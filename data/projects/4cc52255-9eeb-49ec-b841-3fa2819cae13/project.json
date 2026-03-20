@@ -1,0 +1,33 @@
+{
+  "id": "4cc52255-9eeb-49ec-b841-3fa2819cae13",
+  "name": "IG Hashtag Trends Intro 2 copy (9:16)",
+  "animationType": "broll",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "vertical",
+    "fps": 25
+  },
+  "code": "backgroundColor: isActive\n  ? interpolate(hlp, [0, 1], 0, 0) === 0  // ← interpolate called with wrong args (0, 0 instead of [0,0])",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "Hey, i need a b§roll animation for this video. It will be overlayed over a voice over, so it should not be text heavy. Make sure, to follow the timings from the script - THIS IS IMPORTANT"
+    },
+    {
+      "role": "assistant",
+      "content": "Looking at the script, I'll create visual B-roll animations that match the timestamps and mood — mostly visual metaphors, minimal text, timed precisely to the script.\n\n**Script timing breakdown:**\n- 0:00–2:04 (~52 frames): Hashtag chaos intro\n- 2:04–7:10 (~152 frames): Only a fraction are used\n- 7:10–9:13 (~58 frames): Drive reach\n- 9:13–13:14 (~100 frames): Can't see post counts\n- 13:19–17:12 (~98 frames): Can't see related hashtags\n- 17:24–22:11 (~117 frames): Teams guessing\n- 22:17–27:10 (~123 frames): Vague tools, not real data\n- 28:01–30:10 (~54 frames): Right hashtag matters\n- 30:10–33:10 (~75 frames): Buried or discovered\n- 33:11–36:23 (~87 frames): Not just social media managers\n- 36:23–39:11 (~72 frames): Campaign tracking\n- 39:11–42:09 (~73 frames): Hashtags = research start\n- 42:09–45:02 (~73 frames): Mapping market, finding creators\n- 45:02–48:09 (~77 frames): AI workflows\n- 48:15–51:03 (~72 frames): Start with hashtags not profiles\n- 51:03–54:20 (~92 frames): Wrong hashtag = shallow\n- 55:04–58:20 (~92 frames): Right one unlocks conversation\n- 59:09–1:03:24 (~115 frames): Works for both\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "only and ONLY fix this error: inputRange (2) and outputRange (undefined) must have the same length"
+    },
+    {
+      "role": "assistant",
+      "content": "The error is in `Scene2Fraction` — there's a duplicate `backgroundColor` property and a broken `interpolate` call used as a value inside another interpolate. Let me fix the specific line causing the issue.\n\nThe problem is here:\n\n\nThat whole duplicate `backgroundColor` block needs to be collapsed to just one clean property.\n\nAnimation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "Hey, i need a b§roll animation for this video. It will be overlayed over a voice over, so it should not be text heavy. Make sure, to follow the timings from the script - THIS IS IMPORTANT",
+  "scriptWithTimestamps": "00:00:00:00 - 00:00:02:04\nHashtags on Instagram. Chaos.\n\n00:00:02:04 - 00:00:06:02\nAnyone can turn any word into a hashtag,\nbut only a fraction of them\n\n00:00:06:02 - 00:00:07:10\nare actually used.\n\n00:00:07:10 - 00:00:09:13\nAnd those are the ones that driver each.\n\n00:00:09:13 - 00:00:13:14\nAnd the problem is, you can't see how many\nposts a given hashtag has in total,\n\n00:00:13:19 - 00:00:17:12\nor which related hashtags exist\nuntil you search for them one by one.\n\n00:00:17:24 - 00:00:22:11\nSo most social media teams end up guessing\nthey pick hashtags based on instinct.\n\n00:00:22:17 - 00:00:27:10\nCopy what competitors use, rely on tools\nthat give Vegas instead of real data.\n\n00:00:28:01 - 00:00:30:10\nThat's a problem\nbecause choosing the right hashtag\n\n00:00:30:10 - 00:00:33:10\nis the difference between your content\ngetting buried or discovered.\n\n00:00:33:11 - 00:00:36:23\nBut this isn't just about social\nmedia managers planning their next post\n\n00:00:36:23 - 00:00:39:11\nor tracking the success of a campaign\nlaunch.\n\n00:00:39:11 - 00:00:42:09\nHashtags are often\nwhere Instagram research begins.\n\n00:00:42:09 - 00:00:45:02\nIf you're mapping a market\nlooking for creators, searching\n\n00:00:45:02 - 00:00:48:09\nfor competitors,\nor building an AI workflow around a topic,\n\n00:00:48:15 - 00:00:51:03\nyou don't start with profiles,\nbut with hashtags.\n\n00:00:51:03 - 00:00:54:20\nThe wrong starting hashtag leads\nto shallow insights and incomplete data.\n\n00:00:55:04 - 00:00:58:20\nThe right one unlocks the real\nconversation happening around a topic.\n\n00:00:59:09 - 00:01:00:06\nThis approach works\n\n00:01:00:06 - 00:01:03:24\nboth for deciding what to post\nand for deciding what to analyze.",
+  "createdAt": "2026-03-12T16:04:26.866Z",
+  "updatedAt": "2026-03-12T16:11:21.330Z"
+}

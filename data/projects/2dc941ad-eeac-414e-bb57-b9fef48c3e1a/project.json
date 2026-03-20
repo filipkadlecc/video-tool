@@ -1,0 +1,113 @@
+{
+  "id": "2dc941ad-eeac-414e-bb57-b9fef48c3e1a",
+  "name": "FB Intro",
+  "animationType": "broll",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import {\n  AbsoluteFill,\n  useCurrentFrame,\n  useVideoConfig,\n  interpolate,\n  spring,\n  Sequence,\n  Img,\n  staticFile,\n} from \"remotion\";\nimport React from \"react\";\n\nexport const fps = 25;\nexport const durationInFrames = 275;\n\nconst tc = (seconds: number) => Math.round(seconds * 25);\n\nconst IG_ORANGE = \"#F77737\";\nconst IG_PINK = \"#E1306C\";\nconst IG_PURPLE = \"#833AB4\";\nconst IG_DARK_TEXT = \"#1A0A2E\";\n\nconst BADGE_HEIGHT = 120;\n\nconst FadeIn: React.FC<{ delay: number; children: React.ReactNode; direction?: \"up\" | \"down\" }> = ({ delay, children, direction = \"up\" }) => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  const p = spring({ frame, fps, delay, config: { damping: 170, stiffness: 80 } });\n  const yShift = direction === \"up\" ? 60 : -60;\n  return (\n    <div style={{ opacity: p, transform: `translateY(${interpolate(p, [0, 1], [yShift, 0])}px)` }}>\n      {children}\n    </div>\n  );\n};\n\nconst SpringIn: React.FC<{ delay: number; children: React.ReactNode; direction?: \"up\" | \"left\" | \"right\" | \"scale\" }> = ({ delay, children, direction = \"up\" }) => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n  const p = spring({ frame, fps, delay, config: { damping: 180, stiffness: 80 } });\n  let transform = \"\";\n  if (direction === \"up\") transform = `translateY(${interpolate(p, [0, 1], [80, 0])}px)`;\n  if (direction === \"left\") transform = `translateX(${interpolate(p, [0, 1], [-120, 0])}px)`;\n  if (direction === \"right\") transform = `translateX(${interpolate(p, [0, 1], [120, 0])}px)`;\n  if (direction === \"scale\") transform = `scale(${interpolate(p, [0, 1], [0.7, 1])})`;\n  return (\n    <div style={{ opacity: p, transform }}>\n      {children}\n    </div>\n  );\n};\n\nconst Background: React.FC = () => (\n  <AbsoluteFill>\n    <Img\n      src={staticFile(\"assets/backgrounds/Screep White Pink.png\")}\n      style={{ width: \"100%\", height: \"100%\", objectFit: \"cover\" }}\n    />\n  </AbsoluteFill>\n);\n\n// Bulk Download card — appears FIRST (at scene start, i.e. frame 0 of MainScene = tc(1) globally)\nconst BulkDownloadCard: React.FC<{ globalFrame: number }> = ({ globalFrame }) => {\n  const { fps } = useVideoConfig();\n\n  // Appears immediately at start of MainScene\n  const cardEntrance = spring({ frame: globalFrame, fps, delay: 5, config: { damping: 180, stiffness: 80 } });\n\n  const downloadProgress = spring({\n    frame: globalFrame,\n    fps,\n    delay: 20,\n    config: { damping: 170, stiffness: 60 },\n  });\n\n  return (\n    <div style={{ flex: 1, display: \"flex\", flexDirection: \"column\" }}>\n      <div style={{\n        opacity: cardEntrance,\n        transform: `translateX(${interpolate(cardEntrance, [0, 1], [-120, 0])}px)`,\n        backgroundColor: \"rgba(255,255,255,0.80)\",\n        borderRadius: 32,\n        padding: \"72px 80px\",\n        boxSizing: \"border-box\",\n        display: \"flex\",\n        flexDirection: \"column\",\n        boxShadow: \"0 8px 64px rgba(247,119,55,0.10)\",\n        backdropFilter: \"blur(12px)\",\n        height: 900,\n      }}>\n        {/* Header */}\n        <div style={{ display: \"flex\", alignItems: \"center\", gap: 24, marginBottom: 60 }}>\n          <span style={{ fontSize: 60 }}>⬇️</span>\n          <div>\n            <div style={{ fontSize: 56, fontWeight: 800, color: IG_DARK_TEXT, lineHeight: 1.1 }}>\n              Bulk Download\n            </div>\n            <div style={{ fontSize: 38, fontWeight: 500, color: \"#6D7178\", marginTop: 8 }}>\n              Can't export anything at scale\n            </div>\n          </div>\n        </div>\n\n        {/* File list */}\n        <div style={{ display: \"flex\", flexDirection: \"column\", gap: 40, flex: 1, justifyContent: \"center\" }}>\n          {[\n            { name: \"competitor_ad_jan.mp4\", size: \"12.4 MB\" },\n            { name: \"competitor_ad_feb.mp4\", size: \"8.7 MB\" },\n            { name: \"competitor_ad_mar.mp4\", size: \"15.2 MB\" },\n          ].map((file, i) => {\n            const fileProgress = spring({\n              frame: globalFrame,\n              fps,\n              delay: 18 + i * 16,\n              config: { damping: 170, stiffness: 80 },\n            });\n            return (\n              <div key={file.name} style={{\n                opacity: fileProgress,\n                transform: `translateX(${interpolate(fileProgress, [0, 1], [60, 0])}px)`,\n                display: \"flex\",\n                alignItems: \"center\",\n                gap: 28,\n                backgroundColor: \"rgba(247,119,55,0.07)\",\n                borderRadius: 16,\n                padding: \"32px 40px\",\n              }}>\n                <span style={{ fontSize: 44 }}>🎬</span>\n                <div style={{ flex: 1 }}>\n                  <div style={{ fontSize: 36, fontWeight: 600, color: IG_DARK_TEXT }}>{file.name}</div>\n                  <div style={{ fontSize: 30, fontWeight: 500, color: \"#848890\", marginTop: 6 }}>{file.size}</div>\n                </div>\n                <div style={{ width: 200, display: \"flex\", flexDirection: \"column\", gap: 10, alignItems: \"flex-end\" }}>\n                  <div style={{\n                    width: 200,\n                    height: 12,\n                    borderRadius: 6,\n                    backgroundColor: \"rgba(247,119,55,0.12)\",\n                    overflow: \"hidden\",\n                  }}>\n                    <div style={{\n                      height: \"100%\",\n                      width: interpolate(downloadProgress, [0, 1], [0, 200]),\n                      borderRadius: 6,\n                      background: `linear-gradient(90deg, ${IG_ORANGE}, ${IG_PINK})`,\n                    }} />\n                  </div>\n                  <div style={{ fontSize: 28, fontWeight: 700, color: IG_ORANGE }}>\n                    {Math.round(interpolate(downloadProgress, [0, 1], [0, 100]))}%\n                  </div>\n                </div>\n              </div>\n            );\n          })}\n        </div>\n      </div>\n    </div>\n  );\n};\n\n// Creative Strategy card — appears at tc(3.76) of the global timeline\n// globalFrame is already the raw frame; we pass the local frame offset for animations\nconst CreativeStrategyCard: React.FC<{ globalFrame: number }> = ({ globalFrame }) => {\n  const { fps } = useVideoConfig();\n\n  // Creative strategy starts appearing at 3.76s globally (i.e. 3.76s after scene start)\n  const appearFrame = tc(3.76);\n  const localFrame = Math.max(0, globalFrame - appearFrame);\n\n  const cardEntrance = spring({ frame: localFrame, fps, delay: 0, config: { damping: 180, stiffness: 80 } });\n\n  const months = [\"Jan\", \"Feb\", \"Mar\", \"Apr\", \"May\", \"Jun\"];\n  const competitorData = [12, 18, 14, 28, 35, 42];\n  const maxVal = 50;\n\n  return (\n    <div style={{ flex: 1, display: \"flex\", flexDirection: \"column\" }}>\n      <div style={{\n        opacity: cardEntrance,\n        transform: `translateX(${interpolate(cardEntrance, [0, 1], [120, 0])}px)`,\n        backgroundColor: \"rgba(255,255,255,0.80)\",\n        borderRadius: 32,\n        padding: \"72px 80px\",\n        boxSizing: \"border-box\",\n        display: \"flex\",\n        flexDirection: \"column\",\n        boxShadow: \"0 8px 64px rgba(131,58,180,0.10)\",\n        backdropFilter: \"blur(12px)\",\n        height: 900,\n      }}>\n        {/* Header */}\n        <div style={{ display: \"flex\", alignItems: \"center\", gap: 24, marginBottom: 60 }}>\n          <span style={{ fontSize: 60 }}>📈</span>\n          <div>\n            <div style={{ fontSize: 56, fontWeight: 800, color: IG_DARK_TEXT, lineHeight: 1.1 }}>\n              Creative Strategy\n            </div>\n            <div style={{ fontSize: 38, fontWeight: 500, color: \"#6D7178\", marginTop: 8 }}>\n              Can't track evolution over time\n            </div>\n          </div>\n        </div>\n\n        {/* Bar chart */}\n        <div style={{ display: \"flex\", flexDirection: \"column\", gap: 52, flex: 1, justifyContent: \"center\" }}>\n          {months.map((month, i) => {\n            const barProgress = spring({\n              frame: localFrame,\n              fps,\n              delay: 12 + i * 12,\n              config: { damping: 170, stiffness: 80 },\n            });\n            const barWidth = interpolate(barProgress, [0, 1], [0, (competitorData[i] / maxVal) * 900]);\n\n            return (\n              <div key={month} style={{\n                display: \"flex\",\n                alignItems: \"center\",\n                gap: 32,\n              }}>\n                <div style={{ fontSize: 36, fontWeight: 700, color: \"#848890\", width: 80, textAlign: \"right\", flexShrink: 0 }}>\n                  {month}\n                </div>\n                <div style={{\n                  flex: 1,\n                  height: 44,\n                  borderRadius: 12,\n                  backgroundColor: \"rgba(131,58,180,0.08)\",\n                  overflow: \"hidden\",\n                }}>\n                  <div style={{\n                    height: \"100%\",\n                    width: barWidth,\n                    borderRadius: 12,\n                    background: `linear-gradient(90deg, ${IG_PURPLE}, ${IG_PINK})`,\n                    opacity: 0.85,\n                  }} />\n                </div>\n                <div style={{ fontSize: 40, fontWeight: 800, color: IG_PINK, width: 80, flexShrink: 0 }}>\n                  {competitorData[i]}\n                </div>\n              </div>\n            );\n          })}\n        </div>\n      </div>\n    </div>\n  );\n};\n\nconst MainScene: React.FC = () => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  // Left badge (Export not available) — appears right at the start\n  const leftBadgeP = spring({ frame, fps, delay: 60, config: { damping: 170, stiffness: 80 } });\n\n  // Right badge (Not visible in static library) — appears at tc(3.76)\n  const rightAppearFrame = tc(3.76);\n  const rightLocalFrame = Math.max(0, frame - rightAppearFrame);\n  const rightBadgeP = spring({ frame: rightLocalFrame, fps, delay: 18, config: { damping: 170, stiffness: 80 } });\n\n  return (\n    <AbsoluteFill\n      style={{\n        fontFamily: \"sans-serif\",\n        display: \"flex\",\n        alignItems: \"center\",\n        justifyContent: \"center\",\n      }}\n    >\n      {/* Background image */}\n      <Img\n        src={staticFile(\"assets/backgrounds/Screep White Pink.png\")}\n        style={{ position: \"absolute\", width: \"100%\", height: \"100%\", objectFit: \"cover\" }}\n      />\n\n      {/* Subtle overlay */}\n      <div style={{\n        position: \"absolute\",\n        inset: 0,\n        background: \"rgba(255,255,255,0.18)\",\n        pointerEvents: \"none\",\n      }} />\n\n      <div style={{\n        display: \"flex\",\n        flexDirection: \"column\",\n        alignItems: \"center\",\n        gap: 0,\n        width: 3200,\n        position: \"relative\",\n      }}>\n        {/* Cards row — Bulk Download on LEFT, Creative Strategy on RIGHT */}\n        <div style={{\n          display: \"flex\",\n          gap: 72,\n          width: \"100%\",\n          alignItems: \"stretch\",\n          justifyContent: \"center\",\n        }}>\n          {/* LEFT: Bulk Download (appears first) */}\n          <BulkDownloadCard globalFrame={frame} />\n\n          {/* RIGHT: Creative Strategy (appears at 3.76s) */}\n          <CreativeStrategyCard globalFrame={frame} />\n        </div>\n\n        {/* Badges row — OUTSIDE cards, perfectly aligned side by side */}\n        <div style={{\n          display: \"flex\",\n          gap: 72,\n          width: \"100%\",\n          marginTop: 40,\n        }}>\n          {/* Left badge: Export not available (matches Bulk Download card) */}\n          <div style={{ flex: 1 }}>\n            <div style={{\n              opacity: leftBadgeP,\n              transform: `translateY(${interpolate(leftBadgeP, [0, 1], [30, 0])}px)`,\n              display: \"flex\",\n              alignItems: \"center\",\n              justifyContent: \"center\",\n              gap: 20,\n              backgroundColor: \"rgba(247,119,55,0.08)\",\n              borderRadius: 16,\n              height: BADGE_HEIGHT,\n              boxSizing: \"border-box\",\n            }}>\n              <span style={{ fontSize: 36 }}>🚫</span>\n              <div style={{ fontSize: 36, fontWeight: 700, color: IG_ORANGE }}>\n                Export not available\n              </div>\n            </div>\n          </div>\n\n          {/* Right badge: Not visible in static library (matches Creative Strategy card) */}\n          <div style={{ flex: 1 }}>\n            <div style={{\n              opacity: rightBadgeP,\n              transform: `translateY(${interpolate(rightBadgeP, [0, 1], [30, 0])}px)`,\n              display: \"flex\",\n              alignItems: \"center\",\n              justifyContent: \"center\",\n              gap: 20,\n              backgroundColor: \"rgba(225,48,108,0.08)\",\n              borderRadius: 16,\n              height: BADGE_HEIGHT,\n              boxSizing: \"border-box\",\n            }}>\n              <span style={{ fontSize: 36 }}>🚫</span>\n              <div style={{ fontSize: 36, fontWeight: 700, color: IG_PINK }}>\n                Not visible in static library\n              </div>\n            </div>\n          </div>\n        </div>\n      </div>\n    </AbsoluteFill>\n  );\n};\n\nexport default function MyVideo() {\n  const introFrames = tc(1);\n  const contentFrames = durationInFrames - introFrames;\n\n  return (\n    <AbsoluteFill style={{ fontFamily: \"sans-serif\" }}>\n      {/* 1 second background only */}\n      <Sequence from={0} durationInFrames={introFrames}>\n        <Background />\n      </Sequence>\n\n      {/* Main scene — starts at 1s */}\n      <Sequence from={introFrames} durationInFrames={contentFrames}>\n        <MainScene />\n      </Sequence>\n    </AbsoluteFill>\n  );\n}",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "i need a really simple animation for these 2 things. please, keep it simple and use logos if needed"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "kep both things on one screen, no cut from the first to the other. show the evolution and under that show the exporting\nthe exporting means downloading, so change the context of the animation\nalso, have 1 second before the start of just the background and one second of freeze frame at the end\none last thing, it is about instagram, so use a color palette related to that"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "fix the duplicate IG_DARK variable"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "notes:\nloose the instagram logo at the top\nmake sure, to have the \"creative strategy\" appear only at the start and \"bulk download\" only when mentioned (based on the script timestamp)\nmake sure to not expand the \"creative strategy\" section. the box is growing with the charts expanding. KEEP IT THE SAME SIZE\nand align both to the center horizontally"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "i uploaded a file called \"Screen White Pink.png\". Use that as a background for this. The background is white, so edit the colors of all the elements acordingly"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you expand both boxes vertically they are both too small and have elements wierdly spaced\nremove the stroke on the boxes (it is showing up only on one side)\nalign the \"not visible in static library\" with the \"export not available\" (move the \"not visible in static library\" down)"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "move the \"not visible in static library\" outside of the \"creative strategy + month charts\" and ALIGN IT WITH THE EXPORT"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "bro....ALIGN BOTH \"NOT VISABLE IN STATIC LIBRARY\" AND \"EXPORT NOT AVAILABLE\"!!!!! ONLY MOVE \"NOT VISABLE IN STATIC LIBRARY\" TO THE SAME LEVEL AS \"EXPORT NOT AVAILABLE\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make sure that the \"EXPORT NOT AVAILABLE\" appears at the 7 seconds"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "go back to the previous version"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "you messed it up......\nthe small grey text (Active competitor ads tracked/month) (Bulk export competitor creatives) - remove it\nthe arrow - remove it \nKEEP EVERYTHING AS IS, JUST DO THE 2 THINGS AS I SAY"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you swap it out? meaning, that the exporting part comes first and then the \"creative strategy\" segment"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "i need a really simple animation for these 2 things. please, keep it simple and use logos if needed",
+  "scriptWithTimestamps": "00:00:00:00 - 00:00:03:19\nYou can't export anything at scale,\nand you definitely can't track\n\n00:00:03:19 - 00:00:08:03\nhow a competitor's creative strategy\nevolves over time with that library alone.",
+  "createdAt": "2026-03-01T20:17:30.591Z",
+  "updatedAt": "2026-03-01T20:46:43.177Z"
+}

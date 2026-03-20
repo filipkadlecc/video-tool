@@ -6,12 +6,24 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "studio": "npx remotion studio remotion/Root.tsx"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@notionhq/client": "^5.11.0",
+    "@remotion/cli": "^4.0.431",
+    "@remotion/google-fonts": "^4.0.431",
+    "@remotion/player": "^4.0.431",
+    "@remotion/transitions": "^4.0.431",
+    "monaco-editor": "^0.55.1",
     "next": "16.1.6",
+    "p-queue": "^9.1.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "remotion": "^4.0.431",
+    "sucrase": "^3.35.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

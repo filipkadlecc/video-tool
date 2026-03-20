@@ -1,65 +1,141 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import ProjectCard from "@/components/ProjectCard";
+import NewProjectModal from "@/components/NewProjectModal";
+import type { ProjectMeta } from "@/lib/types";
 
 export default function Home() {
+  const router = useRouter();
+  const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  async function fetchProjects() {
+    try {
+      const res = await fetch("/api/projects");
+      const data = await res.json();
+      setProjects(data);
+    } catch (err) {
+      console.error("Failed to load projects:", err);
+    }
+  }
+
+  async function handleDuplicate(id: string) {
+    try {
+      const res = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
+      if (res.ok) {
+        fetchProjects();
+      }
+    } catch (err) {
+      console.error("Failed to duplicate project:", err);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await fetch(`/api/projects/${id}`, { method: "DELETE" });
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+    }
+  }
+
+  async function handleCreate(data: {
+    name: string;
+    animationType: string;
+    settings: { resolution: string; orientation: string; fps: number };
+    initialPrompt: string;
+    notionContent?: string;
+    scriptWithTimestamps?: string;
+  }) {
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const project = await res.json();
+        setModalOpen(false);
+        router.push(`/project/${project.id}`);
+      }
+    } catch (err) {
+      console.error("Failed to create project:", err);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-surface">
+        <h1 className="text-sm font-semibold tracking-tight">Video Tool</h1>
+        <button
+          onClick={() => setModalOpen(true)}
+          className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+        >
+          + New Project
+        </button>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-6 py-8">
+        {projects.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-muted text-sm mb-4">No projects yet</p>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="px-4 py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+              Create your first project
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {projects.map((project) => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onClick={() => router.push(`/project/${project.id}`)}
+                onDelete={() => setDeleteConfirm(project.id)}
+                onDuplicate={() => handleDuplicate(project.id)}
+              />
+            ))}
+          </div>
+        )}
       </main>
+
+      <NewProjectModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreate={handleCreate}
+      />
+
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
+          <div className="bg-surface border border-border rounded-xl p-5 w-[360px]">
+            <p className="text-sm text-foreground mb-4">Delete this project? This cannot be undone.</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-3 py-1.5 text-xs text-muted border border-border rounded-lg hover:bg-surface-hover transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                className="px-3 py-1.5 text-xs text-white bg-red-600 rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
