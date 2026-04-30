@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import type { Project, ProjectMeta, AnimationType, ProjectSettings } from "./types";
+import type { Project, ProjectMeta, AnimationType, ProjectSettings, SvgFile } from "./types";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -58,7 +58,8 @@ export interface CreateProjectData {
   initialPrompt: string;
   notionContent?: string;
   scriptWithTimestamps?: string;
-  svgContent?: string;
+  svgContents?: SvgFile[];
+  mediaFolder?: string;
 }
 
 export function createProject(data: CreateProjectData): Project {
@@ -75,7 +76,8 @@ export function createProject(data: CreateProjectData): Project {
     initialPrompt: data.initialPrompt,
     notionContent: data.notionContent,
     scriptWithTimestamps: data.scriptWithTimestamps,
-    svgContent: data.svgContent,
+    svgContents: data.svgContents,
+    mediaFolder: data.mediaFolder,
     createdAt: now,
     updatedAt: now,
   };

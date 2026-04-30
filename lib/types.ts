@@ -1,4 +1,4 @@
-export type AnimationType = "broll" | "animation" | "svg";
+export type AnimationType = "broll" | "animation" | "svg" | "video";
 export type Resolution = "1080p" | "4k";
 export type Orientation = "horizontal" | "vertical" | "square";
 export type FPS = 24 | 25 | 30 | 50;
@@ -14,6 +14,11 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface SvgFile {
+  filename: string;
+  content: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -24,12 +29,13 @@ export interface Project {
   initialPrompt: string;
   notionContent?: string;
   scriptWithTimestamps?: string;
-  svgContent?: string;
+  svgContents?: SvgFile[];
+  mediaFolder?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type ProjectMeta = Omit<Project, "chatHistory" | "code" | "notionContent" | "scriptWithTimestamps" | "svgContent">;
+export type ProjectMeta = Omit<Project, "chatHistory" | "code" | "notionContent" | "scriptWithTimestamps" | "svgContents">;
 
 const RESOLUTION_MAP: Record<`${Orientation}-${Resolution}`, { width: number; height: number }> = {
   "horizontal-4k": { width: 3840, height: 2160 },

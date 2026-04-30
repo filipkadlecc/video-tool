@@ -22,6 +22,7 @@
     "p-queue": "^9.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-resizable-panels": "^4.10.0",
     "remotion": "^4.0.431",
     "sucrase": "^3.35.1"
   },

@@ -1,6 +1,40 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
+import Icon from "@/components/ui/Icon";
+import IconButton from "@/components/ui/IconButton";
+import Input from "@/components/ui/Input";
+import Segmented from "@/components/ui/Segmented";
+
+interface RenderPreset {
+  name: string;
+  codec: string;
+  builtIn?: boolean;
+}
+
+const BUILT_IN_PRESETS: RenderPreset[] = [
+  { name: "YouTube 4K", codec: "h264", builtIn: true },
+  { name: "Instagram Reel", codec: "h264", builtIn: true },
+  { name: "Color Grading", codec: "prores-xq", builtIn: true },
+  { name: "Compositing", codec: "prores", builtIn: true },
+  { name: "No Background", codec: "prores", builtIn: true },
+];
+
+function loadUserPresets(): RenderPreset[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("vt-render-presets");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUserPresets(presets: RenderPreset[]) {
+  localStorage.setItem("vt-render-presets", JSON.stringify(presets));
+}
 
 interface ExportDialogProps {
   open: boolean;
@@ -28,8 +62,48 @@ export default function ExportDialog({
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState(projectName.replace(/\s+/g, "-").toLowerCase());
-  const [codec, setCodec] = useState<"h264" | "prores">("h264");
+  const [codec, setCodec] = useState<string>("h264");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [presetOpen, setPresetOpen] = useState(false);
+  const [userPresets, setUserPresets] = useState<RenderPreset[]>([]);
+  const [savePresetName, setSavePresetName] = useState("");
+  const [showSavePreset, setShowSavePreset] = useState(false);
+  const presetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setUserPresets(loadUserPresets());
+  }, []);
+
+  useEffect(() => {
+    if (!presetOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (presetRef.current && !presetRef.current.contains(e.target as Node)) setPresetOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [presetOpen]);
+
+  function applyPreset(preset: RenderPreset) {
+    setCodec(preset.codec);
+    setPresetOpen(false);
+  }
+
+  function handleSavePreset() {
+    if (!savePresetName.trim()) return;
+    const newPreset: RenderPreset = { name: savePresetName.trim(), codec };
+    const updated = [...userPresets, newPreset];
+    setUserPresets(updated);
+    saveUserPresets(updated);
+    setSavePresetName("");
+    setShowSavePreset(false);
+  }
+
+  function deleteUserPreset(index: number) {
+    const updated = userPresets.filter((_, i) => i !== index);
+    setUserPresets(updated);
+    saveUserPresets(updated);
+  }
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -37,8 +111,6 @@ export default function ExportDialog({
       pollRef.current = null;
     }
   }, []);
-
-  if (!open) return null;
 
   async function handleExport() {
     if (!code.trim()) return;
@@ -71,6 +143,7 @@ export default function ExportDialog({
           if (statusData.status === "done") {
             stopPolling();
             setDownloadUrl(statusData.outputPath);
+            new Audio("/assets/render-complete.m4a").play().catch(() => {});
           } else if (statusData.status === "error") {
             stopPolling();
             setError(statusData.error);
@@ -97,118 +170,306 @@ export default function ExportDialog({
   }
 
   const seconds = (durationInFrames / fps).toFixed(1);
+  const stats = [
+    { label: "Resolution", value: `${width}\u00d7${height}` },
+    { label: "Duration", value: `${seconds}s` },
+    { label: "FPS", value: String(fps) },
+    { label: "Codec", value: codec === "h264" ? "H.264" : codec === "prores" ? "ProRes 4444" : "ProRes 4444 XQ" },
+  ];
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-surface border border-border rounded-2xl w-[360px] shadow-2xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h2 className="text-sm font-semibold">Export Video</h2>
-          <button onClick={handleClose} className="text-muted hover:text-foreground text-xs">
-            Close
-          </button>
+    <Modal open={open} onClose={handleClose} width={480} title="Export" stepLabel="Render to file">
+      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+        {/* Presets */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ position: "relative" }} ref={presetRef}>
+            <Button variant="outline" size="sm" icon="settings" onClick={() => setPresetOpen(!presetOpen)}>
+              Presets <Icon name="chevronDown" size={12} />
+            </Button>
+            {presetOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: "100%",
+                  marginTop: 6,
+                  minWidth: 220,
+                  padding: 5,
+                  background: "var(--bg-3)",
+                  border: "0.5px solid var(--line-2)",
+                  borderRadius: "var(--r-sm)",
+                  boxShadow: "var(--sh-float)",
+                  zIndex: 10,
+                }}
+              >
+                <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
+                  Built-in
+                </div>
+                {BUILT_IN_PRESETS.map((p) => (
+                  <button
+                    key={p.name}
+                    onClick={() => applyPreset(p)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      width: "100%",
+                      padding: "7px 8px",
+                      fontSize: 12,
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-0)",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <span style={{ flex: 1 }}>{p.name}</span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                      {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : "XQ"}
+                    </span>
+                  </button>
+                ))}
+                {userPresets.length > 0 && (
+                  <>
+                    <div style={{ height: 1, background: "var(--line-1)", margin: "4px 0" }} />
+                    <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
+                      Custom
+                    </div>
+                    {userPresets.map((p, i) => (
+                      <div
+                        key={i}
+                        style={{ display: "flex", alignItems: "center" }}
+                      >
+                        <button
+                          onClick={() => applyPreset(p)}
+                          style={{
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "7px 8px",
+                            fontSize: 12,
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-0)",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            textAlign: "left",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <span style={{ flex: 1 }}>{p.name}</span>
+                          <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                            {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : "XQ"}
+                          </span>
+                        </button>
+                        <IconButton icon="close" size={20} onClick={() => deleteUserPreset(i)} />
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1 }} />
+          {!showSavePreset ? (
+            <Button variant="ghost" size="sm" onClick={() => setShowSavePreset(true)}>
+              Save as preset
+            </Button>
+          ) : (
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <Input
+                value={savePresetName}
+                onChange={setSavePresetName}
+                placeholder="Preset name"
+                autoFocus
+                style={{ height: 26, fontSize: 11, width: 140 }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSavePreset(); if (e.key === "Escape") setShowSavePreset(false); }}
+              />
+              <Button variant="primary" size="sm" onClick={handleSavePreset} disabled={!savePresetName.trim()}>
+                Save
+              </Button>
+              <IconButton icon="close" size={22} onClick={() => setShowSavePreset(false)} />
+            </div>
+          )}
         </div>
 
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-background rounded-lg p-3">
-              <span className="text-muted">Resolution</span>
-              <p className="text-foreground font-medium">{width}x{height}</p>
-            </div>
-            <div className="bg-background rounded-lg p-3">
-              <span className="text-muted">Duration</span>
-              <p className="text-foreground font-medium">{durationInFrames}f / {seconds}s</p>
-            </div>
-            <div className="bg-background rounded-lg p-3">
-              <span className="text-muted">FPS</span>
-              <p className="text-foreground font-medium">{fps}</p>
-            </div>
-            <div className="bg-background rounded-lg p-3">
-              <span className="text-muted">Codec</span>
-              <div className="flex gap-1.5 mt-1">
-                <button
-                  onClick={() => setCodec("h264")}
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded ${
-                    codec === "h264"
-                      ? "bg-accent text-white"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  H.264
-                </button>
-                <button
-                  onClick={() => setCodec("prores")}
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded ${
-                    codec === "prores"
-                      ? "bg-accent text-white"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  ProRes
-                </button>
+        {/* Stats grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              style={{
+                padding: 12,
+                background: "var(--bg-inset)",
+                border: "0.5px solid var(--line-2)",
+                borderRadius: "var(--r-sm)",
+              }}
+            >
+              <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 4 }}>
+                {s.label}
+              </div>
+              <div className="mono nums" style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.2 }}>
+                {s.value}
               </div>
             </div>
+          ))}
+        </div>
+
+        {/* Codec */}
+        <div>
+          <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+            Codec
           </div>
-
-          {codec === "prores" && (
-            <p className="text-[10px] text-accent">ProRes 4444 — .mov with transparent background (alpha channel)</p>
-          )}
-
-          <div>
-            <label className="block text-xs text-muted mb-1.5">File Name</label>
-            <input
-              type="text"
-              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <Segmented
+              value={codec}
+              onChange={(v) => setCodec(v as string)}
+              options={[
+                { value: "h264", label: "H.264" },
+                { value: "prores", label: "ProRes 4444" },
+                { value: "prores-xq", label: "ProRes XQ" },
+              ]}
             />
-          </div>
-
-          {status === "rendering" && (
-            <div>
-              <div className="flex justify-between text-xs text-muted mb-1">
-                <span>Rendering...</span>
-                <span>{progress}%</span>
+            {codec === "prores" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--amber-soft)",
+                  borderRadius: 4,
+                  border: "0.5px solid color-mix(in oklab, var(--amber) 30%, transparent)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--amber)" }} />
+                ProRes 4444 — .mov with alpha channel. Good for compositing.
               </div>
-              <div className="h-2 bg-background rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-accent transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
+            )}
+            {codec === "prores-xq" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--accent-soft)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--accent-line)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* File name */}
+        <div>
+          <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+            File name
+          </div>
+          <Input
+            value={fileName}
+            onChange={setFileName}
+            mono
+            suffix={`.${codec === "h264" ? "mp4" : "mov"}`}
+          />
+        </div>
+
+        {/* States */}
+        {(status === "idle" || status === "error") && (
+          <>
+            {status === "error" && (
+              <div style={{ fontSize: 12, color: "var(--red)" }}>{error}</div>
+            )}
+            <Button variant="primary" size="lg" full icon="download" onClick={handleExport} disabled={!code.trim()}>
+              Export
+            </Button>
+          </>
+        )}
+
+        {(status === "queued" || status === "rendering") && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span className="mono cap" style={{ color: "var(--text-1)" }}>
+                {status === "queued" ? "Queued..." : "Rendering"}
+              </span>
+              <span className="mono nums" style={{ fontSize: 12, color: "var(--accent)" }}>
+                {Math.min(100, Math.round(progress))}%
+              </span>
+            </div>
+            <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
+              <div
+                style={{
+                  width: `${Math.min(100, progress)}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, var(--accent), oklch(0.92 0.22 124))",
+                  transition: "width 100ms linear",
+                  boxShadow: "0 0 12px oklch(0.88 0.22 124 / 0.5)",
+                }}
+              />
+            </div>
+            <div className="mono nums" style={{ fontSize: 11, color: "var(--text-3)" }}>
+              frame {Math.round((progress / 100) * durationInFrames)} / {durationInFrames}
+            </div>
+          </div>
+        )}
+
+        {status === "done" && downloadUrl && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 12,
+                background: "var(--accent-soft)",
+                border: "0.5px solid var(--accent-line)",
+                borderRadius: "var(--r-sm)",
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  background: "var(--accent)",
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                <Icon name="check" size={14} style={{ color: "var(--accent-ink)" }} />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Render complete</div>
+                <div className="mono nums" style={{ fontSize: 11, color: "var(--text-2)" }}>
+                  {fileName}.{codec === "h264" ? "mp4" : "mov"}
+                </div>
               </div>
             </div>
-          )}
-
-          {status === "done" && downloadUrl && (
             <a
               href={downloadUrl}
-              download={`${fileName || "export"}.${codec === "prores" ? "mov" : "mp4"}`}
-              className="block w-full py-2.5 text-center bg-[#5C8374] text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
+              download={`${fileName || "export"}.${codec === "h264" ? "mp4" : "mov"}`}
+              style={{ textDecoration: "none" }}
             >
-              Download {codec === "prores" ? "MOV" : "MP4"}
+              <Button variant="primary" size="lg" full icon="download">
+                Download file
+              </Button>
             </a>
-          )}
-
-          {status === "error" && (
-            <p className="text-xs text-red-400">{error}</p>
-          )}
-
-          {(status === "idle" || status === "error") && (
-            <button
-              onClick={handleExport}
-              disabled={!code.trim()}
-              className="w-full py-2.5 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              Export
-            </button>
-          )}
-
-          {status === "queued" && (
-            <button disabled className="w-full py-2.5 bg-accent/50 text-white text-sm font-medium rounded-lg opacity-50">
-              Queued...
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

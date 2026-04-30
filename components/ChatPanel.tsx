@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, SvgFile } from "@/lib/types";
+import Icon from "@/components/ui/Icon";
+import Button from "@/components/ui/Button";
+import IconButton from "@/components/ui/IconButton";
 
 function extractCodeFromResponse(text: string): string {
   const fenceMatch = text.match(/```(?:tsx|typescript|jsx)?\s*\n([\s\S]*?)```/);
@@ -38,7 +41,7 @@ interface ChatPanelProps {
   animationType: string;
   notionContent?: string;
   scriptWithTimestamps?: string;
-  svgContent?: string;
+  svgContents?: SvgFile[];
   currentCode: string;
   autoSend?: boolean;
   onGenerationComplete?: (code: string, chatHistory: ChatMessage[]) => void;
@@ -46,6 +49,7 @@ interface ChatPanelProps {
 }
 
 export default function ChatPanel({
+  projectId,
   chatHistory,
   initialPrompt,
   onCodeUpdate,
@@ -56,7 +60,7 @@ export default function ChatPanel({
   animationType,
   notionContent,
   scriptWithTimestamps,
-  svgContent,
+  svgContents,
   currentCode,
   autoSend,
   onGenerationComplete,
@@ -64,11 +68,12 @@ export default function ChatPanel({
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
-  const [attachedSvg, setAttachedSvg] = useState<SvgAttachment | null>(null);
+  const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
   const [svgPickerOpen, setSvgPickerOpen] = useState(false);
   const [svgOptions, setSvgOptions] = useState<SvgAssetOption[]>([]);
   const [svgLoading, setSvgLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const autoSentRef = useRef(false);
   const svgPickerRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +81,6 @@ export default function ChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory, isGenerating]);
 
-  // Close SVG picker on outside click
   useEffect(() => {
     if (!svgPickerOpen) return;
     function handleClick(e: MouseEvent) {
@@ -88,7 +92,6 @@ export default function ChatPanel({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [svgPickerOpen]);
 
-  // Auto-send initial prompt for new projects
   useEffect(() => {
     if (autoSend && !autoSentRef.current && !isGenerating && chatHistory.length === 0) {
       autoSentRef.current = true;
@@ -125,7 +128,7 @@ export default function ChatPanel({
       const res = await fetch(`/api/assets/content?path=${encodeURIComponent(option.path)}`);
       if (!res.ok) return;
       const data: { content: string; filename: string } = await res.json();
-      setAttachedSvg({ path: option.path, content: data.content, filename: data.filename });
+      setAttachedSvgs((prev) => [...prev, { path: option.path, content: data.content, filename: data.filename }]);
     } catch {
       // ignore
     }
@@ -137,18 +140,19 @@ export default function ChatPanel({
     setIsGenerating(true);
     setStreamingContent("");
 
-    // Build the AI message with context
     let messageForAI = text.trim();
     if (sceneError) {
       messageForAI = `[SCENE ERROR: ${sceneError}]\n\n${messageForAI}`;
     }
-    if (attachedSvg) {
-      messageForAI = `[SVG TO ANIMATE: ${attachedSvg.filename}]\nPath: ${attachedSvg.path}\n${attachedSvg.content}\n[END SVG]\n\n${messageForAI}`;
+    if (attachedSvgs.length > 0) {
+      const svgBlock = attachedSvgs
+        .map((svg, i) => `[SVG ${i + 1}: ${svg.filename}]\nPath: ${svg.path}\n${svg.content}\n[END SVG ${i + 1}]`)
+        .join("\n\n");
+      messageForAI = `${svgBlock}\n\n${messageForAI}`;
     }
 
-    // User-visible message shows attachment info but not the SVG content
-    const displayText = attachedSvg
-      ? `${text.trim()}\n\nAttached SVG: ${attachedSvg.filename}`
+    const displayText = attachedSvgs.length > 0
+      ? `${text.trim()}\n\nAttached SVGs: ${attachedSvgs.map((s) => s.filename).join(", ")}`
       : text.trim();
 
     const userMessage: ChatMessage = { role: "user", content: displayText };
@@ -156,8 +160,7 @@ export default function ChatPanel({
     const updatedHistory = [...chatHistory, userMessage];
     onChatUpdate(updatedHistory);
 
-    // Clear attachment after sending
-    setAttachedSvg(null);
+    setAttachedSvgs([]);
 
     let fullResponse = "";
 
@@ -171,8 +174,9 @@ export default function ChatPanel({
           animationType,
           notionContent,
           scriptWithTimestamps,
-          svgContent,
+          svgContents,
           currentCode,
+          projectId,
         }),
       });
 
@@ -218,7 +222,6 @@ export default function ChatPanel({
         onCodeUpdate(finalCode);
       }
 
-      // Strip the code block from the visible message and append a done note
       const textOnly = fullResponse.replace(/```[\s\S]*?```/g, "").trim();
       const doneNote = textOnly
         ? `${textOnly}\n\nAnimation generated — preview is live.`
@@ -227,7 +230,6 @@ export default function ChatPanel({
       const finalHistory = [...updatedHistory, assistantMessage];
       onChatUpdate(finalHistory);
 
-      // Immediate save
       if (onGenerationComplete) {
         onGenerationComplete(finalCode || currentCode, finalHistory);
       }
@@ -255,152 +257,337 @@ export default function ChatPanel({
     }
   }
 
-  const displayMessages = chatHistory;
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-3 py-2 border-b border-border">
-        <span className="text-sm font-medium text-muted">Chat</span>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {/* Header */}
+      <div
+        style={{
+          padding: "10px 14px",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          borderBottom: "0.5px solid var(--line-1)",
+        }}
+      >
+        <Icon name="chat" size={13} style={{ color: "var(--text-2)" }} />
+        <span className="mono cap" style={{ color: "var(--text-1)" }}>
+          Chat
+        </span>
+        <div style={{ flex: 1 }} />
+        <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)" }}>
+          {chatHistory.length} msgs
+        </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
-        {/* Initial prompt display */}
-        <div className="bg-accent/10 border border-accent/20 rounded-lg p-3">
-          <p className="text-[10px] text-accent font-medium mb-1">Initial Prompt</p>
-          <p className="text-xs text-foreground whitespace-pre-wrap">{initialPrompt}</p>
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        className="vt-scroll"
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}
+      >
+        {/* Initial prompt */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 4,
+                background: "var(--accent)",
+                color: "var(--accent-ink)",
+                display: "grid",
+                placeItems: "center",
+                fontSize: 9,
+                fontWeight: 700,
+              }}
+            >
+              <Icon name="sparkle" size={10} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)" }}>System</span>
+          </div>
+          <div
+            style={{
+              fontSize: 12.5,
+              lineHeight: 1.55,
+              color: "var(--text-0)",
+              paddingLeft: 24,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {initialPrompt}
+          </div>
         </div>
 
-        {displayMessages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[85%] rounded-lg p-3 text-xs whitespace-pre-wrap ${
-                msg.role === "user"
-                  ? "bg-accent/20 text-foreground"
-                  : "bg-surface border border-border text-foreground"
-              }`}
-            >
-              {msg.role === "assistant" ? (
-                <MessageContent content={msg.content} />
-              ) : (
-                msg.content
-              )}
+        {chatHistory.map((msg, i) => {
+          const isUser = msg.role === "user";
+          return (
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 4,
+                    background: isUser ? "var(--bg-4)" : "var(--accent)",
+                    color: isUser ? "var(--text-0)" : "var(--accent-ink)",
+                    display: "grid",
+                    placeItems: "center",
+                    fontSize: 9,
+                    fontWeight: 700,
+                  }}
+                >
+                  {isUser ? "Y" : <Icon name="sparkle" size={10} />}
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)" }}>
+                  {isUser ? "You" : "Studio"}
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  lineHeight: 1.55,
+                  color: "var(--text-0)",
+                  paddingLeft: 24,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {msg.role === "assistant" ? <MessageContent content={msg.content} /> : msg.content}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {isGenerating && (
-          <div className="flex justify-start">
-            <div className="rounded-lg p-3 bg-surface border border-border">
-              <p className="text-xs text-accent">Generating...</p>
-            </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              marginTop: 4,
+              paddingLeft: 24,
+              fontSize: 12,
+              color: "var(--text-2)",
+            }}
+          >
+            <span
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: "50%",
+                background: "var(--accent)",
+                animation: "vt-dot-fade 1.4s ease-in-out infinite",
+              }}
+            />
+            <span
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: "50%",
+                background: "var(--accent)",
+                animation: "vt-dot-fade 1.4s ease-in-out .2s infinite",
+              }}
+            />
+            <span
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: "50%",
+                background: "var(--accent)",
+                animation: "vt-dot-fade 1.4s ease-in-out .4s infinite",
+              }}
+            />
+            <span style={{ marginLeft: 4 }}>Thinking...</span>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 border-t border-border space-y-2">
-        {/* SVG attachment chip */}
-        {attachedSvg && (
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 bg-accent/15 border border-accent/30 rounded-full px-3 py-1">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M7 12l3 3 7-7" />
-              </svg>
-              <span className="text-[11px] text-accent font-medium">{attachedSvg.filename}</span>
-              <button
-                onClick={() => setAttachedSvg(null)}
-                className="text-accent/60 hover:text-accent ml-0.5"
+      {/* Input */}
+      <div style={{ padding: 10, borderTop: "0.5px solid var(--line-1)" }}>
+        {/* SVG attachment chips */}
+        {attachedSvgs.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+            {attachedSvgs.map((svg, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 6px",
+                  fontSize: 10,
+                  background: "var(--accent-soft)",
+                  border: "0.5px solid var(--accent-line)",
+                  borderRadius: 3,
+                  color: "var(--accent)",
+                }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+                <Icon name="image" size={10} />
+                <span className="mono">{svg.filename}</span>
+                <button
+                  onClick={() => setAttachedSvgs((prev) => prev.filter((_, j) => j !== i))}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--accent)",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  <Icon name="close" size={10} />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
-        <div className="relative flex gap-2">
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            padding: 8,
+            background: "var(--bg-inset)",
+            border: "0.5px solid var(--line-2)",
+            borderRadius: "var(--r-sm)",
+          }}
+        >
           <textarea
-            className="flex-1 bg-background border border-border rounded-lg p-3 text-sm text-foreground resize-none focus:outline-none focus:border-accent placeholder:text-muted"
-            rows={3}
-            placeholder="Describe changes... (Cmd+Enter to send)"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            placeholder="Ask for a change..."
+            rows={2}
             disabled={isGenerating}
+            className="vt-scroll"
+            style={{
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--text-0)",
+              fontSize: 12.5,
+              fontFamily: "inherit",
+              resize: "none",
+              padding: 0,
+              lineHeight: 1.5,
+            }}
           />
-          {/* SVG attach button */}
-          <div className="relative" ref={svgPickerRef}>
-            <button
-              onClick={openSvgPicker}
-              disabled={isGenerating}
-              title="Attach SVG to animate"
-              className="h-full px-2.5 border border-border rounded-lg text-muted hover:text-accent hover:border-accent disabled:opacity-50 transition-colors flex items-center"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
-                <polyline points="14 2 14 8 20 8" />
-                <text x="8" y="18" fontSize="7" fontWeight="bold" fill="currentColor" stroke="none">SVG</text>
-              </svg>
-            </button>
-
-            {/* SVG picker dropdown */}
-            {svgPickerOpen && (
-              <div className="absolute bottom-full right-0 mb-2 w-64 max-h-60 overflow-y-auto bg-surface border border-border rounded-lg shadow-lg z-50">
-                <div className="p-2 border-b border-border">
-                  <span className="text-[10px] font-medium text-muted">Select SVG to animate</span>
-                </div>
-                {svgLoading ? (
-                  <div className="p-3 text-xs text-muted">Loading...</div>
-                ) : svgOptions.length === 0 ? (
-                  <div className="p-3 text-xs text-muted">No SVG files found in assets</div>
-                ) : (
-                  <div className="p-1">
-                    {svgOptions.map((opt) => (
-                      <button
-                        key={opt.path}
-                        onClick={() => selectSvg(opt)}
-                        className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-accent/10 rounded-md transition-colors"
-                      >
-                        <div className="font-medium truncate">{opt.name}</div>
-                        <div className="text-[10px] text-muted truncate">{opt.path}</div>
-                      </button>
-                    ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ position: "relative" }} ref={svgPickerRef}>
+              <IconButton icon="attach" size={22} title="Attach SVG" onClick={openSvgPicker} disabled={isGenerating} />
+              {svgPickerOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    bottom: "100%",
+                    left: 0,
+                    marginBottom: 6,
+                    width: 240,
+                    maxHeight: 200,
+                    overflowY: "auto",
+                    background: "var(--bg-3)",
+                    border: "0.5px solid var(--line-2)",
+                    borderRadius: "var(--r-sm)",
+                    boxShadow: "var(--sh-float)",
+                    zIndex: 50,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "6px 10px",
+                      borderBottom: "0.5px solid var(--line-1)",
+                      fontSize: 10,
+                      color: "var(--text-2)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    Select SVG to animate
                   </div>
-                )}
-              </div>
-            )}
+                  {svgLoading ? (
+                    <div style={{ padding: 10, fontSize: 11, color: "var(--text-2)" }}>Loading...</div>
+                  ) : svgOptions.length === 0 ? (
+                    <div style={{ padding: 10, fontSize: 11, color: "var(--text-2)" }}>No SVG files in assets</div>
+                  ) : (
+                    <div style={{ padding: 4 }}>
+                      {svgOptions.map((opt) => (
+                        <button
+                          key={opt.path}
+                          onClick={() => selectSvg(opt)}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            padding: "6px 8px",
+                            fontSize: 11,
+                            color: "var(--text-0)",
+                            background: "transparent",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <div style={{ fontWeight: 500 }}>{opt.name}</div>
+                          <div className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                            {opt.path}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div style={{ flex: 1 }} />
+            <span className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>
+              <Kbd>&#8984;</Kbd> <Kbd>&#9166;</Kbd>
+            </span>
+            <Button variant="primary" size="sm" onClick={handleSend} disabled={!input.trim() || isGenerating} icon="send">
+              Send
+            </Button>
           </div>
         </div>
-
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || isGenerating}
-          className="w-full py-2 bg-accent text-white text-sm font-medium rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-        >
-          {isGenerating ? "Generating..." : "Send"}
-        </button>
       </div>
     </div>
   );
 }
 
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="mono"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        height: 18,
+        padding: "0 5px",
+        fontSize: 10,
+        color: "var(--text-1)",
+        background: "var(--bg-3)",
+        border: "0.5px solid var(--line-2)",
+        borderRadius: 3,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function MessageContent({ content }: { content: string }) {
-  // Show text outside code fences, collapse code blocks
   const parts = content.split(/(```[\s\S]*?```)/g);
   return (
     <>
       {parts.map((part, i) => {
         if (part.startsWith("```")) {
           return (
-            <details key={i} className="my-1">
-              <summary className="text-accent cursor-pointer text-[10px]">Code block</summary>
-              <pre className="mt-1 text-[10px] text-muted overflow-x-auto">{part}</pre>
+            <details key={i} style={{ margin: "4px 0" }}>
+              <summary style={{ color: "var(--accent)", cursor: "pointer", fontSize: 10 }}>Code block</summary>
+              <pre className="mono" style={{ marginTop: 4, fontSize: 10, color: "var(--text-2)", overflowX: "auto" }}>
+                {part}
+              </pre>
             </details>
           );
         }

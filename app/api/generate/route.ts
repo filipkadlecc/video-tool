@@ -1,11 +1,57 @@
 import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
+import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
 import { listAssetPaths } from "@/lib/assets";
-import type { AnimationType, ProjectSettings, ChatMessage } from "@/lib/types";
+import { getProject } from "@/lib/projects";
+import type { AnimationType, ProjectSettings, ChatMessage, SvgFile } from "@/lib/types";
 
 const anthropic = new Anthropic();
 
 export const maxDuration = 300;
+
+const VIDEO_EXTS = new Set([".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"]);
+const AUDIO_EXTS = new Set([".mp3", ".wav", ".m4a", ".aac"]);
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]);
+
+function getMediaFileType(ext: string): "video" | "audio" | "image" | "other" {
+  if (VIDEO_EXTS.has(ext)) return "video";
+  if (AUDIO_EXTS.has(ext)) return "audio";
+  if (IMAGE_EXTS.has(ext)) return "image";
+  return "other";
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)}GB`;
+}
+
+function listMediaFiles(dir: string, baseDir: string): { name: string; path: string; type: string; sizeFormatted: string }[] {
+  const files: { name: string; path: string; type: string; sizeFormatted: string }[] = [];
+  if (!fs.existsSync(dir)) return files;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listMediaFiles(fullPath, baseDir));
+    } else if (entry.isFile()) {
+      const ext = path.extname(entry.name).toLowerCase();
+      const type = getMediaFileType(ext);
+      if (type === "other") continue;
+      const stat = fs.statSync(fullPath);
+      files.push({
+        name: entry.name,
+        path: path.relative(baseDir, fullPath),
+        type,
+        sizeFormatted: formatSize(stat.size),
+      });
+    }
+  }
+  return files;
+}
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -16,7 +62,8 @@ export async function POST(request: Request) {
     notionContent,
     scriptWithTimestamps,
     currentCode,
-    svgContent,
+    svgContents,
+    projectId,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -24,7 +71,8 @@ export async function POST(request: Request) {
     notionContent?: string;
     scriptWithTimestamps?: string;
     currentCode?: string;
-    svgContent?: string;
+    svgContents?: SvgFile[];
+    projectId?: string;
   };
 
   if (!messages || !messages.length) {
@@ -32,15 +80,29 @@ export async function POST(request: Request) {
   }
 
   const assetPaths = listAssetPaths();
-  const systemPrompt = buildSystemPrompt(animationType, projectSettings, assetPaths);
+
+  // For video projects, gather media file info
+  let videoContext: { projectId: string; mediaFiles: { name: string; path: string; type: string; sizeFormatted: string }[] } | undefined;
+  if (animationType === "video" && projectId) {
+    const project = getProject(projectId);
+    if (project?.mediaFolder && fs.existsSync(project.mediaFolder)) {
+      const mediaFiles = listMediaFiles(project.mediaFolder, project.mediaFolder);
+      videoContext = { projectId, mediaFiles };
+    }
+  }
+
+  const systemPrompt = buildSystemPrompt(animationType, projectSettings, assetPaths, videoContext);
 
   // Build Anthropic messages from chat history
   // Enhance the last user message with context
   const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg, i) => {
     if (msg.role === "user" && i === messages.length - 1) {
       let userContent = buildUserMessage(msg.content, currentCode, notionContent, scriptWithTimestamps);
-      if (svgContent) {
-        userContent = `[SVG TO ANIMATE]\n${svgContent}\n[END SVG]\n\n${userContent}`;
+      if (svgContents && svgContents.length > 0) {
+        const svgBlock = svgContents
+          .map((svg, i) => `[SVG ${i + 1}: ${svg.filename}]\n${svg.content}\n[END SVG ${i + 1}]`)
+          .join("\n\n");
+        userContent = `${svgBlock}\n\n${userContent}`;
       }
       return {
         role: "user" as const,

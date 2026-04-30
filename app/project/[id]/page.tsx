@@ -8,14 +8,21 @@ import ChatPanel from "@/components/ChatPanel";
 import AssetBrowser from "@/components/AssetBrowser";
 import ExportDialog from "@/components/ExportDialog";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
+import Timeline from "@/components/Timeline";
 import { evalSceneCode } from "@/remotion/DynamicScene";
 import type { Project, ChatMessage } from "@/lib/types";
 import { getResolution } from "@/lib/types";
+import Logo from "@/components/ui/Logo";
+import Button from "@/components/ui/Button";
+import IconButton from "@/components/ui/IconButton";
+import TypeBadge from "@/components/ui/TypeBadge";
+import { useCodeHistory } from "@/hooks/useCodeHistory";
+import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 
 const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full text-muted text-sm">
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
       Loading preview...
     </div>
   ),
@@ -24,7 +31,7 @@ const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-full text-muted text-sm">
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
       Loading editor...
     </div>
   ),
@@ -45,6 +52,7 @@ export default function ProjectEditor() {
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef<{ code: string; chatLength: number }>({ code: "", chatLength: 0 });
+  const codeHistory = useCodeHistory();
 
   // Load project
   useEffect(() => {
@@ -95,6 +103,64 @@ export default function ProjectEditor() {
     };
   }, [code, chatHistory, project, projectId]);
 
+  // Force save (Cmd+S)
+  const forceSave = useCallback(async () => {
+    if (!project) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, chatHistory }),
+      });
+      lastSavedRef.current = { code, chatLength: chatHistory.length };
+    } catch {
+      // silent
+    }
+  }, [project, projectId, code, chatHistory]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === "s") {
+        e.preventDefault();
+        forceSave();
+      } else if (mod && e.key === "e") {
+        e.preventDefault();
+        if (code.trim()) setExportOpen(true);
+      } else if (mod && e.key === "z" && !e.shiftKey) {
+        // Only handle composition-level undo when focus is NOT inside Monaco
+        const active = document.activeElement;
+        const inMonaco = active?.closest(".monaco-editor");
+        if (!inMonaco) {
+          e.preventDefault();
+          const prev = codeHistory.undo();
+          if (prev !== null) setCode(prev);
+        }
+      } else if (mod && e.key === "z" && e.shiftKey) {
+        const active = document.activeElement;
+        const inMonaco = active?.closest(".monaco-editor");
+        if (!inMonaco) {
+          e.preventDefault();
+          const next = codeHistory.redo();
+          if (next !== null) setCode(next);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [forceSave, code, codeHistory]);
+
+  // Snapshot code before AI generation starts
+  const prevGeneratingRef = useRef(false);
+  useEffect(() => {
+    if (isGenerating && !prevGeneratingRef.current && code) {
+      codeHistory.pushSnapshot(code);
+    }
+    prevGeneratingRef.current = isGenerating;
+  }, [isGenerating, code, codeHistory]);
+
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode);
   }, []);
@@ -105,7 +171,7 @@ export default function ProjectEditor() {
 
   // Immediate save when generation completes (no debounce), then generate thumbnail
   const handleGenerationComplete = useCallback(async (finalCode: string, finalChat: ChatMessage[]) => {
-    // Cancel any pending debounced save
+    codeHistory.pushSnapshot(finalCode);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     try {
       await fetch(`/api/projects/${projectId}`, {
@@ -117,9 +183,8 @@ export default function ProjectEditor() {
     } catch {
       // silent fail
     }
-    // Generate thumbnail in background (fire and forget)
     fetch(`/api/projects/${projectId}/thumbnail`, { method: "POST" }).catch(() => {});
-  }, [projectId]);
+  }, [projectId, codeHistory]);
 
   const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
     if (!code || !code.trim()) return { durationInFrames: 250, fps: project?.settings.fps ?? 25, sceneError: undefined };
@@ -131,9 +196,22 @@ export default function ProjectEditor() {
     };
   }, [code, project?.settings.fps]);
 
+  const layoutKind = project?.animationType === "video" ? "video" : "still";
+  const storage = typeof window !== "undefined" ? window.localStorage : undefined;
+  const horizontalLayout = useDefaultLayout({
+    id: `studio-h-${layoutKind}`,
+    panelIds: ["main", "chat"],
+    storage,
+  });
+  const verticalLayout = useDefaultLayout({
+    id: `studio-v-${layoutKind}`,
+    panelIds: layoutKind === "video" ? ["preview", "timeline", "code"] : ["preview", "code"],
+    storage,
+  });
+
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center text-muted text-sm">
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", fontSize: 13 }}>
         Loading project...
       </div>
     );
@@ -142,78 +220,161 @@ export default function ProjectEditor() {
   if (!project) return null;
 
   const { width, height } = getResolution(project.settings.orientation, project.settings.resolution);
+  const resLabel = project.settings.resolution === "4k" ? "3840\u00d72160" : "1920\u00d71080";
+  const isVideoProject = project.animationType === "video";
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2 border-b border-border bg-surface shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => router.push("/")}
-            className="text-xs text-muted hover:text-foreground transition-colors"
-          >
-            &larr; Projects
-          </button>
-          <h1 className="text-sm font-semibold tracking-tight">{project.name}</h1>
-          <span className="text-[10px] text-muted">
-            {width}x{height} &middot; {project.settings.fps}fps
-          </span>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 16px",
+          height: 48,
+          background: "var(--bg-2)",
+          borderBottom: "0.5px solid var(--line-1)",
+          position: "relative",
+          zIndex: 5,
+          flexShrink: 0,
+        }}
+      >
+        <IconButton icon="arrowLeft" onClick={() => router.push("/")} title="Back to projects" />
+        <Logo size={20} />
+        <div style={{ width: 1, height: 20, background: "var(--line-2)", marginLeft: 4 }} />
+        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</div>
+          <div className="mono nums" style={{ fontSize: 10, color: "var(--text-2)" }}>
+            {resLabel} &middot; {project.settings.fps}fps &middot;{" "}
+            {project.settings.orientation === "horizontal" ? "16:9" : project.settings.orientation === "vertical" ? "9:16" : "1:1"}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <ConvertAspectRatioButton
-            projectId={projectId}
-            currentOrientation={project.settings.orientation}
-            disabled={!code.trim() || isGenerating}
+        <TypeBadge type={project.animationType} />
+        <div style={{ flex: 1 }} />
+        {/* Undo / Redo */}
+        <div style={{ display: "flex", gap: 1 }}>
+          <IconButton
+            icon="arrowLeft"
+            size={26}
+            title="Undo (Cmd+Z)"
+            onClick={() => { const prev = codeHistory.undo(); if (prev !== null) setCode(prev); }}
+            style={{ opacity: codeHistory.canUndo ? 1 : 0.3 }}
           />
-          <button
-            onClick={() => setAssetsOpen(true)}
-            className="px-3 py-1.5 text-xs text-muted border border-border rounded-lg hover:bg-surface-hover transition-colors"
-          >
-            Assets
-          </button>
-          <button
-            onClick={() => setExportOpen(true)}
-            disabled={!code.trim()}
-            className="px-4 py-1.5 bg-accent text-white text-xs font-medium rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            Export
-          </button>
+          <IconButton
+            icon="arrowRight"
+            size={26}
+            title="Redo (Cmd+Shift+Z)"
+            onClick={() => { const next = codeHistory.redo(); if (next !== null) setCode(next); }}
+            style={{ opacity: codeHistory.canRedo ? 1 : 0.3 }}
+          />
         </div>
-      </header>
+        <div style={{ width: 1, height: 20, background: "var(--line-2)" }} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 2,
+            padding: 3,
+            background: "var(--bg-inset)",
+            border: "0.5px solid var(--line-2)",
+            borderRadius: "var(--r-sm)",
+          }}
+        >
+          <span className="mono" style={{ fontSize: 10, color: "var(--text-2)", padding: "0 6px" }}>
+            SAVED
+          </span>
+          <span
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: "var(--accent)",
+              marginRight: 6,
+            }}
+          />
+        </div>
+        <ConvertAspectRatioButton
+          projectId={projectId}
+          currentOrientation={project.settings.orientation}
+          disabled={!code.trim() || isGenerating}
+        />
+        <Button variant="outline" size="sm" icon="folder" onClick={() => setAssetsOpen(true)}>
+          Assets
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          icon="download"
+          onClick={() => setExportOpen(true)}
+          disabled={!code.trim()}
+        >
+          Export
+        </Button>
+      </div>
 
-      {/* 2-column grid layout */}
-      <div className="flex-1 flex min-h-0">
-        {/* Left column: Preview (top 60%) + Chat (bottom 40%) */}
-        <div className="w-[60%] flex flex-col min-h-0 shrink-0">
-          <div className="h-[60%] min-h-0 border-b border-border">
-            <PreviewPanel code={code} width={width} height={height} />
-          </div>
-          <div className="h-[40%] min-h-0">
-            <ChatPanel
-              projectId={projectId}
-              chatHistory={chatHistory}
-              initialPrompt={project.initialPrompt}
-              onCodeUpdate={handleCodeChange}
-              onChatUpdate={handleChatUpdate}
-              isGenerating={isGenerating}
-              setIsGenerating={setIsGenerating}
-              projectSettings={project.settings}
-              animationType={project.animationType}
-              notionContent={project.notionContent}
-              scriptWithTimestamps={project.scriptWithTimestamps}
-              svgContent={project.svgContent}
-              currentCode={code}
-              autoSend={!project.code && project.chatHistory.length === 0}
-              onGenerationComplete={handleGenerationComplete}
-              sceneError={sceneError}
-            />
-          </div>
-        </div>
-
-        {/* Right column: Code editor (full height) */}
-        <div className="w-[40%] border-l border-border min-h-0">
-          <CodeEditor code={code} onChange={handleCodeChange} />
-        </div>
+      {/* Studio layout: resizable panels */}
+      <div style={{ flex: 1, minHeight: 0, background: "var(--line-1)" }}>
+        <Group
+          orientation="horizontal"
+          defaultLayout={horizontalLayout.defaultLayout}
+          onLayoutChanged={horizontalLayout.onLayoutChanged}
+          style={{ height: "100%" }}
+        >
+          <Panel id="main" defaultSize="72%" minSize="30%">
+            <Group
+              orientation="vertical"
+              defaultLayout={verticalLayout.defaultLayout}
+              onLayoutChanged={verticalLayout.onLayoutChanged}
+              style={{ height: "100%" }}
+            >
+              <Panel id="preview" defaultSize={isVideoProject ? "55%" : "65%"} minSize="15%">
+                <div style={{ background: "#000", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
+                  <PreviewPanel code={code} width={width} height={height} />
+                </div>
+              </Panel>
+              {isVideoProject && (
+                <>
+                  <Separator className="resize-handle resize-handle-horizontal" />
+                  <Panel id="timeline" defaultSize="15%" minSize="8%">
+                    <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                      <Timeline code={code} fps={extractedFps} durationInFrames={durationInFrames} />
+                    </div>
+                  </Panel>
+                </>
+              )}
+              <Separator className="resize-handle resize-handle-horizontal" />
+              <Panel id="code" defaultSize={isVideoProject ? "30%" : "35%"} minSize="10%">
+                <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                  <CodeEditor code={code} onChange={handleCodeChange} />
+                </div>
+              </Panel>
+            </Group>
+          </Panel>
+          <Separator className="resize-handle resize-handle-vertical" />
+          <Panel id="chat" defaultSize="28%" minSize="18%" maxSize="50%">
+            <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <ChatPanel
+                projectId={projectId}
+                chatHistory={chatHistory}
+                initialPrompt={project.initialPrompt}
+                onCodeUpdate={handleCodeChange}
+                onChatUpdate={handleChatUpdate}
+                isGenerating={isGenerating}
+                setIsGenerating={setIsGenerating}
+                projectSettings={project.settings}
+                animationType={project.animationType}
+                notionContent={project.notionContent}
+                scriptWithTimestamps={project.scriptWithTimestamps}
+                svgContents={project.svgContents}
+                currentCode={code}
+                autoSend={!project.code && project.chatHistory.length === 0}
+                onGenerationComplete={handleGenerationComplete}
+                sceneError={sceneError}
+              />
+            </div>
+          </Panel>
+        </Group>
       </div>
 
       <AssetBrowser

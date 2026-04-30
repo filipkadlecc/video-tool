@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Orientation } from "@/lib/types";
+import Button from "@/components/ui/Button";
+import Icon from "@/components/ui/Icon";
 
 interface Props {
   projectId: string;
@@ -11,10 +13,26 @@ interface Props {
 }
 
 const RATIOS = [
-  { label: "16:9", value: "16:9", orientation: "horizontal" },
-  { label: "9:16", value: "9:16", orientation: "vertical" },
-  { label: "1:1", value: "1:1", orientation: "square" },
+  { label: "Vertical \u00b7 9:16", value: "9:16", orientation: "vertical" },
+  { label: "Horizontal \u00b7 16:9", value: "16:9", orientation: "horizontal" },
+  { label: "Square \u00b7 1:1", value: "1:1", orientation: "square" },
 ] as const;
+
+function OrientationPreview({ ratio }: { ratio: string }) {
+  const dims =
+    ratio === "16:9" ? { w: 24, h: 14 } : ratio === "9:16" ? { w: 14, h: 24 } : { w: 18, h: 18 };
+  return (
+    <div
+      style={{
+        width: dims.w,
+        height: dims.h,
+        background: "var(--bg-4)",
+        border: "0.5px solid var(--line-3)",
+        borderRadius: 2,
+      }}
+    />
+  );
+}
 
 export default function ConvertAspectRatioButton({ projectId, currentOrientation, disabled }: Props) {
   const router = useRouter();
@@ -23,7 +41,6 @@ export default function ConvertAspectRatioButton({ projectId, currentOrientation
   const [progress, setProgress] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
@@ -69,7 +86,6 @@ export default function ConvertAspectRatioButton({ projectId, currentOrientation
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        // Keep the last (potentially incomplete) line in the buffer
         buffer = lines.pop() || "";
 
         for (const line of lines) {
@@ -104,23 +120,59 @@ export default function ConvertAspectRatioButton({ projectId, currentOrientation
   }
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
+    <div style={{ position: "relative" }} ref={dropdownRef}>
+      <Button
+        variant="outline"
+        size="sm"
+        icon="aspect"
         onClick={() => setOpen(!open)}
         disabled={disabled || converting}
-        className="px-3 py-1.5 text-xs text-muted border border-border rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-50"
       >
-        {converting ? progress : "Convert Aspect Ratio"}
-      </button>
+        {converting ? progress : "Convert ratio"}
+        {!converting && <Icon name="chevronDown" size={12} />}
+      </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-lg overflow-hidden z-50 min-w-[140px]">
+        <div
+          style={{
+            position: "absolute",
+            right: 0,
+            top: "100%",
+            marginTop: 6,
+            minWidth: 200,
+            padding: 5,
+            background: "var(--bg-3)",
+            border: "0.5px solid var(--line-2)",
+            borderRadius: "var(--r-sm)",
+            boxShadow: "var(--sh-float)",
+            zIndex: 10,
+          }}
+        >
+          <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
+            Duplicate to...
+          </div>
           {availableRatios.map((ratio) => (
             <button
               key={ratio.value}
               onClick={() => handleConvert(ratio.value)}
-              className="w-full px-4 py-2.5 text-xs text-left text-foreground hover:bg-surface-hover transition-colors"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                width: "100%",
+                padding: "8px 8px",
+                fontSize: 12,
+                background: "transparent",
+                border: "none",
+                color: "var(--text-0)",
+                borderRadius: 4,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
+              <OrientationPreview ratio={ratio.value} />
               {ratio.label}
             </button>
           ))}

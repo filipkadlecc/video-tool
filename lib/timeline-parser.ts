@@ -1,0 +1,180 @@
+export interface TimelineClip {
+  name: string;
+  src: string;
+  from: number;
+  durationInFrames: number;
+  startFrom?: number;
+  endAt?: number;
+  type: "video" | "audio" | "image" | "scene";
+}
+
+// Palette for clip colors
+const CLIP_COLORS = [
+  "oklch(0.72 0.26 340)",  // magenta
+  "oklch(0.82 0.14 210)",  // cyan
+  "oklch(0.82 0.16 75)",   // amber
+  "oklch(0.88 0.22 124)",  // lime
+  "oklch(0.72 0.20 280)",  // purple
+  "oklch(0.78 0.18 160)",  // teal
+];
+
+export function getClipColor(index: number): string {
+  return CLIP_COLORS[index % CLIP_COLORS.length];
+}
+
+function extractFilename(src: string): string {
+  const parts = src.split("/");
+  return parts[parts.length - 1] || src;
+}
+
+function resolveNumericExpr(expr: string, constants: Record<string, number>): number | null {
+  // Trim
+  let s = expr.trim();
+
+  // Direct number
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+
+  // Simple math: "150 + 300", "TRANSITION + 200", etc.
+  // Replace known constants
+  for (const [name, value] of Object.entries(constants)) {
+    s = s.replace(new RegExp(`\\b${name}\\b`, "g"), String(value));
+  }
+
+  // Try to evaluate simple arithmetic
+  if (/^[\d\s+\-*/().]+$/.test(s)) {
+    try {
+      const result = Function(`"use strict"; return (${s})`)();
+      if (typeof result === "number" && !isNaN(result)) return Math.round(result);
+    } catch {
+      // fallback
+    }
+  }
+
+  return null;
+}
+
+export function parseTimeline(code: string, fps: number): TimelineClip[] {
+  if (!code || !code.trim()) return [];
+
+  const clips: TimelineClip[] = [];
+
+  // Extract constants (const FOO = 123)
+  const constants: Record<string, number> = { fps };
+  const constRegex = /(?:const|let|var)\s+(\w+)\s*=\s*(\d+)/g;
+  let constMatch;
+  while ((constMatch = constRegex.exec(code)) !== null) {
+    constants[constMatch[1]] = parseInt(constMatch[2], 10);
+  }
+
+  // Also try to get fps and durationInFrames from exports
+  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*=\s*(\d+)/);
+  if (fpsExport) constants.fps = parseInt(fpsExport[1], 10);
+
+  // Pattern 1: <Sequence from={X} durationInFrames={Y}> containing video/audio/img
+  const sequenceRegex = /<Sequence[^>]*?\bfrom=\{([^}]+)\}[^>]*?\bdurationInFrames=\{([^}]+)\}[^>]*?>([\s\S]*?)<\/Sequence>/g;
+  const sequenceRegex2 = /<Sequence[^>]*?\bdurationInFrames=\{([^}]+)\}[^>]*?\bfrom=\{([^}]+)\}[^>]*?>([\s\S]*?)<\/Sequence>/g;
+
+  function parseSequenceContent(from: number, duration: number, content: string) {
+    // Look for video sources
+    const videoRegex = /<(?:OffthreadVideo|Video)\s[^>]*?src=(?:\{["`']([^"'`]+)["`']\}|"([^"]+)")[^>]*?\/?>/g;
+    let vMatch;
+    while ((vMatch = videoRegex.exec(content)) !== null) {
+      const src = vMatch[1] || vMatch[2];
+      const startFromMatch = content.match(/startFrom=\{(\d+)\}/);
+      const endAtMatch = content.match(/endAt=\{(\d+)\}/);
+
+      clips.push({
+        name: extractFilename(src),
+        src,
+        from,
+        durationInFrames: duration,
+        startFrom: startFromMatch ? parseInt(startFromMatch[1], 10) : undefined,
+        endAt: endAtMatch ? parseInt(endAtMatch[1], 10) : undefined,
+        type: "video",
+      });
+    }
+
+    // Look for audio sources
+    const audioRegex = /<Audio\s[^>]*?src=(?:\{["`']([^"'`]+)["`']\}|"([^"]+)")[^>]*?\/?>/g;
+    let aMatch;
+    while ((aMatch = audioRegex.exec(content)) !== null) {
+      const src = aMatch[1] || aMatch[2];
+      clips.push({
+        name: extractFilename(src),
+        src,
+        from,
+        durationInFrames: duration,
+        type: "audio",
+      });
+    }
+
+    // If no media found, it's a scene/overlay
+    if (!clips.find((c) => c.from === from && (c.type === "video" || c.type === "audio"))) {
+      // Check for any meaningful content
+      const hasContent = /<(?:div|h1|h2|p|span|AbsoluteFill|Img)\b/.test(content);
+      if (hasContent) {
+        // Try to extract a scene name from component usage or text content
+        const componentMatch = content.match(/<(\w+Scene|\w+Overlay|\w+Title)\b/);
+        const name = componentMatch ? componentMatch[1] : "Scene";
+        clips.push({
+          name,
+          src: "",
+          from,
+          durationInFrames: duration,
+          type: "scene",
+        });
+      }
+    }
+  }
+
+  let sMatch;
+  while ((sMatch = sequenceRegex.exec(code)) !== null) {
+    const from = resolveNumericExpr(sMatch[1], constants);
+    const duration = resolveNumericExpr(sMatch[2], constants);
+    if (from !== null && duration !== null) {
+      parseSequenceContent(from, duration, sMatch[3]);
+    }
+  }
+
+  // Also match durationInFrames before from
+  while ((sMatch = sequenceRegex2.exec(code)) !== null) {
+    const duration = resolveNumericExpr(sMatch[1], constants);
+    const from = resolveNumericExpr(sMatch[2], constants);
+    if (from !== null && duration !== null) {
+      parseSequenceContent(from, duration, sMatch[3]);
+    }
+  }
+
+  // Pattern 2: <TransitionSeries.Sequence durationInFrames={Y}> — no `from`, sequential
+  const tsRegex = /<TransitionSeries\.Sequence\s[^>]*?durationInFrames=\{([^}]+)\}[^>]*?>([\s\S]*?)<\/TransitionSeries\.Sequence>/g;
+  const transitionRegex = /<TransitionSeries\.Transition[^>]*?durationInFrames=\{([^}]+)\}[^>]*?\/?>/g;
+
+  // Only use TransitionSeries parsing if no regular Sequences were found
+  if (clips.length === 0) {
+    const transitionDurations: number[] = [];
+    let tMatch;
+    while ((tMatch = transitionRegex.exec(code)) !== null) {
+      const d = resolveNumericExpr(tMatch[1], constants);
+      if (d !== null) transitionDurations.push(d);
+    }
+
+    let runningFrame = 0;
+    let transIdx = 0;
+    while ((sMatch = tsRegex.exec(code)) !== null) {
+      const duration = resolveNumericExpr(sMatch[1], constants);
+      if (duration === null) continue;
+
+      parseSequenceContent(runningFrame, duration, sMatch[2]);
+
+      // Account for transition overlap
+      const overlapDuration = transitionDurations[transIdx] || 0;
+      runningFrame += duration - overlapDuration;
+      transIdx++;
+    }
+  }
+
+  // Sort by start frame
+  clips.sort((a, b) => a.from - b.from);
+
+  return clips;
+}

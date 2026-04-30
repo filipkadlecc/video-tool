@@ -2,6 +2,8 @@
 
 import React, { useState } from "react";
 import type { ProjectMeta } from "@/lib/types";
+import TypeBadge from "@/components/ui/TypeBadge";
+import Icon from "@/components/ui/Icon";
 
 interface ProjectCardProps {
   project: ProjectMeta;
@@ -10,101 +12,175 @@ interface ProjectCardProps {
   onDuplicate: () => void;
 }
 
-const TYPE_BADGE: Record<string, { label: string; color: string }> = {
-  broll: { label: "B-Roll", color: "#5C8374" },
-  animation: { label: "Animation", color: "#5C8374" },
-  svg: { label: "SVG", color: "#7C5C83" },
-};
-
 export default function ProjectCard({ project, onClick, onDelete, onDuplicate }: ProjectCardProps) {
-  const badge = TYPE_BADGE[project.animationType] ?? TYPE_BADGE.animation;
+  const [hover, setHover] = useState(false);
   const [thumbError, setThumbError] = useState(false);
 
   const specs = [
     project.settings.resolution.toUpperCase(),
-    `${project.settings.fps}fps`,
-    project.settings.orientation === "horizontal" ? "16:9" : project.settings.orientation === "vertical" ? "9:16" : "1:1",
-  ].join(" / ");
+    `${project.settings.fps}FPS`,
+    project.settings.orientation === "horizontal"
+      ? "16:9"
+      : project.settings.orientation === "vertical"
+        ? "9:16"
+        : "1:1",
+  ].join(" · ");
 
   const date = new Date(project.updatedAt).toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 
   return (
     <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       onClick={onClick}
-      className="group relative bg-[#0a1a1a] rounded-2xl p-4 cursor-pointer hover:bg-[#183D3D]/40 transition-colors border border-[#183D3D]"
+      style={{
+        position: "relative",
+        cursor: "pointer",
+        background: "var(--bg-2)",
+        border: "0.5px solid var(--line-2)",
+        borderRadius: "var(--r-md)",
+        overflow: "hidden",
+        transition: "transform 160ms, border-color 160ms, box-shadow 160ms",
+        transform: hover ? "translateY(-2px)" : "none",
+        boxShadow: hover ? "var(--sh-card)" : "none",
+        borderColor: hover ? "var(--line-3)" : "var(--line-2)",
+      }}
     >
-      {/* Action buttons */}
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 flex gap-1.5 transition-opacity z-10">
+      {/* Thumbnail */}
+      <div style={{ position: "relative", width: "100%", paddingBottom: "56.25%", overflow: "hidden" }}>
+        {!thumbError ? (
+          <img
+            src={`/api/projects/${project.id}/thumbnail?t=${project.updatedAt}`}
+            alt=""
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setThumbError(true)}
+          />
+        ) : (
+          <div
+            className="vt-ph"
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span style={{ fontSize: 11, color: "var(--text-3)" }}>No preview</span>
+          </div>
+        )}
+        {/* Ratio badge */}
+        <div
+          className="mono"
+          style={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            padding: "2px 5px",
+            fontSize: 9,
+            color: "rgba(255,255,255,0.6)",
+            background: "rgba(0,0,0,0.5)",
+            borderRadius: 2,
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          {project.settings.orientation === "horizontal"
+            ? "16:9"
+            : project.settings.orientation === "vertical"
+              ? "9:16"
+              : "1:1"}
+        </div>
+      </div>
+
+      {/* Hover actions */}
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          display: "flex",
+          gap: 4,
+          opacity: hover ? 1 : 0,
+          transition: "opacity 120ms",
+        }}
+      >
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDuplicate();
           }}
-          className="bg-black/60 text-muted hover:text-foreground text-[11px] px-2.5 py-1 rounded-lg"
+          title="Duplicate"
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 5,
+            border: "none",
+            background: "rgba(10,10,14,0.8)",
+            backdropFilter: "blur(6px)",
+            color: "var(--text-0)",
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
         >
-          Duplicate
+          <Icon name="duplicate" size={13} />
         </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onDelete();
           }}
-          className="bg-black/60 text-muted hover:text-red-400 text-[11px] px-2.5 py-1 rounded-lg"
+          title="Delete"
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 5,
+            border: "none",
+            background: "rgba(10,10,14,0.8)",
+            backdropFilter: "blur(6px)",
+            color: "var(--text-0)",
+            cursor: "pointer",
+            display: "grid",
+            placeItems: "center",
+          }}
         >
-          Delete
+          <Icon name="trash" size={13} />
         </button>
       </div>
 
-      {/* Two-column layout */}
-      <div className="flex gap-5">
-        {/* Left: Thumbnail */}
-        <div className="w-[45%] shrink-0">
-          <div className="aspect-video rounded-xl overflow-hidden bg-[#1a1a1a]">
-            {!thumbError ? (
-              <img
-                src={`/api/projects/${project.id}/thumbnail?t=${project.updatedAt}`}
-                alt=""
-                className="w-full h-full object-cover"
-                onError={() => setThumbError(true)}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-[#183D3D]/30">
-                <div className="text-[#93B1A6]/60 text-xs">No preview</div>
-              </div>
-            )}
-          </div>
+      {/* Info */}
+      <div style={{ padding: "14px 14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <TypeBadge type={project.animationType} />
+          <span className="mono nums" style={{ fontSize: 10, color: "var(--text-2)", marginLeft: "auto" }}>
+            {date}
+          </span>
         </div>
-
-        {/* Right: Project info */}
-        <div className="flex-1 flex flex-col justify-between min-w-0 py-1">
-          {/* Name */}
-          <h3 className="text-lg font-bold text-foreground truncate">{project.name}</h3>
-
-          {/* Badge + Specs row */}
-          <div className="flex items-center gap-3 mt-2">
-            <span
-              className="text-[11px] font-bold uppercase tracking-wider px-3 py-1 rounded-full"
-              style={{ color: "#fff", backgroundColor: badge.color }}
-            >
-              {badge.label}
-            </span>
-            <span className="text-xs text-muted">{specs}</span>
-          </div>
-
-          {/* Description box */}
-          <div className="mt-3 bg-white/5 border border-[#5C8374]/30 rounded-lg px-3 py-2">
-            <p className="text-xs text-foreground/80 line-clamp-2">{project.initialPrompt}</p>
-          </div>
-
-          {/* Date */}
-          <p className="text-[11px] text-muted mt-3">{date}</p>
+        <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.1, marginBottom: 4 }}>
+          {project.name}
+        </div>
+        <div className="mono nums" style={{ fontSize: 10, color: "var(--text-2)", marginBottom: 8 }}>
+          {specs}
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            lineHeight: 1.45,
+            color: "var(--text-1)",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {project.initialPrompt}
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ const Fallback: React.FC = () => (
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      color: "#93B1A6",
+      color: "var(--text-2)",
       fontSize: 48,
       fontFamily: "sans-serif",
     }}
@@ -40,10 +40,22 @@ class PlayerErrorBoundary extends Component<
   render() {
     if (this.state.error) {
       return (
-        <div className="flex-1 flex items-center justify-center bg-black text-red-400 text-sm p-4 text-center">
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "#000",
+            color: "var(--red)",
+            fontSize: 13,
+            padding: 16,
+            textAlign: "center",
+          }}
+        >
           <div>
-            <p className="font-medium mb-1">Preview error</p>
-            <p className="text-xs text-muted">{this.state.error}</p>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>Preview error</p>
+            <p style={{ fontSize: 12, color: "var(--text-2)" }}>{this.state.error}</p>
           </div>
         </div>
       );
@@ -78,14 +90,29 @@ export default function PreviewPanel({ code, width = 3840, height = 2160 }: Prev
   const seconds = (durationInFrames / fps).toFixed(1);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-sm font-medium text-muted">Preview</span>
-        <span className="text-xs text-muted">
-          {durationInFrames}f / {fps}fps / {seconds}s
-        </span>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
+      {/* Frame info overlays */}
+      <div
+        className="mono nums"
+        style={{
+          position: "absolute",
+          top: 12,
+          left: 12,
+          zIndex: 2,
+          padding: "4px 8px",
+          background: "rgba(0,0,0,0.6)",
+          backdropFilter: "blur(8px)",
+          fontSize: 10,
+          color: "rgba(255,255,255,0.75)",
+          borderRadius: 3,
+          border: "0.5px solid rgba(255,255,255,0.1)",
+        }}
+      >
+        {durationInFrames}F / {fps}FPS / {seconds}S
       </div>
-      <div className="flex-1 flex items-center justify-center bg-black p-2 min-h-0">
+
+      {/* Player */}
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 2, minHeight: 0 }}>
         <PlayerErrorBoundary code={code}>
           <Player
             component={SceneComponent}
@@ -113,7 +140,7 @@ export default function PreviewPanel({ code, width = 3840, height = 2160 }: Prev
               >
                 <div style={{ color: "#f87171", fontSize: 28, textAlign: "center", fontFamily: "sans-serif" }}>
                   <div style={{ marginBottom: 12 }}>Scene error</div>
-                  <div style={{ color: "#93B1A6", fontSize: 20 }}>{error.message}</div>
+                  <div style={{ color: "var(--text-2)", fontSize: 20 }}>{error.message}</div>
                 </div>
               </AbsoluteFill>
             )}

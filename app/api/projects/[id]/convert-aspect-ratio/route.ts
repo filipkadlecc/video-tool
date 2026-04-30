@@ -48,7 +48,7 @@ export async function POST(
     initialPrompt: source.initialPrompt,
     notionContent: source.notionContent,
     scriptWithTimestamps: source.scriptWithTimestamps,
-    svgContent: source.svgContent,
+    svgContents: source.svgContents,
   });
 
   // Build the conversion prompt
