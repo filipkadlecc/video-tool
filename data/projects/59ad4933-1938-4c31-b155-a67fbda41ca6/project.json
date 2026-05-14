@@ -1,0 +1,256 @@
+{
+  "id": "59ad4933-1938-4c31-b155-a67fbda41ca6",
+  "name": "Lower 3rd",
+  "animationType": "animation",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import React from \"react\";\nimport {\n  AbsoluteFill,\n  useCurrentFrame,\n  useVideoConfig,\n  spring,\n  interpolate,\n  Img,\n  staticFile,\n} from \"remotion\";\nimport { TransitionSeries, linearTiming } from \"@remotion/transitions\";\nimport { fade } from \"@remotion/transitions/fade\";\n\nexport const fps = 25;\n\nconst COLORS = {\n  green: \"#00C25A\",\n  white: \"#FFFFFF\",\n  dark: \"#1A1A1A\",\n  bg: \"#000000\",\n};\n\nconst TRANSITION = 15;\nconst SCENE_FRAMES = 750; // 30 seconds at 25fps\n\nconst BlackScreen: React.FC = () => (\n  <AbsoluteFill style={{ backgroundColor: \"transparent\" }} />\n);\n\ninterface PersonCardProps {\n  name: string;\n  title: string;\n  entranceDelay: number;\n  align: \"left\" | \"right\";\n}\n\nconst PersonCard: React.FC<PersonCardProps> = ({ name, title, entranceDelay, align }) => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  const containerProgress = spring({\n    frame,\n    fps,\n    delay: entranceDelay,\n    config: { damping: 200 },\n  });\n\n  const logoProgress = spring({\n    frame,\n    fps,\n    delay: entranceDelay + 15,\n    config: { damping: 200 },\n  });\n\n  const nameProgress = spring({\n    frame,\n    fps,\n    delay: entranceDelay + 28,\n    config: { damping: 200 },\n  });\n\n  const lineProgress = spring({\n    frame,\n    fps,\n    delay: entranceDelay + 36,\n    config: { damping: 200 },\n  });\n\n  const titleProgress = spring({\n    frame,\n    fps,\n    delay: entranceDelay + 43,\n    config: { damping: 200 },\n  });\n\n  const exitStart = SCENE_FRAMES - 40;\n  const exitEnd = SCENE_FRAMES - 5;\n\n  const exitProgress = interpolate(frame, [exitStart, exitEnd], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\",\n  });\n\n  const entranceY = interpolate(containerProgress, [0, 1], [120, 0]);\n  const exitY = interpolate(exitProgress, [0, 1], [0, 120]);\n  const containerY = entranceY + exitY;\n  const containerOpacity = Math.min(\n    containerProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n\n  const logoOpacity = Math.min(\n    logoProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n  const logoX = interpolate(logoProgress, [0, 1], [-30, 0]);\n\n  const nameOpacity = Math.min(\n    nameProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n  const nameX = interpolate(nameProgress, [0, 1], [align === \"left\" ? 40 : -40, 0]);\n\n  const titleOpacity = Math.min(\n    titleProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n  const titleX = interpolate(titleProgress, [0, 1], [align === \"left\" ? 40 : -40, 0]);\n\n  const lineWidth = interpolate(lineProgress, [0, 1], [0, 100]);\n\n  return (\n    <div\n      style={{\n        opacity: containerOpacity,\n        transform: `translateY(${containerY}px)`,\n        display: \"flex\",\n        flexDirection: \"row\",\n        alignItems: \"stretch\",\n      }}\n    >\n      <div\n        style={{\n          backgroundColor: COLORS.dark,\n          borderRadius: 14,\n          padding: \"48px 80px 48px 64px\",\n          display: \"flex\",\n          flexDirection: \"row\",\n          alignItems: \"center\",\n          gap: 64,\n          boxShadow:\n            \"0 12px 60px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4)\",\n          whiteSpace: \"nowrap\",\n        }}\n      >\n        {/* Apify logo */}\n        <div\n          style={{\n            opacity: logoOpacity,\n            transform: `translateX(${logoX}px)`,\n            display: \"flex\",\n            alignItems: \"center\",\n            flexShrink: 0,\n          }}\n        >\n          <Img\n            src={staticFile(\"assets/apify/Apify Logo white Wordmark.svg\")}\n            style={{ height: 100, width: \"auto\" }}\n          />\n        </div>\n\n        {/* Divider */}\n        <div\n          style={{\n            width: 2,\n            alignSelf: \"stretch\",\n            backgroundColor: \"rgba(255,255,255,0.15)\",\n            borderRadius: 2,\n            opacity: logoOpacity,\n            flexShrink: 0,\n          }}\n        />\n\n        {/* Name + Title stacked */}\n        <div\n          style={{\n            display: \"flex\",\n            flexDirection: \"column\",\n            gap: 10,\n          }}\n        >\n          {/* Name */}\n          <div\n            style={{\n              opacity: nameOpacity,\n              transform: `translateX(${nameX}px)`,\n              fontSize: 64,\n              fontWeight: 700,\n              color: COLORS.white,\n              letterSpacing: \"0.01em\",\n              lineHeight: 1,\n              whiteSpace: \"nowrap\",\n            }}\n          >\n            {name}\n          </div>\n\n          {/* Accent line */}\n          <div\n            style={{\n              width: `${lineWidth}%`,\n              height: 3,\n              backgroundColor: COLORS.green,\n              borderRadius: 2,\n              opacity: titleOpacity,\n            }}\n          />\n\n          {/* Job title */}\n          <div\n            style={{\n              opacity: titleOpacity,\n              transform: `translateX(${titleX}px)`,\n              fontSize: 46,\n              fontWeight: 500,\n              color: COLORS.green,\n              letterSpacing: \"0.01em\",\n              lineHeight: 1,\n              whiteSpace: \"nowrap\",\n            }}\n          >\n            {title}\n          </div>\n        </div>\n      </div>\n    </div>\n  );\n};\n\nconst DualNameLower3rd: React.FC = () => {\n  return (\n    <AbsoluteFill style={{ fontFamily: \"'Inter', sans-serif\" }}>\n      <AbsoluteFill\n        style={{\n          display: \"flex\",\n          flexDirection: \"row\",\n          alignItems: \"flex-end\",\n          justifyContent: \"space-between\",\n          padding: \"0 100px 160px 100px\",\n        }}\n      >\n        {/* Left — Luís */}\n        <PersonCard\n          name=\"Luís Pinto\"\n          title=\"Product Marketing Manager\"\n          entranceDelay={5}\n          align=\"left\"\n        />\n\n        {/* Right — Sameh */}\n        <PersonCard\n          name=\"Sameh Jarour\"\n          title=\"AI Product Evangelist\"\n          entranceDelay={5}\n          align=\"right\"\n        />\n      </AbsoluteFill>\n    </AbsoluteFill>\n  );\n};\n\n// Sequences: 10 + 765 + 25 = 800\n// Transitions: 10 + 15 = 25\n// Net: 800 - 25 = 775\nexport const durationInFrames = 775;\n\nconst MainComposition: React.FC = () => {\n  return (\n    <TransitionSeries>\n      <TransitionSeries.Sequence durationInFrames={10}>\n        <BlackScreen />\n      </TransitionSeries.Sequence>\n      <TransitionSeries.Transition\n        presentation={fade()}\n        timing={linearTiming({ durationInFrames: 10 })}\n      />\n\n      <TransitionSeries.Sequence durationInFrames={SCENE_FRAMES + TRANSITION}>\n        <DualNameLower3rd />\n      </TransitionSeries.Sequence>\n      <TransitionSeries.Transition\n        presentation={fade()}\n        timing={linearTiming({ durationInFrames: TRANSITION })}\n      />\n\n      <TransitionSeries.Sequence durationInFrames={25}>\n        <BlackScreen />\n      </TransitionSeries.Sequence>\n    </TransitionSeries>\n  );\n};\n\nexport default MainComposition;",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "Hey, i need a lower 3rd animation in the Apify style\nNO BACKGROUND!!!!!\nThe text in the box should be \"Get $30 in free credits with the coupon \"WEBINAR\"\"\n\nthe animation should be in a box, make it an apify style box"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make it bigger and remove the gradient"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you extend it horizontally to have the text on one line?"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make it a little bit bigger and make the color some Apify green instead"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "remove the green line on the left"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make the whole text green and only \"WEBINAR\" green\nremove the green \nbox from the text \"WEBINAR\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "change the text to \"Now using E-commerce Scraping Tool\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "now change the text to \"Connect your AI agents to 25K+ Actors at mcp.apify.com\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "Now can you make one for \"follow us on linkedin : https://www.linkedin.com/company/apify/\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can u change the link to linkedin.com/apify"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "OKAY, now change the text to \"follow us on X: x.com/apify\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "Now do a subscribe to our youtube one"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you do one for all? \nLinkedin\nX\nYouTube\nTikTok (https://www.tiktok.com/@apifytech)"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the full multi-scene lower 3rd animation with all four social platforms:\n\n\n\nHere's what's in this animation:\n\n- **4 scenes** — LinkedIn, X, Twitter, YouTube, TikTok — each 4 seconds long with smooth fade transitions between them\n- **Platform-accurate colors** — LinkedIn blue, X white, YouTube red, TikTok cyan\n- **Correct URLs** — including `tiktok.com/@apifytech`\n- **Reusable `Lower3rd` component** — all 4 scenes share the same animation logic, just different content\n- **Staggered entrance** — box slides up, then Apify logo, then icon + label, then URL reveal\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "i added into the assets logos, use them instead"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "instead of the animation repeating between socials, just animate the text changing and the box changing sizes"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's what changed:\n\n- **Single box entrance** — the dark card slides up once and stays on screen the entire duration\n- **Apify logo stays fixed** — it animates in once and never moves\n- **Text swaps in place** — when switching between socials, the current text fades + slides up out, and the new text fades + slides up in (no full scene transition)\n- **No TransitionSeries needed** — everything is driven by a single frame counter that cycles through the 4 socials, each held for 100 frames (~4 seconds)\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "tiktok is there twice for some reason, remove one\nalso, the change animation feels not smooth, fix that pls"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's what changed:\n\n- **No duplicate TikTok** — the `SOCIALS` array now has exactly 4 entries\n- **Smooth crossfade swap** — instead of the abrupt opacity cut, the current social now **fades + slides up out** while the next one **fades + slides up in** simultaneously, using a 25-frame crossfade window at the end of each slot\n- **Layered approach** — both the outgoing and incoming text are rendered on top of each other during the transition using `position: absolute`, so they overlap cleanly\n- **Fixed container width** (`minWidth: 1400`) so the box doesn't resize between socials\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make sure, that when the box is changing sizes, that it is animated, now it is just jumping between sizes and it looks bad"
+    },
+    {
+      "role": "assistant",
+      "content": "Looking at the issue — the box has `whiteSpace: \"nowrap\"` and a fixed `minWidth: 1400` but the content inside still causes jumps. The fix is to **animate the box width explicitly** by measuring each social's approximate character width and interpolating between the current and next width during the swap.\n\n\n\nHere's what changed:\n\n- **Explicit `width` on the text container** — instead of letting the box grow naturally (which causes a snap), the container now has a numeric `width` that is interpolated between `current.contentWidth` and `next.contentWidth` on every frame\n- **Ease-in-out on the width** — used a quadratic ease so the resize feels physically smooth rather than linear\n- **`overflow: hidden`** on both the inner card and the text container — so content never bleeds outside during the resize\n- **`contentWidth` values** defined per social — tuned approximate px widths based on character count at 66px font size. You may want to fine-tune these numbers if text clips or has too much trailing space\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make the coupon one linger for 15s, not 5"
+    },
+    {
+      "role": "assistant",
+      "content": "Changed:\n- **Scene duration**: `375 frames` (15 seconds × 25 fps) instead of 100\n- **`durationInFrames`**: Updated to `420` (10 + 375 + 15 + fade overlaps = 420 net frames)\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make a dissapear animation for it aswell, make it linger for 60s"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's what changed:\n\n- **60 second duration** — `SCENE_FRAMES = 1500` (60 × 25fps), total `durationInFrames = 1540`\n- **Exit animation** — starts at frame `1460` (last ~1.6s), slides the box **back down** (`translateY +120px`) while fading out to 0 — mirrors the entrance exactly\n- **All elements exit together** — logo, divider, text, and badge all fade out in sync with the container slide-down\n- **Clean combination** — entrance and exit values are combined with `Math.min` for opacity and addition for Y, so they never conflict if somehow both are active\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "change the text to \"Now using E-commerce Scraping Tool\""
+    },
+    {
+      "role": "assistant",
+      "content": "Changes made:\n- **Removed** the coupon badge element entirely (no more separate `badgeProgress` spring)\n- **Updated text** to `\"Now using \"` in white + `\"E-commerce Scraping Tool\"` in Apify green via an inline `<span>`\n- **Simplified** the layout — single text element instead of two separate animated divs\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "now change the text to \"Connect your AI agents to 25K+ Actors at mcp.apify.com\""
+    },
+    {
+      "role": "assistant",
+      "content": "Changed:\n- **Text updated** to `\"Connect your AI agents to 25K+ Actors at \"` in white + `\"mcp.apify.com\"` highlighted in Apify green\n- Everything else (60s duration, entrance/exit animation, logo) remains identical\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you do one for social media?\nMake each platform linger for 25s\nLinkedin\nX\nYouTube (https://www.youtube.com/apify)\nTikTok (https://www.tiktok.com/@apifytech)"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's what's in this animation:\n\n- **4 separate scenes** — LinkedIn, X, YouTube, TikTok — each its own `TransitionSeries.Sequence` with a **25 second hold** (625 frames)\n- **Each scene has its own entrance + exit animation** — slides up in, holds, then slides back down before the fade transition to the next\n- **Platform icon** animates in with a scale pop after the Apify logo\n- **Two-line text** — platform name in white on top, URL in the platform's brand color below\n- **Correct URLs** — `youtube.com/apify` and `tiktok.com/@apifytech`\n- **Clean fade transitions** between each social (15 frames)\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "i like it, make the logos bigger and for X use the new asset instead"
+    },
+    {
+      "role": "assistant",
+      "content": "Changes made:\n- **Apify logo** increased from `height: 80` → `height: 100`\n- **Platform icons** increased from `height/width: 72` → `height/width: 96`\n- **X Twitter** now uses `NEW_X_Twitter_icon.png` instead of the old `X_Twitter_icon.png`\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "Now i need a lower 3rd for a person\n\"Luís Pinto\nProduct Marketing Manager\""
+    },
+    {
+      "role": "assistant",
+      "content": "Here's what's in this lower 3rd:\n\n- **Same dark card style** as the social media ones — consistent Apify look\n- **Apify logo** slides in from the left, separated by a vertical divider\n- **Name \"Luís Pinto\"** in white at 64px, slides in from the right\n- **Animated green accent line** grows from 0 → 320px width between the name and title — a nice touch that draws the eye\n- **\"Product Marketing Manager\"** in Apify green below, slightly delayed for a staggered feel\n- **60 second hold** with entrance slide-up and exit slide-down animations matching your other lower 3rds exactly\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make it linger for only 30s"
+    },
+    {
+      "role": "assistant",
+      "content": "Changed `SCENE_FRAMES` from `1500` (60s) to `750` (30s × 25fps) and updated `durationInFrames` accordingly.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "a new person \n\"Sameh Jarour\nAI Product Evangelist\""
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the updated code with the new person's details:\n\n\n\nJust swapped:\n- **Name**: `Luís Pinto` → `Sameh Jarour`\n- **Title**: `Product Marketing Manager` → `AI Product Evangelist`\n\nEverything else — timing, animations, exit slide, Apify logo — stays identical.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you extend the green line seperating the 2 texts to the full length of the text?"
+    },
+    {
+      "role": "assistant",
+      "content": "The accent line now uses `width: \"100%\"` instead of the fixed `interpolate(titleProgress, [0, 1], [0, 320])` value, so it always stretches to match the width of the text block — regardless of how long the name or title is.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "okay, now can you do both for Sameh and Luis\nLuis is on the left\nSameh is on the right"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's what's in this animation:\n\n- **Both name cards side by side** — Luís on the left, Sameh on the right\n- **Staggered entrance** — Luís slides up first (delay 5), Sameh follows slightly after (delay 20) for a nice cascading feel\n- **Independent exit animations** — both slide back down together at the end\n- **Same Apify style** — dark card, white logo, green accent line, green title\n- **30 second hold** with entrance/exit animations\n\nAnimation generated — preview is live.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "okay, now i need 2 lower thirds on the same screen\nLuis on the left\n\"Luís Pinto\nProduct Marketing Manager\"\n\nSameh on the right\n\"Sameh Jarour\nAI Product Evangelist\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make sure that both appear at the same time, no delay"
+    },
+    {
+      "role": "assistant",
+      "content": "Changed `entranceDelay` for both cards to `5` — they now animate in simultaneously with no stagger between them.\n\nAnimation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "Hey, i need a lower 3rd animation in the Apify style\nNO BACKGROUND!!!!!\nThe text in the box should be \"Get $30 in free credits with the coupon \"WEBINAR\"\"\n\nthe animation should be in a box, make it an apify style box",
+  "createdAt": "2026-05-05T08:20:11.026Z",
+  "updatedAt": "2026-05-06T13:31:20.303Z"
+}

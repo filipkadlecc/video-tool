@@ -1,4 +1,5 @@
-export type AnimationType = "broll" | "animation" | "svg" | "video";
+export type AnimationType = "broll" | "animation" | "svg" | "video" | "terminal";
+export type StyleMode = "default" | "kinetic" | "editorial" | "cinematic";
 export type Resolution = "1080p" | "4k";
 export type Orientation = "horizontal" | "vertical" | "square";
 export type FPS = 24 | 25 | 30 | 50;
@@ -19,6 +20,51 @@ export interface SvgFile {
   content: string;
 }
 
+export interface TerminalZoomRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface TerminalZoom {
+  id: string;
+  startFrame: number;
+  endFrame: number;
+  rect: TerminalZoomRect;
+}
+
+export interface TerminalEndCard {
+  title: string;
+  subtitle?: string;
+  url?: string;
+  startFrame?: number;
+}
+
+export interface TerminalBanner {
+  text: string;
+  subtitle?: string;
+  startFrame: number;
+  endFrame: number;
+}
+
+export interface TerminalFreeze {
+  id: string;
+  atCompFrame: number;
+  durationFrames: number;
+}
+
+export interface TerminalAnnotations {
+  videoDurationFrames: number;
+  videoWidth: number;
+  videoHeight: number;
+  fps: number;
+  zooms: TerminalZoom[];
+  freezes?: TerminalFreeze[];
+  banner?: TerminalBanner;
+  endCard?: TerminalEndCard;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -31,6 +77,8 @@ export interface Project {
   scriptWithTimestamps?: string;
   svgContents?: SvgFile[];
   mediaFolder?: string;
+  terminalAnnotations?: TerminalAnnotations;
+  styleMode?: StyleMode;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,0 +1,51 @@
+{
+  "id": "d851c8e8-d7fe-4887-8df1-ed0a1e7a290a",
+  "name": "apify actors search instagram (4k)",
+  "animationType": "terminal",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 30
+  },
+  "code": "Output out.mp4\nSet Theme { \"background\": \"#292B2E\", \"foreground\": \"#FFFFFF\", \"cursor\": \"#FFFFFF\", \"selection\": \"#3A3D40\", \"black\": \"#292B2E\", \"white\": \"#FFFFFF\" }\nSet FontSize 28\nSet Width 3840\nSet Height 2160\nSet TypingSpeed 150ms\nSet Margin 40\nSet Padding 40\n\nSleep 800ms\nType `apify actors search \"instagram\"`\nSleep 700ms\nEnter\nSleep 10s",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "can you redo the command and extend the animation to 10s?"
+    },
+    {
+      "role": "assistant",
+      "content": "Looking at your message, it seems like you've pasted a **VHS/Charm terminal recording script** rather than Remotion TSX code. Let me build a proper Remotion scene that simulates a terminal with the `apify actors search \"instagram\"` command animation.\n\n\n\n### What this renders\n\n| Phase | Timing | What happens |\n|---|---|---|\n| **Window appears** | 0–0.3s | Terminal window scales in smoothly |\n| **Prompt** | 0.3s | `➜ ~` prompt fades up |\n| **Typing** | 0.8s | `apify actors search \"instagram\"` types out character by character with blinking cursor |\n| **Results** | ~2.5s | \"Searching…\" message, then \"Found 47 actors\", then 5 result rows slide in with staggered delays |\n| **Footer tip** | ~5s | Hint command fades in at the bottom |\n| **Hold** | 5–10s | Full results held on screen for 5 full seconds |\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you redo the command and extend the animation to 10s?"
+    },
+    {
+      "role": "assistant",
+      "content": "Output out.mp4\nSet Theme { \"background\": \"#292B2E\", \"foreground\": \"#FFFFFF\", \"cursor\": \"#FFFFFF\", \"selection\": \"#3A3D40\", \"black\": \"#292B2E\", \"white\": \"#FFFFFF\" }\nSet FontSize 28\nSet Width 3840\nSet Height 2160\nSet TypingSpeed 150ms\nSet Margin 40\nSet Padding 40\n\nSleep 800ms\nType `apify actors search \"instagram\"`\nSleep 700ms\nEnter\nSleep 10s\n\nAnimation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "Demo of apify actors search instagram",
+  "createdAt": "2026-05-11T12:33:26.681Z",
+  "updatedAt": "2026-05-12T11:06:46.963Z",
+  "terminalAnnotations": {
+    "videoDurationFrames": 105,
+    "videoWidth": 3840,
+    "videoHeight": 2160,
+    "fps": 25,
+    "zooms": [
+      {
+        "id": "kh5ncae1",
+        "startFrame": 0,
+        "endFrame": 50,
+        "rect": {
+          "x": 0.004460915056270316,
+          "y": 0.017030678042199685,
+          "w": 0.38942326111518977,
+          "h": 0.3331453448210665
+        }
+      }
+    ]
+  }
+}

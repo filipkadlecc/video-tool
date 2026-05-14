@@ -1,0 +1,31 @@
+{
+  "id": "f1c4b2b6-6a18-40b3-8e7f-4905e922716a",
+  "name": "Test",
+  "animationType": "terminal",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "square",
+    "fps": 25
+  },
+  "code": "Output out.mp4\nSet FontSize 18\nSet Width 1200\nSet Height 400\nSet Theme \"Catppuccin Mocha\"\nSet TypingSpeed 80ms\nSet Margin 20\nSet Padding 20\n\nSleep 500ms\nType \"apify actors search \"instagram\"\nSleep 500ms\nEnter\nSleep 8s",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "Terminal input: \napify actors search \"instagram\"\n\nLength 10s"
+    },
+    {
+      "role": "assistant",
+      "content": "Output out.mp4\nSet FontSize 18\nSet Width 1200\nSet Height 400\nSet Theme \"Catppuccin Mocha\"\nSet TypingSpeed 80ms\nSet Margin 20\nSet Padding 20\n\nSleep 500ms\nType \"apify actors search \"instagram\"\"\nSleep 500ms\nEnter\nSleep 8s\n\nAnimation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "Terminal input: \napify actors search \"instagram\"\n\nLength 10s",
+  "createdAt": "2026-05-12T11:20:40.103Z",
+  "updatedAt": "2026-05-12T11:21:34.301Z",
+  "terminalAnnotations": {
+    "videoDurationFrames": 280,
+    "videoWidth": 1200,
+    "videoHeight": 400,
+    "fps": 25,
+    "zooms": []
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "8917108d-659c-4535-a41a-b4fe1c4b93f5",
+  "name": "apify actors search instagram",
+  "animationType": "terminal",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 30
+  },
+  "code": "# apify actors search instagram — terminal recording\nSet Theme { \"background\": \"#292B2E\", \"foreground\": \"#FFFFFF\", \"cursor\": \"#FFFFFF\", \"selection\": \"#3A3D40\", \"black\": \"#292B2E\", \"white\": \"#FFFFFF\" }\nSet FontSize 28\nSet Width 3840\nSet Height 2160\nSet TypingSpeed 60ms\nSet Margin 40\nSet Padding 40\n\nType `apify actors search \"instagram\"`\nSleep 500ms\nEnter\nSleep 8s\n",
+  "chatHistory": [],
+  "initialPrompt": "Demo of apify actors search instagram",
+  "createdAt": "2026-05-11T12:06:36.092Z",
+  "updatedAt": "2026-05-11T12:15:57.886Z"
+}

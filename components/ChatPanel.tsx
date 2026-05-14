@@ -46,6 +46,8 @@ interface ChatPanelProps {
   autoSend?: boolean;
   onGenerationComplete?: (code: string, chatHistory: ChatMessage[]) => void;
   sceneError?: string;
+  styleMode?: import("@/lib/types").StyleMode;
+  onStyleModeChange?: (mode: import("@/lib/types").StyleMode) => void;
 }
 
 export default function ChatPanel({
@@ -65,6 +67,8 @@ export default function ChatPanel({
   autoSend,
   onGenerationComplete,
   sceneError,
+  styleMode,
+  onStyleModeChange,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
@@ -177,6 +181,7 @@ export default function ChatPanel({
           svgContents,
           currentCode,
           projectId,
+          styleMode,
         }),
       });
 
@@ -223,15 +228,25 @@ export default function ChatPanel({
       }
 
       const textOnly = fullResponse.replace(/```[\s\S]*?```/g, "").trim();
-      const doneNote = textOnly
-        ? `${textOnly}\n\nAnimation generated — preview is live.`
-        : "Animation generated — preview is live.";
+      let doneNote: string;
+      if (!fullResponse.trim()) {
+        doneNote =
+          "⚠️ The model returned an empty response. This sometimes happens with long prompts or model timeouts — try sending the message again.";
+      } else if (finalCode && finalCode.length > 50) {
+        doneNote = textOnly
+          ? `${textOnly}\n\nAnimation generated — preview is live.`
+          : "Animation generated — preview is live.";
+      } else {
+        doneNote = textOnly
+          ? textOnly
+          : "⚠️ The model responded but didn't produce a code block. Try rephrasing the request.";
+      }
       const assistantMessage: ChatMessage = { role: "assistant", content: doneNote };
       const finalHistory = [...updatedHistory, assistantMessage];
       onChatUpdate(finalHistory);
 
-      if (onGenerationComplete) {
-        onGenerationComplete(finalCode || currentCode, finalHistory);
+      if (onGenerationComplete && finalCode && finalCode.length > 50) {
+        onGenerationComplete(finalCode, finalHistory);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -274,6 +289,28 @@ export default function ChatPanel({
           Chat
         </span>
         <div style={{ flex: 1 }} />
+        {onStyleModeChange && animationType !== "terminal" && animationType !== "video" && (
+          <select
+            value={styleMode ?? "default"}
+            onChange={(e) => onStyleModeChange(e.target.value as import("@/lib/types").StyleMode)}
+            title="Animation style — affects how the AI composes scenes"
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--mono)",
+              padding: "3px 6px",
+              background: "var(--bg-3)",
+              color: "var(--text-1)",
+              border: "0.5px solid var(--line-2)",
+              borderRadius: 3,
+              cursor: "pointer",
+            }}
+          >
+            <option value="default">style: default</option>
+            <option value="kinetic">style: kinetic</option>
+            <option value="editorial">style: editorial</option>
+            <option value="cinematic">style: cinematic</option>
+          </select>
+        )}
         <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)" }}>
           {chatHistory.length} msgs
         </span>

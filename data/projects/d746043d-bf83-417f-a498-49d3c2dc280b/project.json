@@ -1,0 +1,17 @@
+{
+  "id": "d746043d-bf83-417f-a498-49d3c2dc280b",
+  "name": "tdhjhhgfiuknghfuz",
+  "animationType": "broll",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "vertical",
+    "fps": 25
+  },
+  "code": "",
+  "chatHistory": [],
+  "initialPrompt": "Heyo, i need a b-roll style animation for this transcript. make sure to follow the timestamps from the transcript closley, DO NOT OFFSET AT ALL. Make sure to get inspired from the transcript and what is being said, meaning what is being said is being animated on screen. Please FOLLOW THE TIMESTAMPS!",
+  "scriptWithTimestamps": "[00:00.1]\nClicks are dropping. Rankings haven't changed. Impressions are up. Are you doing SEO right now? Here's what's going on. Google AI overviews AI mode perplexity and ChatGPT are answering your users questions before they ever click a link.\n\n[00:17.6]\nThey're pulling content from across the web, synthesizing it into a neat little answer, and citing whoever they think deserves the credit. The problem? Your existing SEO tools can't see any of these. And, the tools that do track AI visibility?\n\n[00:32.6]\nThey're expensive. Specialized AEO platforms charge hundreds of dollars a month. Legacy tools like Semrush and Areps have added AI features, but they're usually locked behind higher tire plans. With apify's Google Search Results Scraper, you can track exactly how Google AI Mode, Perplexity, and ChatGPT handle your queries, who they're citing, and where you need to improve, which is incredibly valuable for understanding what kind of content you need to create.\n\n[01:01.1]\nThe best part? You can get started on Apify's free plan with $5 of credit. If you want to dive deeper into the setup, check out our full video tutorial on scraping Google Search.",
+  "styleMode": "default",
+  "createdAt": "2026-05-13T12:39:32.473Z",
+  "updatedAt": "2026-05-13T12:39:32.473Z"
+}

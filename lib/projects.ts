@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import type { Project, ProjectMeta, AnimationType, ProjectSettings, SvgFile } from "./types";
+import type { Project, ProjectMeta, AnimationType, ProjectSettings, SvgFile, StyleMode } from "./types";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -56,34 +56,79 @@ export interface CreateProjectData {
   animationType: AnimationType;
   settings: ProjectSettings;
   initialPrompt: string;
+  initialCode?: string;
   notionContent?: string;
   scriptWithTimestamps?: string;
   svgContents?: SvgFile[];
-  mediaFolder?: string;
+  styleMode?: StyleMode;
 }
+
+export function getProjectMediaDir(id: string): string {
+  return path.join(PROJECTS_DIR, id, "media");
+}
+
+const STARTER_TAPE = `# A vhs tape — terminal recording as code.
+# Docs: https://github.com/charmbracelet/vhs
+#
+# Output is rendered to out.mp4 by the "Render" button.
+
+Output out.mp4
+
+Set FontSize 22
+Set Width 1200
+Set Height 600
+Set Theme { "background": "#333538", "foreground": "#FFFFFF", "cursor": "#FFFFFF", "selection": "#4A4D50", "black": "#333538", "white": "#FFFFFF" }
+Set TypingSpeed 50ms
+
+Type "echo 'Hello from VHS'"
+Sleep 500ms
+Enter
+Sleep 1s
+
+Type "ls -la"
+Sleep 500ms
+Enter
+Sleep 2s
+`;
 
 export function createProject(data: CreateProjectData): Project {
   const id = randomUUID();
   const now = new Date().toISOString();
+
+  const projectDir = path.join(PROJECTS_DIR, id);
+  ensureDir(projectDir);
+
+  // Video projects get an internal media folder under the project directory.
+  // Uploaded files land here; mediaFolder always points to it for the rest of
+  // the app (transcribe, /api/media/*, generate) to find files.
+  let mediaFolder: string | undefined;
+  if (data.animationType === "video") {
+    mediaFolder = getProjectMediaDir(id);
+    ensureDir(mediaFolder);
+  }
 
   const project: Project = {
     id,
     name: data.name,
     animationType: data.animationType,
     settings: data.settings,
-    code: "",
+    code:
+      data.initialCode != null
+        ? data.initialCode
+        : data.animationType === "terminal" && !data.initialPrompt
+          ? STARTER_TAPE
+          : "",
     chatHistory: [],
     initialPrompt: data.initialPrompt,
     notionContent: data.notionContent,
     scriptWithTimestamps: data.scriptWithTimestamps,
     svgContents: data.svgContents,
-    mediaFolder: data.mediaFolder,
+    mediaFolder,
+    styleMode: data.styleMode,
     createdAt: now,
     updatedAt: now,
   };
 
-  const projectDir = path.join(PROJECTS_DIR, id);
-  ensureDir(projectDir);
   fs.writeFileSync(path.join(projectDir, "project.json"), JSON.stringify(project, null, 2), "utf-8");
 
   return project;

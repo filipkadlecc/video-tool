@@ -1,0 +1,41 @@
+{
+  "id": "51d2f48a-df0f-4109-97a6-bab922485821",
+  "name": "Clock",
+  "animationType": "animation",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import React from \"react\";\nimport {\n  AbsoluteFill,\n  useCurrentFrame,\n  useVideoConfig,\n  spring,\n  interpolate,\n} from \"remotion\";\nimport { TransitionSeries, linearTiming } from \"@remotion/transitions\";\nimport { fade } from \"@remotion/transitions/fade\";\n\nexport const fps = 25;\n\nconst COLORS = {\n  accent: \"#FFFFFF\",\n  accentSoft: \"rgba(255,255,255,0.6)\",\n  ink: \"#FFFFFF\",\n  inkDim: \"rgba(255,255,255,0.55)\",\n  ring: \"rgba(255,255,255,0.08)\",\n  bg: \"#0B0610\",\n};\n\nconst TRANSITION = 15;\n\nconst SNAPPY = { mass: 0.5, damping: 14, stiffness: 220 };\nconst LIQUID = { mass: 1.0, damping: 22, stiffness: 120 };\n\n// ─── Scene durations ────────────────────────────────────────────────────\nconst COUNT_DURATION = 90; // ~3.6s of ticking up\nconst FREEZE_DURATION = 250; // 10s freeze on 20:00\nconst CLOCK_SCENE = COUNT_DURATION + FREEZE_DURATION; // 340\n\nconst BlackScreen: React.FC = () => (\n  <AbsoluteFill style={{ backgroundColor: COLORS.bg }} />\n);\n\n// ─── Clock Scene ────────────────────────────────────────────────────────\nconst ClockScene: React.FC = () => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  // Entrance — compound: opacity + scale + blur (no bounce, no rotate)\n  const enter = spring({ frame, fps, delay: 4, config: LIQUID });\n  const entryScale = interpolate(enter, [0, 1], [0.92, 1]);\n  const entryBlur = interpolate(enter, [0, 1], [10, 0]);\n\n  // Counting progress (0 → 1 across COUNT_DURATION, then clamped)\n  const countStart = 10;\n  const countEnd = countStart + COUNT_DURATION;\n  const rawProgress = interpolate(frame, [countStart, countEnd], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\",\n  });\n  // Ease-out for a satisfying settle on 20:00\n  const eased = 1 - Math.pow(1 - rawProgress, 2.2);\n  const totalSeconds = Math.floor(eased * 20 * 60); // 0 → 1200\n  const minutes = Math.floor(totalSeconds / 60);\n  const seconds = totalSeconds % 60;\n  const mm = String(minutes).padStart(2, \"0\");\n  const ss = String(seconds).padStart(2, \"0\");\n\n  // Ring sweep angle (0 → 360deg)\n  const sweepAngle = eased * 360;\n\n  // Clock size\n  const size = 1600;\n  const stroke = 32;\n  const radius = (size - stroke) / 2;\n  const circumference = 2 * Math.PI * radius;\n  const dashOffset = circumference * (1 - eased);\n\n  return (\n    <AbsoluteFill style={{ fontFamily: \"'Inter', sans-serif\" }}>\n      {/* Clock — centered, no bounce, no drift */}\n      <div\n        style={{\n          position: \"absolute\",\n          left: \"50%\",\n          top: \"50%\",\n          transform: `translate(-50%, -50%) scale(${entryScale})`,\n          opacity: enter,\n          filter: `blur(${entryBlur}px)`,\n          width: size,\n          height: size,\n        }}\n      >\n        {/* SVG dial */}\n        <svg\n          width={size}\n          height={size}\n          viewBox={`0 0 ${size} ${size}`}\n          style={{\n            position: \"absolute\",\n            inset: 0,\n          }}\n        >\n          {/* Outer faint ring */}\n          <circle\n            cx={size / 2}\n            cy={size / 2}\n            r={radius}\n            stroke={COLORS.ring}\n            strokeWidth={stroke}\n            fill=\"none\"\n          />\n          {/* Tick marks (60 ticks, every 5th larger) */}\n          {Array.from({ length: 60 }).map((_, i) => {\n            const angle = (i / 60) * 360 - 90;\n            const rad = (angle * Math.PI) / 180;\n            const isMajor = i % 5 === 0;\n            const inner = radius - (isMajor ? 70 : 38);\n            const outer = radius - 16;\n            const x1 = size / 2 + Math.cos(rad) * inner;\n            const y1 = size / 2 + Math.sin(rad) * inner;\n            const x2 = size / 2 + Math.cos(rad) * outer;\n            const y2 = size / 2 + Math.sin(rad) * outer;\n            const passed = (i / 60) * 360 <= sweepAngle;\n            return (\n              <line\n                key={i}\n                x1={x1}\n                y1={y1}\n                x2={x2}\n                y2={y2}\n                stroke={\n                  passed\n                    ? isMajor\n                      ? \"#FFFFFF\"\n                      : \"rgba(255,255,255,0.7)\"\n                    : isMajor\n                    ? \"rgba(255,255,255,0.35)\"\n                    : \"rgba(255,255,255,0.12)\"\n                }\n                strokeWidth={isMajor ? 7 : 3.5}\n                strokeLinecap=\"round\"\n              />\n            );\n          })}\n\n          {/* Progress arc — sweeps with the count */}\n          <circle\n            cx={size / 2}\n            cy={size / 2}\n            r={radius}\n            stroke=\"#FFFFFF\"\n            strokeWidth={stroke}\n            fill=\"none\"\n            strokeDasharray={circumference}\n            strokeDashoffset={dashOffset}\n            strokeLinecap=\"round\"\n            transform={`rotate(-90 ${size / 2} ${size / 2})`}\n          />\n        </svg>\n\n        {/* Center readout */}\n        <div\n          style={{\n            position: \"absolute\",\n            inset: 0,\n            display: \"flex\",\n            flexDirection: \"column\",\n            alignItems: \"center\",\n            justifyContent: \"center\",\n          }}\n        >\n          <div\n            style={{\n              fontFamily: \"'Inter', sans-serif\",\n              fontSize: 440,\n              fontWeight: 800,\n              color: COLORS.ink,\n              lineHeight: 1,\n              letterSpacing: \"-0.06em\",\n              display: \"flex\",\n              alignItems: \"center\",\n              gap: 8,\n            }}\n          >\n            <span style={{ minWidth: 440, textAlign: \"right\" }}>{mm}</span>\n            <span style={{ color: \"rgba(255,255,255,0.85)\" }}>:</span>\n            <span style={{ minWidth: 440, textAlign: \"left\" }}>{ss}</span>\n          </div>\n        </div>\n      </div>\n    </AbsoluteFill>\n  );\n};\n\n// ─── Main composition ───────────────────────────────────────────────────\nconst MainComposition: React.FC = () => {\n  return (\n    <TransitionSeries>\n      <TransitionSeries.Sequence durationInFrames={20}>\n        <BlackScreen />\n      </TransitionSeries.Sequence>\n      <TransitionSeries.Transition\n        presentation={fade()}\n        timing={linearTiming({ durationInFrames: 20 })}\n      />\n\n      <TransitionSeries.Sequence durationInFrames={CLOCK_SCENE + TRANSITION}>\n        <ClockScene />\n      </TransitionSeries.Sequence>\n      <TransitionSeries.Transition\n        presentation={fade()}\n        timing={linearTiming({ durationInFrames: TRANSITION })}\n      />\n\n      <TransitionSeries.Sequence durationInFrames={25}>\n        <BlackScreen />\n      </TransitionSeries.Sequence>\n    </TransitionSeries>\n  );\n};\n\nexport const durationInFrames = 365;\n\nexport default MainComposition;",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "I need a simple and a short animation of a clock counting up to 20 minutes for a youtube intro\nWithout a background, stops on 20 minutes and freezes for 10s"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "remove \"let's go\"\nremove \"MM : SS\"\nRemove the text on the left, keep only the clock\nremove the glow"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "do not make the clock bounce\nchange the color to white or grey"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "I need a simple and a short animation of a clock counting up to 20 minutes for a youtube intro\nWithout a background, stops on 20 minutes and freezes for 10s",
+  "styleMode": "default",
+  "createdAt": "2026-05-13T09:35:08.563Z",
+  "updatedAt": "2026-05-13T09:38:34.601Z"
+}

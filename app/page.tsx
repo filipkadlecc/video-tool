@@ -1,36 +1,44 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import ProjectCard from "@/components/ProjectCard";
 import NewProjectModal from "@/components/NewProjectModal";
+import StorageModal from "@/components/StorageModal";
+import TypeTile from "@/components/TypeTile";
 import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import Modal from "@/components/ui/Modal";
-import type { ProjectMeta } from "@/lib/types";
+import type { ProjectMeta, AnimationType } from "@/lib/types";
+import { ANIMATION_TYPES, getAnimationTypeMeta } from "@/lib/animation-types";
 
 export default function Home() {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
+  const [selectedType, setSelectedType] = useState<AnimationType | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<ProjectMeta | null>(null);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
-        e.preventDefault();
-        setModalOpen(true);
-      }
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  const [storageOpen, setStorageOpen] = useState(false);
 
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  // Cmd+N opens the modal (only meaningful once a type is chosen)
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n" && selectedType) {
+        e.preventDefault();
+        setModalOpen(true);
+      }
+      if (e.key === "Escape" && selectedType && !modalOpen && !deleteConfirm) {
+        setSelectedType(null);
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [selectedType, modalOpen, deleteConfirm]);
 
   async function fetchProjects() {
     try {
@@ -45,9 +53,9 @@ export default function Home() {
   async function handleDuplicate(id: string) {
     try {
       const res = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
-      if (res.ok) {
-        fetchProjects();
-      }
+      if (!res.ok) return;
+      const newProject = await res.json();
+      router.push(`/project/${newProject.id}`);
     } catch (err) {
       console.error("Failed to duplicate project:", err);
     }
@@ -63,33 +71,28 @@ export default function Home() {
     }
   }
 
-  async function handleCreate(data: {
-    name: string;
-    animationType: string;
-    settings: { resolution: string; orientation: string; fps: number };
-    initialPrompt: string;
-    notionContent?: string;
-    scriptWithTimestamps?: string;
-    mediaFolder?: string;
+  function handleCreated({
+    projectId,
+    autoAction,
+  }: {
+    projectId: string;
+    autoAction?: "smartTrim";
   }) {
-    try {
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) {
-        const project = await res.json();
-        setModalOpen(false);
-        router.push(`/project/${project.id}`);
-      }
-    } catch (err) {
-      console.error("Failed to create project:", err);
-    }
+    setModalOpen(false);
+    const suffix = autoAction ? `?action=${autoAction}` : "";
+    router.push(`/project/${projectId}${suffix}`);
   }
 
-  // Empty state
-  if (projects.length === 0) {
+  const countsByType = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of projects) {
+      counts[p.animationType] = (counts[p.animationType] ?? 0) + 1;
+    }
+    return counts;
+  }, [projects]);
+
+  // ───── Opening screen: type picker ─────
+  if (selectedType === null) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg-1)" }}>
         <header
@@ -102,73 +105,70 @@ export default function Home() {
         >
           <Logo />
           <div style={{ flex: 1 }} />
-          <Button variant="primary" icon="plus" onClick={() => setModalOpen(true)}>
-            New project
+          <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 10 }}>
+            {projects.length} {projects.length === 1 ? "project" : "projects"}
+          </div>
+          <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
+            Storage
           </Button>
         </header>
+
+        <StorageModal
+          open={storageOpen}
+          onClose={() => setStorageOpen(false)}
+          onProjectsDeleted={() => fetchProjects()}
+        />
+
         <div
           style={{
-            height: "calc(100vh - 65px)",
+            maxWidth: 980,
+            margin: "0 auto",
+            padding: "64px 28px 40px",
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 40,
-            gap: 20,
+            gap: 32,
           }}
         >
-          {/* Stacked card illustration */}
-          <div style={{ position: "relative", width: 220, height: 140 }}>
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                style={{
-                  position: "absolute",
-                  left: `${i * 30}px`,
-                  top: `${i * 15}px`,
-                  width: 140,
-                  height: 80,
-                  borderRadius: 8,
-                  background:
-                    i === 2
-                      ? "linear-gradient(135deg, oklch(0.88 0.22 124 / 0.2), oklch(0.72 0.26 340 / 0.1))"
-                      : "var(--bg-2)",
-                  border: `0.5px solid ${i === 2 ? "var(--accent-line)" : "var(--line-2)"}`,
-                  boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
-                  transform: `rotate(${(i - 1) * 4}deg)`,
-                }}
-              >
-                {i === 2 && (
-                  <div style={{ padding: 14 }}>
-                    <div style={{ fontSize: 22, color: "var(--accent)" }}>&#9889;</div>
-                    <div className="mono" style={{ fontSize: 9, color: "var(--text-2)", marginTop: 6 }}>
-                      NEW.tsx
-                    </div>
-                  </div>
-                )}
-              </div>
+          <div>
+            <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 10 }}>
+              Workspace
+            </div>
+            <h1 style={{ margin: 0, fontSize: 36, letterSpacing: -0.8, fontWeight: 600 }}>
+              What are you making?
+            </h1>
+            <p style={{ margin: "10px 0 0", color: "var(--text-1)", fontSize: 14, maxWidth: 560 }}>
+              Pick a style to see past projects or start a new one.
+            </p>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            {ANIMATION_TYPES.map((t) => (
+              <TypeTile
+                key={t.id}
+                type={t.id}
+                size="lg"
+                count={countsByType[t.id] ?? 0}
+                onClick={() => setSelectedType(t.id)}
+              />
             ))}
           </div>
-          <div style={{ textAlign: "center", maxWidth: 380 }}>
-            <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.3, marginBottom: 8 }}>
-              Nothing here yet.
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-1)", lineHeight: 1.5 }}>
-              Describe a video, get Remotion code you can preview, tweak, and export. Start with your first project.
-            </div>
-          </div>
-          <Button variant="primary" size="lg" icon="sparkle" onClick={() => setModalOpen(true)}>
-            Create your first project
-          </Button>
         </div>
-        <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} />
       </div>
     );
   }
 
+  // ───── Per-type screen: filtered projects + new-project tile ─────
+  const meta = getAnimationTypeMeta(selectedType);
+  const filtered = projects.filter((p) => p.animationType === selectedType);
+
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg-1)" }}>
-      {/* Top bar */}
       <header
         style={{
           position: "sticky",
@@ -183,18 +183,40 @@ export default function Home() {
         }}
       >
         <Logo />
+        <button
+          onClick={() => setSelectedType(null)}
+          className="mono"
+          style={{
+            marginLeft: 18,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 10px",
+            background: "transparent",
+            border: "0.5px solid var(--line-2)",
+            borderRadius: 4,
+            color: "var(--text-1)",
+            fontSize: 11,
+            cursor: "pointer",
+          }}
+        >
+          <Icon name="arrowLeft" size={11} />
+          All types
+        </button>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 8 }}>
-            {projects.length} projects
+            {filtered.length} {filtered.length === 1 ? "project" : "projects"}
           </div>
+          <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
+            Storage
+          </Button>
           <Button variant="primary" icon="plus" onClick={() => setModalOpen(true)}>
-            New project
+            New {meta.label} project
           </Button>
         </div>
       </header>
 
-      {/* Hero strip */}
       <div
         style={{
           padding: "36px 28px 20px",
@@ -205,17 +227,21 @@ export default function Home() {
         }}
       >
         <div>
-          <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 8 }}>
-            Workspace
+          <div
+            className="mono cap"
+            style={{ color: meta.color, marginBottom: 8 }}
+          >
+            {meta.badgeLabel}
           </div>
-          <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.8, fontWeight: 600 }}>Your projects</h1>
+          <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.8, fontWeight: 600 }}>
+            {meta.label} projects
+          </h1>
           <p style={{ margin: "6px 0 0", color: "var(--text-1)", fontSize: 14, maxWidth: 520 }}>
-            Describe a video, get Remotion code. Preview, edit, export.
+            {meta.subtitle}.
           </p>
         </div>
       </div>
 
-      {/* Grid */}
       <div
         style={{
           padding: 28,
@@ -224,7 +250,7 @@ export default function Home() {
           gap: 20,
         }}
       >
-        {projects.map((project) => (
+        {filtered.map((project) => (
           <ProjectCard
             key={project.id}
             project={project}
@@ -234,7 +260,6 @@ export default function Home() {
           />
         ))}
 
-        {/* New project slot */}
         <button
           onClick={() => setModalOpen(true)}
           style={{
@@ -252,8 +277,8 @@ export default function Home() {
             transition: "border-color 120ms, color 120ms",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "var(--accent)";
-            e.currentTarget.style.color = "var(--accent)";
+            e.currentTarget.style.borderColor = meta.color;
+            e.currentTarget.style.color = meta.color;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.borderColor = "var(--line-2)";
@@ -261,13 +286,23 @@ export default function Home() {
           }}
         >
           <Icon name="plus" size={22} />
-          <span style={{ fontSize: 12 }}>New project</span>
+          <span style={{ fontSize: 12 }}>New {meta.label} project</span>
         </button>
       </div>
 
-      <NewProjectModal open={modalOpen} onClose={() => setModalOpen(false)} onCreate={handleCreate} />
+      <NewProjectModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialType={selectedType}
+        onCreated={handleCreated}
+      />
 
-      {/* Delete confirm */}
+      <StorageModal
+        open={storageOpen}
+        onClose={() => setStorageOpen(false)}
+        onProjectsDeleted={() => fetchProjects()}
+      />
+
       <Modal open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} width={380}>
         <div style={{ padding: 24 }}>
           <div

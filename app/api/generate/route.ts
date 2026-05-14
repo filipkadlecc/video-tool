@@ -4,7 +4,7 @@ import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
-import type { AnimationType, ProjectSettings, ChatMessage, SvgFile } from "@/lib/types";
+import type { AnimationType, ProjectSettings, ChatMessage, SvgFile, StyleMode } from "@/lib/types";
 
 const anthropic = new Anthropic();
 
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     currentCode,
     svgContents,
     projectId,
+    styleMode,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     currentCode?: string;
     svgContents?: SvgFile[];
     projectId?: string;
+    styleMode?: StyleMode;
   };
 
   if (!messages || !messages.length) {
@@ -91,13 +93,13 @@ export async function POST(request: Request) {
     }
   }
 
-  const systemPrompt = buildSystemPrompt(animationType, projectSettings, assetPaths, videoContext);
+  const systemPrompt = buildSystemPrompt(animationType, projectSettings, assetPaths, videoContext, styleMode);
 
   // Build Anthropic messages from chat history
   // Enhance the last user message with context
   const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg, i) => {
     if (msg.role === "user" && i === messages.length - 1) {
-      let userContent = buildUserMessage(msg.content, currentCode, notionContent, scriptWithTimestamps);
+      let userContent = buildUserMessage(msg.content, currentCode, notionContent, scriptWithTimestamps, animationType);
       if (svgContents && svgContents.length > 0) {
         const svgBlock = svgContents
           .map((svg, i) => `[SVG ${i + 1}: ${svg.filename}]\n${svg.content}\n[END SVG ${i + 1}]`)
@@ -115,12 +117,22 @@ export async function POST(request: Request) {
     };
   });
 
-  const stream = anthropic.messages.stream({
-    model: "claude-sonnet-4-6",
-    max_tokens: 32000,
-    system: systemPrompt,
-    messages: anthropicMessages,
-  });
+  // Terminal projects use cheap Sonnet — the .tape prompt is simple.
+  // Everything else gets Opus 4.7 with extended thinking for design-grade code.
+  const isTerminal = animationType === "terminal";
+  const stream = isTerminal
+    ? anthropic.messages.stream({
+        model: "claude-sonnet-4-6",
+        max_tokens: 32000,
+        system: systemPrompt,
+        messages: anthropicMessages,
+      })
+    : anthropic.messages.stream({
+        model: "claude-opus-4-7",
+        max_tokens: 32000,
+        system: systemPrompt,
+        messages: anthropicMessages,
+      });
 
   const encoder = new TextEncoder();
   const readable = new ReadableStream({

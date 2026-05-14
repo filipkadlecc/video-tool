@@ -6,12 +6,19 @@ import * as RemotionTransitions from "@remotion/transitions";
 import * as RemotionFade from "@remotion/transitions/fade";
 import * as RemotionSlide from "@remotion/transitions/slide";
 import * as RemotionWipe from "@remotion/transitions/wipe";
+import * as RemotionAnimationUtils from "@remotion/animation-utils";
+import * as RemotionPaths from "@remotion/paths";
+import * as RemotionShapes from "@remotion/shapes";
+import * as RemotionNoise from "@remotion/noise";
+import * as RemotionMotionBlur from "@remotion/motion-blur";
+import * as RemotionLayoutUtils from "@remotion/layout-utils";
 import { transform } from "sucrase";
-import { COLORS, FONT_WEIGHT } from "./theme";
+import { COLORS, FONT_WEIGHT, BRAND, BRAND_FONT_FACE_CSS } from "./theme";
+import * as Motion from "./motion";
 
 const { AbsoluteFill } = RemotionLib;
 
-const THEME_MODULE = { COLORS, FONT_WEIGHT };
+const THEME_MODULE = { COLORS, FONT_WEIGHT, BRAND, BRAND_FONT_FACE_CSS };
 
 const MODULE_MAP: Record<string, unknown> = {
   remotion: RemotionLib,
@@ -20,6 +27,12 @@ const MODULE_MAP: Record<string, unknown> = {
   "@remotion/transitions/fade": RemotionFade,
   "@remotion/transitions/slide": RemotionSlide,
   "@remotion/transitions/wipe": RemotionWipe,
+  "@remotion/animation-utils": RemotionAnimationUtils,
+  "@remotion/paths": RemotionPaths,
+  "@remotion/shapes": RemotionShapes,
+  "@remotion/noise": RemotionNoise,
+  "@remotion/motion-blur": RemotionMotionBlur,
+  "@remotion/layout-utils": RemotionLayoutUtils,
 };
 
 const THEME_PATTERNS = [
@@ -30,12 +43,25 @@ const THEME_PATTERNS = [
   "../theme",
 ];
 
+const MOTION_PATTERNS = [
+  "../remotion/motion",
+  "./motion",
+  "@/remotion/motion",
+  "remotion/motion",
+  "../motion",
+  "../../motion",
+];
+
 function fakeRequire(moduleName: string) {
   const mod = MODULE_MAP[moduleName];
   if (mod) return mod;
 
   if (THEME_PATTERNS.some((p) => moduleName.endsWith(p) || moduleName === p)) {
     return THEME_MODULE;
+  }
+
+  if (MOTION_PATTERNS.some((p) => moduleName.endsWith(p) || moduleName === p)) {
+    return Motion;
   }
 
   for (const key of Object.keys(MODULE_MAP)) {

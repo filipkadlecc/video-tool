@@ -7,6 +7,7 @@ import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import Input from "@/components/ui/Input";
 import Segmented from "@/components/ui/Segmented";
+import { formatBytes } from "@/lib/format";
 
 interface RenderPreset {
   name: string;
@@ -20,6 +21,7 @@ const BUILT_IN_PRESETS: RenderPreset[] = [
   { name: "Color Grading", codec: "prores-xq", builtIn: true },
   { name: "Compositing", codec: "prores", builtIn: true },
   { name: "No Background", codec: "prores", builtIn: true },
+  { name: "OBS (Transparent .mov)", codec: "qtrle", builtIn: true },
 ];
 
 function loadUserPresets(): RenderPreset[] {
@@ -71,9 +73,38 @@ export default function ExportDialog({
   const [showSavePreset, setShowSavePreset] = useState(false);
   const presetRef = useRef<HTMLDivElement>(null);
 
+  const [cacheStats, setCacheStats] = useState<{ count: number; totalBytes: number } | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+
+  const refreshCacheStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/renders/cleanup");
+      if (res.ok) setCacheStats(await res.json());
+    } catch {}
+  }, []);
+
+  async function handleClearRenders() {
+    if (cleaning) return;
+    setCleaning(true);
+    try {
+      await fetch("/api/renders/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      await refreshCacheStats();
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   useEffect(() => {
     setUserPresets(loadUserPresets());
   }, []);
+
+  useEffect(() => {
+    if (open) refreshCacheStats();
+  }, [open, refreshCacheStats, status]);
 
   useEffect(() => {
     if (!presetOpen) return;
@@ -144,6 +175,12 @@ export default function ExportDialog({
             stopPolling();
             setDownloadUrl(statusData.outputPath);
             new Audio("/assets/render-complete.m4a").play().catch(() => {});
+            const a = document.createElement("a");
+            a.href = statusData.outputPath;
+            a.download = `${fileName || "export"}.${codec === "h264" ? "mp4" : "mov"}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
           } else if (statusData.status === "error") {
             stopPolling();
             setError(statusData.error);
@@ -174,7 +211,7 @@ export default function ExportDialog({
     { label: "Resolution", value: `${width}\u00d7${height}` },
     { label: "Duration", value: `${seconds}s` },
     { label: "FPS", value: String(fps) },
-    { label: "Codec", value: codec === "h264" ? "H.264" : codec === "prores" ? "ProRes 4444" : "ProRes 4444 XQ" },
+    { label: "Codec", value: codec === "h264" ? "H.264" : codec === "prores" ? "ProRes 4444" : codec === "prores-xq" ? "ProRes 4444 XQ" : "QT Animation (RLE)" },
   ];
 
   return (
@@ -228,7 +265,7 @@ export default function ExportDialog({
                   >
                     <span style={{ flex: 1 }}>{p.name}</span>
                     <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
-                      {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : "XQ"}
+                      {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : p.codec === "prores-xq" ? "XQ" : "QT-RLE"}
                     </span>
                   </button>
                 ))}
@@ -264,7 +301,7 @@ export default function ExportDialog({
                         >
                           <span style={{ flex: 1 }}>{p.name}</span>
                           <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
-                            {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : "XQ"}
+                            {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : p.codec === "prores-xq" ? "XQ" : "QT-RLE"}
                           </span>
                         </button>
                         <IconButton icon="close" size={20} onClick={() => deleteUserPreset(i)} />
@@ -333,6 +370,7 @@ export default function ExportDialog({
                 { value: "h264", label: "H.264" },
                 { value: "prores", label: "ProRes 4444" },
                 { value: "prores-xq", label: "ProRes XQ" },
+                { value: "qtrle", label: "QT-RLE" },
               ]}
             />
             {codec === "prores" && (
@@ -369,6 +407,24 @@ export default function ExportDialog({
               >
                 <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
                 ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
+              </div>
+            )}
+            {codec === "qtrle" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--accent-soft)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--accent-line)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                QuickTime Animation (RLE) — .mov with ARGB alpha channel. Drop into OBS as a Media Source. Large files.
               </div>
             )}
           </div>
@@ -423,6 +479,30 @@ export default function ExportDialog({
             <div className="mono nums" style={{ fontSize: 11, color: "var(--text-3)" }}>
               frame {Math.round((progress / 100) * durationInFrames)} / {durationInFrames}
             </div>
+          </div>
+        )}
+
+        {cacheStats && cacheStats.count > 0 && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              paddingTop: 10,
+              borderTop: "0.5px solid var(--line-1)",
+              fontSize: 11,
+              color: "var(--text-3)",
+            }}
+          >
+            <Icon name="info" size={12} />
+            <span className="mono">
+              {cacheStats.count} cached render{cacheStats.count === 1 ? "" : "s"} ·{" "}
+              {formatBytes(cacheStats.totalBytes)}
+            </span>
+            <span style={{ flex: 1 }} />
+            <Button variant="ghost" size="sm" onClick={handleClearRenders} disabled={cleaning}>
+              {cleaning ? "Clearing..." : "Clear cache"}
+            </Button>
           </div>
         )}
 

@@ -173,6 +173,19 @@ export function parseTimeline(code: string, fps: number): TimelineClip[] {
     }
   }
 
+  // Pattern 3: <Series.Sequence durationInFrames={Y}> — no `from`, sequential, no transitions.
+  // Used by Smart Trim output. Same as TransitionSeries but without overlap logic.
+  if (clips.length === 0) {
+    const seriesSeqRegex = /<Series\.Sequence\s[^>]*?durationInFrames=\{([^}]+)\}[^>]*?>([\s\S]*?)<\/Series\.Sequence>/g;
+    let runningFrame = 0;
+    while ((sMatch = seriesSeqRegex.exec(code)) !== null) {
+      const duration = resolveNumericExpr(sMatch[1], constants);
+      if (duration === null) continue;
+      parseSequenceContent(runningFrame, duration, sMatch[2]);
+      runningFrame += duration;
+    }
+  }
+
   // Sort by start frame
   clips.sort((a, b) => a.from - b.from);
 

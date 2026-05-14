@@ -1,16 +1,11 @@
 "use client";
 
 import React from "react";
-
-const BADGE_MAP: Record<string, { label: string; c: string; bg: string }> = {
-  broll: { label: "B-ROLL", c: "var(--magenta)", bg: "var(--magenta-soft)" },
-  animation: { label: "ANIMATION", c: "var(--cyan)", bg: "var(--cyan-soft)" },
-  svg: { label: "SVG", c: "var(--amber)", bg: "var(--amber-soft)" },
-  video: { label: "VIDEO", c: "var(--accent)", bg: "var(--accent-soft)" },
-};
+import type { AnimationType } from "@/lib/types";
+import { getAnimationTypeMeta } from "@/lib/animation-types";
 
 export default function TypeBadge({ type }: { type: string }) {
-  const { label, c, bg } = BADGE_MAP[type] ?? BADGE_MAP.animation;
+  const meta = getAnimationTypeMeta(type as AnimationType);
 
   return (
     <span
@@ -24,14 +19,14 @@ export default function TypeBadge({ type }: { type: string }) {
         fontWeight: 600,
         letterSpacing: 0.08,
         textTransform: "uppercase",
-        color: c,
-        background: bg,
+        color: meta.color,
+        background: meta.colorSoft,
         borderRadius: 3,
-        border: `0.5px solid ${c}`,
+        border: `0.5px solid ${meta.color}`,
         borderColor: "color-mix(in oklab, currentColor 25%, transparent)",
       }}
     >
-      {label}
+      {meta.badgeLabel}
     </span>
   );
 }

@@ -2,16 +2,20 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import GeneratingOverlay from "@/components/GeneratingOverlay";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import ChatPanel from "@/components/ChatPanel";
 import AssetBrowser from "@/components/AssetBrowser";
+import SnippetBrowser from "@/components/SnippetBrowser";
+import SmartTrimDialog from "@/components/SmartTrimDialog";
 import ExportDialog from "@/components/ExportDialog";
+import TerminalPreview from "@/components/TerminalPreview";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
 import Timeline from "@/components/Timeline";
 import { evalSceneCode } from "@/remotion/DynamicScene";
-import type { Project, ChatMessage } from "@/lib/types";
+import type { Project, ChatMessage, TerminalAnnotations, StyleMode } from "@/lib/types";
 import { getResolution } from "@/lib/types";
+import { buildTerminalExportPlan } from "@/lib/terminal-export";
 import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -40,18 +44,28 @@ const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
 export default function ProjectEditor() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = params.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
   const [code, setCode] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [terminalAnnotations, setTerminalAnnotations] = useState<TerminalAnnotations | undefined>(undefined);
+  const [styleMode, setStyleMode] = useState<StyleMode>("default");
   const [isGenerating, setIsGenerating] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [smartTrimOpen, setSmartTrimOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Captured once on mount from ?action=, before we clean the URL via router.replace.
+  const [initialAutoAction] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("action");
+  });
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedRef = useRef<{ code: string; chatLength: number }>({ code: "", chatLength: 0 });
+  const lastSavedRef = useRef<{ code: string; chatLength: number; annotations: string; styleMode: StyleMode }>({ code: "", chatLength: 0, annotations: "", styleMode: "default" });
   const codeHistory = useCodeHistory();
 
   // Load project
@@ -67,7 +81,14 @@ export default function ProjectEditor() {
         setProject(data);
         setCode(data.code);
         setChatHistory(data.chatHistory);
-        lastSavedRef.current = { code: data.code, chatLength: data.chatHistory.length };
+        setTerminalAnnotations(data.terminalAnnotations);
+        setStyleMode(data.styleMode ?? "default");
+        lastSavedRef.current = {
+          code: data.code,
+          chatLength: data.chatHistory.length,
+          annotations: JSON.stringify(data.terminalAnnotations ?? null),
+          styleMode: data.styleMode ?? "default",
+        };
       } catch {
         router.push("/");
       } finally {
@@ -77,12 +98,27 @@ export default function ProjectEditor() {
     load();
   }, [projectId, router]);
 
+  // Honor ?action=smartTrim once: open the dialog and clean the URL.
+  const consumedActionRef = useRef(false);
+  useEffect(() => {
+    if (consumedActionRef.current) return;
+    if (loading || !project) return;
+    if (searchParams.get("action") !== "smartTrim") return;
+    if (project.animationType !== "video") return;
+    consumedActionRef.current = true;
+    setSmartTrimOpen(true);
+    router.replace(`/project/${projectId}`);
+  }, [loading, project, projectId, router, searchParams]);
+
   // Auto-save with 2s debounce
   useEffect(() => {
     if (!project) return;
+    const annotationsKey = JSON.stringify(terminalAnnotations ?? null);
     const hasCodeChanged = code !== lastSavedRef.current.code;
     const hasChatChanged = chatHistory.length !== lastSavedRef.current.chatLength;
-    if (!hasCodeChanged && !hasChatChanged) return;
+    const hasAnnotationsChanged = annotationsKey !== lastSavedRef.current.annotations;
+    const hasStyleChanged = styleMode !== lastSavedRef.current.styleMode;
+    if (!hasCodeChanged && !hasChatChanged && !hasAnnotationsChanged && !hasStyleChanged) return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
@@ -90,9 +126,9 @@ export default function ProjectEditor() {
         await fetch(`/api/projects/${projectId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, chatHistory }),
+          body: JSON.stringify({ code, chatHistory, styleMode, ...(terminalAnnotations !== undefined ? { terminalAnnotations } : {}) }),
         });
-        lastSavedRef.current = { code, chatLength: chatHistory.length };
+        lastSavedRef.current = { code, chatLength: chatHistory.length, annotations: annotationsKey, styleMode };
       } catch {
         // silent fail
       }
@@ -101,7 +137,7 @@ export default function ProjectEditor() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [code, chatHistory, project, projectId]);
+  }, [code, chatHistory, terminalAnnotations, styleMode, project, projectId]);
 
   // Force save (Cmd+S)
   const forceSave = useCallback(async () => {
@@ -111,13 +147,18 @@ export default function ProjectEditor() {
       await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, chatHistory }),
+        body: JSON.stringify({ code, chatHistory, styleMode, ...(terminalAnnotations !== undefined ? { terminalAnnotations } : {}) }),
       });
-      lastSavedRef.current = { code, chatLength: chatHistory.length };
+      lastSavedRef.current = {
+        code,
+        chatLength: chatHistory.length,
+        annotations: JSON.stringify(terminalAnnotations ?? null),
+        styleMode,
+      };
     } catch {
       // silent
     }
-  }, [project, projectId, code, chatHistory]);
+  }, [project, projectId, code, chatHistory, terminalAnnotations, styleMode]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -179,12 +220,17 @@ export default function ProjectEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: finalCode, chatHistory: finalChat }),
       });
-      lastSavedRef.current = { code: finalCode, chatLength: finalChat.length };
+      lastSavedRef.current = {
+        code: finalCode,
+        chatLength: finalChat.length,
+        annotations: JSON.stringify(terminalAnnotations ?? null),
+        styleMode,
+      };
     } catch {
       // silent fail
     }
     fetch(`/api/projects/${projectId}/thumbnail`, { method: "POST" }).catch(() => {});
-  }, [projectId, codeHistory]);
+  }, [projectId, codeHistory, terminalAnnotations, styleMode]);
 
   const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
     if (!code || !code.trim()) return { durationInFrames: 250, fps: project?.settings.fps ?? 25, sceneError: undefined };
@@ -196,8 +242,19 @@ export default function ProjectEditor() {
     };
   }, [code, project?.settings.fps]);
 
-  const layoutKind = project?.animationType === "video" ? "video" : "still";
-  const storage = typeof window !== "undefined" ? window.localStorage : undefined;
+  const isTerminalProject = project?.animationType === "terminal";
+  const layoutKind = project?.animationType === "video" ? "video" : project?.animationType === "terminal" ? "terminal" : "still";
+  const storage =
+    typeof window !== "undefined"
+      ? window.localStorage
+      : ({
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+          clear: () => {},
+          key: () => null,
+          length: 0,
+        } as Storage);
   const horizontalLayout = useDefaultLayout({
     id: `studio-h-${layoutKind}`,
     panelIds: ["main", "chat"],
@@ -294,23 +351,52 @@ export default function ProjectEditor() {
             }}
           />
         </div>
-        <ConvertAspectRatioButton
-          projectId={projectId}
-          currentOrientation={project.settings.orientation}
-          disabled={!code.trim() || isGenerating}
-        />
+        {!isTerminalProject && (
+          <ConvertAspectRatioButton
+            projectId={projectId}
+            currentOrientation={project.settings.orientation}
+            disabled={!code.trim() || isGenerating}
+          />
+        )}
+        {!isTerminalProject && (
+          <Button variant="outline" size="sm" icon="layers" onClick={() => setSnippetsOpen(true)}>
+            Snippets
+          </Button>
+        )}
+        {isVideoProject && (
+          <Button variant="outline" size="sm" icon="sparkle" onClick={() => setSmartTrimOpen(true)}>
+            Smart trim
+          </Button>
+        )}
         <Button variant="outline" size="sm" icon="folder" onClick={() => setAssetsOpen(true)}>
           Assets
         </Button>
-        <Button
-          variant="primary"
-          size="sm"
-          icon="download"
-          onClick={() => setExportOpen(true)}
-          disabled={!code.trim()}
-        >
-          Export
-        </Button>
+        {isTerminalProject ? (
+          <Button
+            variant="primary"
+            size="sm"
+            icon="download"
+            onClick={() => {
+              const a = document.createElement("a");
+              a.href = `/api/vhs/${projectId}/output`;
+              a.download = `${project.name}.mp4`;
+              a.click();
+            }}
+            disabled={!code.trim()}
+          >
+            Download
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            size="sm"
+            icon="download"
+            onClick={() => setExportOpen(true)}
+            disabled={!code.trim()}
+          >
+            Export
+          </Button>
+        )}
       </div>
 
       {/* Studio layout: resizable panels */}
@@ -330,7 +416,20 @@ export default function ProjectEditor() {
             >
               <Panel id="preview" defaultSize={isVideoProject ? "55%" : "65%"} minSize="15%">
                 <div style={{ background: "#000", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
-                  <PreviewPanel code={code} width={width} height={height} />
+                  {isTerminalProject ? (
+                    <TerminalPreview
+                      projectId={projectId}
+                      code={code}
+                      onReplaceCode={(next) => {
+                        if (code) codeHistory.pushSnapshot(code);
+                        setCode(next);
+                      }}
+                      annotations={terminalAnnotations}
+                      onAnnotationsChange={setTerminalAnnotations}
+                    />
+                  ) : (
+                    <PreviewPanel code={code} width={width} height={height} />
+                  )}
                 </div>
               </Panel>
               {isVideoProject && (
@@ -338,7 +437,15 @@ export default function ProjectEditor() {
                   <Separator className="resize-handle resize-handle-horizontal" />
                   <Panel id="timeline" defaultSize="15%" minSize="8%">
                     <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                      <Timeline code={code} fps={extractedFps} durationInFrames={durationInFrames} />
+                      <Timeline
+                        code={code}
+                        fps={extractedFps}
+                        durationInFrames={durationInFrames}
+                        onCodeChange={(next) => {
+                          if (code) codeHistory.pushSnapshot(code);
+                          setCode(next);
+                        }}
+                      />
                     </div>
                   </Panel>
                 </>
@@ -346,7 +453,12 @@ export default function ProjectEditor() {
               <Separator className="resize-handle resize-handle-horizontal" />
               <Panel id="code" defaultSize={isVideoProject ? "30%" : "35%"} minSize="10%">
                 <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                  <CodeEditor code={code} onChange={handleCodeChange} />
+                  <CodeEditor
+                    code={code}
+                    onChange={handleCodeChange}
+                    language={isTerminalProject ? "vhs" : "typescript"}
+                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
+                  />
                 </div>
               </Panel>
             </Group>
@@ -367,8 +479,17 @@ export default function ProjectEditor() {
                 notionContent={project.notionContent}
                 scriptWithTimestamps={project.scriptWithTimestamps}
                 svgContents={project.svgContents}
+                styleMode={styleMode}
+                onStyleModeChange={setStyleMode}
                 currentCode={code}
-                autoSend={!project.code && project.chatHistory.length === 0}
+                autoSend={
+                  !project.code &&
+                  project.chatHistory.length === 0 &&
+                  // For Smart Trim projects the dialog generates the composition,
+                  // not the AI chat — captured from the URL once on mount before
+                  // the ?action=smartTrim param gets cleaned.
+                  initialAutoAction !== "smartTrim"
+                }
                 onGenerationComplete={handleGenerationComplete}
                 sceneError={sceneError}
               />
@@ -383,16 +504,58 @@ export default function ProjectEditor() {
         onCopyPath={() => {}}
       />
 
-      <ExportDialog
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        code={code}
-        durationInFrames={durationInFrames}
-        fps={extractedFps}
-        width={width}
-        height={height}
-        projectName={project.name}
+      <SnippetBrowser
+        open={snippetsOpen}
+        onClose={() => setSnippetsOpen(false)}
+        hasExistingCode={code.trim().length > 0}
+        onUseSnippet={(snippetCode) => {
+          if (code) codeHistory.pushSnapshot(code);
+          setCode(snippetCode);
+        }}
       />
+
+      <SmartTrimDialog
+        open={smartTrimOpen}
+        onClose={() => setSmartTrimOpen(false)}
+        projectId={projectId}
+        fps={extractedFps}
+        hasMediaFolder={!!project.mediaFolder}
+        hasExistingCode={code.trim().length > 0}
+        onApply={(generatedCode) => {
+          if (code) codeHistory.pushSnapshot(code);
+          setCode(generatedCode);
+        }}
+      />
+
+      {(() => {
+        let exportCode = code;
+        let exportDuration = durationInFrames;
+        let exportFps = extractedFps;
+        let exportWidth = width;
+        let exportHeight = height;
+        if (isTerminalProject && terminalAnnotations) {
+          const origin = typeof window !== "undefined" ? window.location.origin : "";
+          const videoUrl = `${origin}/api/vhs/${projectId}/output`;
+          const plan = buildTerminalExportPlan(videoUrl, terminalAnnotations);
+          exportCode = plan.code;
+          exportDuration = plan.durationInFrames;
+          exportFps = plan.fps;
+          exportWidth = plan.width;
+          exportHeight = plan.height;
+        }
+        return (
+          <ExportDialog
+            open={exportOpen}
+            onClose={() => setExportOpen(false)}
+            code={exportCode}
+            durationInFrames={exportDuration}
+            fps={exportFps}
+            width={exportWidth}
+            height={exportHeight}
+            projectName={project.name}
+          />
+        );
+      })()}
 
       <GeneratingOverlay visible={isGenerating} />
     </div>

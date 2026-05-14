@@ -1,28 +1,133 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import type { AnimationType, Resolution, Orientation, FPS, SvgFile } from "@/lib/types";
+import React, { useState, useEffect, useRef } from "react";
+import { STYLE_MODES } from "@/lib/prompts/styles";
+import type { AnimationType, Resolution, Orientation, FPS, SvgFile, StyleMode } from "@/lib/types";
+import { getAnimationTypeMeta } from "@/lib/animation-types";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Segmented from "@/components/ui/Segmented";
+import TypeTile from "@/components/TypeTile";
+
+interface SnippetSummary {
+  id: string;
+  name: string;
+  subtitle: string;
+  code: string;
+}
+
+type VideoMode = "smarttrim" | "compose";
 
 interface NewProjectModalProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (data: {
-    name: string;
-    animationType: AnimationType;
-    settings: { resolution: Resolution; orientation: Orientation; fps: FPS };
-    initialPrompt: string;
-    notionContent?: string;
-    scriptWithTimestamps?: string;
-    svgContents?: SvgFile[];
-    mediaFolder?: string;
-  }) => void;
+  initialType?: AnimationType;
+  // Called when the project is created and all media (if any) has finished
+  // uploading. The parent is responsible for navigating to the new project.
+  onCreated: (result: { projectId: string; autoAction?: "smartTrim" }) => void;
 }
+
+type Phase =
+  | { kind: "idle" }
+  | { kind: "creating-project" }
+  | {
+      kind: "uploading";
+      fileIndex: number;
+      fileName: string;
+      fileSize: number;
+      bytesUploadedTotal: number;
+      totalBytes: number;
+    }
+  | { kind: "error"; message: string };
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)}KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)}MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)}GB`;
+}
+
+function uploadFileWithProgress(
+  projectId: string,
+  file: File,
+  onProgress: (bytesLoaded: number) => void,
+  registerXhr: (xhr: XMLHttpRequest) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    registerXhr(xhr);
+    const url = `/api/media/${projectId}/upload?name=${encodeURIComponent(file.name)}`;
+    console.log("[upload] starting", { name: file.name, size: file.size, url });
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.upload.onloadstart = () => {
+      console.log("[upload] loadstart", file.name);
+      // Tell the caller we've started even before bytes leave so the UI moves.
+      onProgress(0);
+    };
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded);
+    };
+    xhr.upload.onerror = () => {
+      console.error("[upload] upload.onerror", file.name);
+    };
+    xhr.upload.onabort = () => {
+      console.warn("[upload] upload.onabort", file.name);
+    };
+    xhr.onload = () => {
+      console.log("[upload] onload", file.name, xhr.status);
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else
+        reject(
+          new Error(
+            `Upload failed (HTTP ${xhr.status})${xhr.responseText ? `: ${xhr.responseText}` : ""}`
+          )
+        );
+    };
+    xhr.onerror = () => {
+      console.error("[upload] onerror", file.name);
+      reject(new Error("Network error during upload (server may have crashed)"));
+    };
+    xhr.onabort = () => {
+      console.warn("[upload] onabort", file.name);
+      reject(new Error("Upload aborted"));
+    };
+    xhr.ontimeout = () => {
+      console.error("[upload] ontimeout", file.name);
+      reject(new Error("Upload timed out"));
+    };
+    xhr.send(file);
+  });
+}
+
+const SNIPPET_ACCENT: Record<string, string> = {
+  IntroCard: "#FF64B8",
+  LowerThird: "#20A34E",
+  EndCard: "#246DFF",
+  StatCallout: "#F86606",
+  QuoteCard: "#9D829F",
+  LogoBumper: "#FF64B8",
+  CalloutBanner: "#246DFF",
+  ListReveal: "#20A34E",
+  CodeSnippet: "#7DD3FC",
+  SymbolBug: "#F86606",
+};
+
+const SNIPPET_ICON: Record<string, string> = {
+  IntroCard: "film",
+  LowerThird: "monitor",
+  EndCard: "check",
+  StatCallout: "bolt",
+  QuoteCard: "chat",
+  LogoBumper: "sparkle",
+  CalloutBanner: "info",
+  ListReveal: "list",
+  CodeSnippet: "code",
+  SymbolBug: "image",
+};
 
 function OrientationPreview({ ratio, active }: { ratio: string; active: boolean }) {
   const dims =
@@ -37,67 +142,6 @@ function OrientationPreview({ ratio, active }: { ratio: string; active: boolean 
         borderRadius: 3,
       }}
     />
-  );
-}
-
-function TypeTile({
-  type,
-  active,
-  onClick,
-}: {
-  type: AnimationType;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const info: Record<AnimationType, { label: string; sub: string; icon: string; c: string }> = {
-    broll: { label: "B-Roll", sub: "Dark, cinematic style", icon: "film", c: "var(--magenta)" },
-    animation: { label: "Animation", sub: "Generic motion graphics", icon: "bolt", c: "var(--cyan)" },
-    svg: { label: "SVG", sub: "Animate SVG assets", icon: "layers", c: "var(--amber)" },
-    video: { label: "Video Edit", sub: "Compose & edit video files", icon: "movie", c: "var(--accent)" },
-  };
-  const t = info[type];
-  const [hover, setHover] = useState(false);
-
-  return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        flex: 1,
-        padding: 14,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 10,
-        background: active ? "var(--accent-soft)" : hover ? "var(--bg-3)" : "var(--bg-inset)",
-        border: `0.5px solid ${active ? "var(--accent)" : "var(--line-2)"}`,
-        borderRadius: "var(--r-md)",
-        cursor: "pointer",
-        textAlign: "left",
-        color: "var(--text-0)",
-        transition: "all 120ms",
-      }}
-    >
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 6,
-          background: `color-mix(in oklab, ${t.c} 15%, transparent)`,
-          border: `0.5px solid color-mix(in oklab, ${t.c} 40%, transparent)`,
-          color: t.c,
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
-        <Icon name={t.icon} size={16} />
-      </div>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{t.label}</div>
-        <div style={{ fontSize: 11, color: "var(--text-2)" }}>{t.sub}</div>
-      </div>
-    </button>
   );
 }
 
@@ -116,13 +160,15 @@ function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: stri
   );
 }
 
-export default function NewProjectModal({ open, onClose, onCreate }: NewProjectModalProps) {
+export default function NewProjectModal({ open, onClose, initialType, onCreated }: NewProjectModalProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [resolution, setResolution] = useState<Resolution>("4k");
   const [fps, setFps] = useState<FPS>(25);
   const [orientation, setOrientation] = useState<Orientation>("horizontal");
-  const [animationType, setAnimationType] = useState<AnimationType>("broll");
+  const [animationType, setAnimationType] = useState<AnimationType>(initialType ?? "broll");
+  const typeLocked = initialType !== undefined;
+  const typeMeta = getAnimationTypeMeta(animationType);
 
   const [prompt, setPrompt] = useState("");
   const [notionUrl, setNotionUrl] = useState("");
@@ -131,14 +177,51 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
   const [scriptWithTimestamps, setScriptWithTimestamps] = useState("");
 
   const [svgFiles, setSvgFiles] = useState<SvgFile[]>([]);
-  const [mediaFolder, setMediaFolder] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [mediaFiles, setMediaFiles] = useState<File[]>([]);
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const currentXhrRef = useRef<XMLHttpRequest | null>(null);
+  const creating = phase.kind === "creating-project" || phase.kind === "uploading";
+  // Diagnostics so we can tell whether the file-input onChange ever fires.
+  const [pickEvents, setPickEvents] = useState(0);
+  const [lastPickStatus, setLastPickStatus] = useState<string>("");
+
+  const [snippets, setSnippets] = useState<SnippetSummary[]>([]);
+  const [selectedSnippetId, setSelectedSnippetId] = useState<string | null>(null);
+  const [videoMode, setVideoMode] = useState<VideoMode>("smarttrim");
+  const [styleMode, setStyleMode] = useState<StyleMode>("default");
 
   useEffect(() => {
-    if (open) setStep(1);
-  }, [open]);
+    if (open) {
+      setStep(1);
+      setSelectedSnippetId(null);
+      setVideoMode("smarttrim");
+      if (initialType) setAnimationType(initialType);
+    }
+  }, [open, initialType]);
+
+  // Fetch snippets once when the modal first opens.
+  useEffect(() => {
+    if (!open || snippets.length > 0) return;
+    let cancelled = false;
+    fetch("/api/snippets")
+      .then((r) => r.json())
+      .then((data: SnippetSummary[]) => {
+        if (!cancelled) setSnippets(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, snippets.length]);
 
   function handleClose() {
+    // Abort any in-flight upload so the user can't leave one half-running.
+    if (currentXhrRef.current) {
+      try {
+        currentXhrRef.current.abort();
+      } catch {}
+      currentXhrRef.current = null;
+    }
     setStep(1);
     setName("");
     setPrompt("");
@@ -146,8 +229,12 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
     setNotionContent(undefined);
     setScriptWithTimestamps("");
     setSvgFiles([]);
-    setMediaFolder("");
-    setCreating(false);
+    setMediaFiles([]);
+    setSelectedSnippetId(null);
+    setVideoMode("smarttrim");
+    setPhase({ kind: "idle" });
+    setPickEvents(0);
+    setLastPickStatus("");
     onClose();
   }
 
@@ -171,20 +258,128 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
     }
   }
 
+  const selectedSnippet = selectedSnippetId
+    ? snippets.find((s) => s.id === selectedSnippetId) ?? null
+    : null;
+
+  const isVideo = animationType === "video";
+  const isSmartTrim = isVideo && videoMode === "smarttrim";
+
+  function canCreate(): boolean {
+    if (isSmartTrim) return mediaFiles.length > 0;
+    if (isVideo) return mediaFiles.length > 0 || prompt.trim().length > 0;
+    if (selectedSnippet) return true;
+    return prompt.trim().length > 0;
+  }
+
   async function handleCreate() {
-    if (!prompt.trim()) return;
-    setCreating(true);
-    onCreate({
+    if (!canCreate()) return;
+    console.log("[create] start", {
+      name: name.trim(),
+      animationType,
+      mediaFiles: mediaFiles.map((f) => ({ name: f.name, size: f.size })),
+    });
+    // Immediately surface the overlay so the user sees something is happening,
+    // even before the project create POST resolves.
+    setPhase({ kind: "creating-project" });
+
+    const projectBody = {
       name: name.trim(),
       animationType,
       settings: { resolution, orientation, fps },
-      initialPrompt: prompt.trim(),
+      initialPrompt: isSmartTrim
+        ? prompt.trim() || "Smart trim recording"
+        : selectedSnippet
+          ? prompt.trim() || `Started from ${selectedSnippet.name}`
+          : prompt.trim(),
+      initialCode: selectedSnippet?.code,
       notionContent,
       scriptWithTimestamps: scriptWithTimestamps.trim() || undefined,
       svgContents: svgFiles.length > 0 ? svgFiles : undefined,
-      mediaFolder: mediaFolder.trim() || undefined,
-    });
+      styleMode: animationType === "terminal" || isVideo ? undefined : styleMode,
+    };
+
+    try {
+      console.log("[create] POST /api/projects");
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(projectBody),
+      });
+      console.log("[create] /api/projects status", res.status);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        setPhase({
+          kind: "error",
+          message: `Failed to create project (HTTP ${res.status})${text ? `: ${text}` : ""}`,
+        });
+        return;
+      }
+      const project = await res.json();
+      console.log("[create] project created", project.id);
+
+      if (mediaFiles.length > 0) {
+        const totalBytes = mediaFiles.reduce((s, f) => s + f.size, 0);
+        let cumulative = 0;
+        for (let i = 0; i < mediaFiles.length; i++) {
+          const file = mediaFiles[i];
+          const baseCumulative = cumulative;
+          setPhase({
+            kind: "uploading",
+            fileIndex: i,
+            fileName: file.name,
+            fileSize: file.size,
+            bytesUploadedTotal: baseCumulative,
+            totalBytes,
+          });
+          await uploadFileWithProgress(
+            project.id,
+            file,
+            (loaded) => {
+              setPhase({
+                kind: "uploading",
+                fileIndex: i,
+                fileName: file.name,
+                fileSize: file.size,
+                bytesUploadedTotal: baseCumulative + loaded,
+                totalBytes,
+              });
+            },
+            (xhr) => {
+              currentXhrRef.current = xhr;
+            }
+          );
+          currentXhrRef.current = null;
+          cumulative += file.size;
+        }
+      }
+
+      console.log("[create] done");
+      onCreated({
+        projectId: project.id,
+        autoAction: isSmartTrim ? "smartTrim" : undefined,
+      });
+    } catch (err) {
+      console.error("[create] failed", err);
+      setPhase({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Upload failed",
+      });
+    }
   }
+
+  function cancelUpload() {
+    if (currentXhrRef.current) {
+      try {
+        currentXhrRef.current.abort();
+      } catch {}
+      currentXhrRef.current = null;
+    }
+    setPhase({ kind: "idle" });
+  }
+
+  const showSnippetPicker =
+    animationType !== "terminal" && animationType !== "video";
 
   const ratioForOrientation = (o: Orientation) =>
     o === "horizontal" ? "16:9" : o === "vertical" ? "9:16" : "1:1";
@@ -194,7 +389,13 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
       open={open}
       onClose={handleClose}
       width={560}
-      title={step === 1 ? "New project" : "Describe the animation"}
+      title={
+        step === 1
+          ? typeLocked
+            ? `New ${typeMeta.label} project`
+            : "New project"
+          : animationType === "terminal" ? "Describe the recording" : "Describe the animation"
+      }
       stepLabel={`Step ${step} of 2`}
     >
       {/* Step progress bar */}
@@ -224,19 +425,21 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
               />
             </div>
 
-            <div>
-              <FieldLabel>Type</FieldLabel>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["broll", "animation", "svg", "video"] as AnimationType[]).map((t) => (
-                  <TypeTile
-                    key={t}
-                    type={t}
-                    active={animationType === t}
-                    onClick={() => setAnimationType(t)}
-                  />
-                ))}
+            {!typeLocked && (
+              <div>
+                <FieldLabel>Type</FieldLabel>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(["broll", "animation", "svg", "video"] as AnimationType[]).map((t) => (
+                    <TypeTile
+                      key={t}
+                      type={t}
+                      active={animationType === t}
+                      onClick={() => setAnimationType(t)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
@@ -337,16 +540,192 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
 
         {step === 2 && (
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-            <div>
-              <FieldLabel hint="What should the AI generate?">Prompt</FieldLabel>
-              <Textarea
-                value={prompt}
-                onChange={setPrompt}
-                rows={5}
-                placeholder="Describe the animation you want..."
-                style={undefined}
-              />
-            </div>
+            {isVideo && (
+              <div>
+                <FieldLabel hint="Pick how you want to edit this video">
+                  Editing mode
+                </FieldLabel>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <ModeCard
+                    active={videoMode === "smarttrim"}
+                    accent="#FF64B8"
+                    icon="sparkle"
+                    title="Smart trim"
+                    subtitle="Auto-build a Remotion edit — Whisper picks the takes, silences + fillers drop out"
+                    onClick={() => setVideoMode("smarttrim")}
+                  />
+                  <ModeCard
+                    active={videoMode === "compose"}
+                    accent="#246DFF"
+                    icon="code"
+                    title="Compose"
+                    subtitle="AI writes the Remotion composition from your prompt"
+                    onClick={() => setVideoMode("compose")}
+                  />
+                </div>
+                <div
+                  className="mono"
+                  style={{ fontSize: 10, color: "var(--text-3)", marginTop: 8 }}
+                >
+                  Both modes produce a Remotion composition you can refine afterwards.
+                </div>
+              </div>
+            )}
+
+            {showSnippetPicker && snippets.length > 0 && (
+              <div>
+                <FieldLabel hint="Skip the AI prompt and start from a finished scene">
+                  Start from a brand snippet
+                </FieldLabel>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 8,
+                  }}
+                >
+                  <button
+                    onClick={() => setSelectedSnippetId(null)}
+                    style={{
+                      padding: "10px 12px",
+                      minHeight: 64,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 4,
+                      background:
+                        selectedSnippetId === null ? "var(--accent-soft)" : "var(--bg-inset)",
+                      border: `0.5px solid ${
+                        selectedSnippetId === null ? "var(--accent)" : "var(--line-2)"
+                      }`,
+                      borderRadius: "var(--r-sm)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      color: "var(--text-0)",
+                      transition: "all 120ms",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Icon name="sparkle" size={11} style={{ color: "var(--accent)" }} />
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>AI prompt</span>
+                    </div>
+                    <span style={{ fontSize: 10, color: "var(--text-2)" }}>
+                      Describe it, AI generates
+                    </span>
+                  </button>
+                  {snippets.map((s) => {
+                    const accent = SNIPPET_ACCENT[s.id] ?? "var(--accent)";
+                    const icon = SNIPPET_ICON[s.id] ?? "film";
+                    const active = selectedSnippetId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSnippetId(s.id)}
+                        style={{
+                          padding: "10px 12px",
+                          minHeight: 64,
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-start",
+                          gap: 4,
+                          background: active
+                            ? `color-mix(in oklab, ${accent} 14%, transparent)`
+                            : "var(--bg-inset)",
+                          border: `0.5px solid ${active ? accent : "var(--line-2)"}`,
+                          borderRadius: "var(--r-sm)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          color: "var(--text-0)",
+                          transition: "all 120ms",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <Icon name={icon} size={11} style={{ color: accent }} />
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: "var(--text-2)", lineHeight: 1.3 }}>
+                          {s.subtitle}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!isSmartTrim && !isVideo && animationType !== "terminal" && (
+              <div>
+                <FieldLabel hint="Visual style for the AI — kinetic/editorial/cinematic produce noticeably different looks">
+                  Style
+                </FieldLabel>
+                <Segmented
+                  value={styleMode}
+                  onChange={(v) => setStyleMode(v as StyleMode)}
+                  options={STYLE_MODES.map((m) => ({ label: m.label, value: m.id }))}
+                />
+                <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6 }}>
+                  {STYLE_MODES.find((m) => m.id === styleMode)?.description}
+                </div>
+              </div>
+            )}
+
+            {!isSmartTrim && (
+              <div>
+                <FieldLabel
+                  hint={
+                    selectedSnippet
+                      ? "Optional — refine after creation via chat"
+                      : animationType === "terminal"
+                        ? "Describe the command(s), timing, and style"
+                        : "What should the AI generate?"
+                  }
+                >
+                  {animationType === "terminal" ? "Terminal script prompt" : "Prompt"}
+                </FieldLabel>
+                <Textarea
+                  value={prompt}
+                  onChange={setPrompt}
+                  rows={selectedSnippet ? 3 : 5}
+                  placeholder={
+                    selectedSnippet
+                      ? `${selectedSnippet.name} loaded — leave blank or note any tweaks…`
+                      : animationType === "terminal"
+                        ? `e.g. "Type 'apify actors search instagram', press Enter, show results, 8 seconds total. Dark theme, large font."`
+                        : "Describe the animation you want..."
+                  }
+                  style={undefined}
+                />
+              </div>
+            )}
+
+            {isSmartTrim && (
+              <div
+                style={{
+                  padding: 12,
+                  background: "var(--accent-soft)",
+                  border: "0.5px solid var(--accent)",
+                  borderRadius: "var(--r-sm)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  fontSize: 12,
+                  color: "var(--text-1)",
+                  lineHeight: 1.5,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Icon name="sparkle" size={12} style={{ color: "var(--accent)" }} />
+                  <span style={{ fontWeight: 600, color: "var(--text-0)" }}>
+                    Smart trim flow
+                  </span>
+                </div>
+                <div style={{ color: "var(--text-2)" }}>
+                  Add your media below — after upload, the Smart Trim dialog opens
+                  automatically. Whisper transcribes locally, silences &gt; 600ms and filler
+                  words drop out, kept ranges become a Remotion composition you can refine.
+                </div>
+              </div>
+            )}
 
             {animationType === "svg" && (
               <div>
@@ -454,15 +833,149 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
 
             {animationType === "video" && (
               <div>
-                <FieldLabel hint="Absolute path to your video files">Media folder</FieldLabel>
-                <Input
-                  value={mediaFolder}
-                  onChange={setMediaFolder}
-                  placeholder="/Users/you/Movies/project-folder"
-                  mono
-                />
-                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>
-                  Point to a local folder with your video/audio/image files. Files are streamed directly — nothing gets copied or uploaded.
+                <FieldLabel
+                  hint={`${mediaFiles.length} file${mediaFiles.length === 1 ? "" : "s"}`}
+                >
+                  Media files
+                </FieldLabel>
+                <div
+                  style={{
+                    padding: 12,
+                    background: "var(--bg-inset)",
+                    border: "0.5px dashed var(--line-2)",
+                    borderRadius: "var(--r-sm)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  {mediaFiles.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {mediaFiles.map((file, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 6px 4px 10px",
+                            height: 26,
+                            background: "var(--bg-3)",
+                            border: "0.5px solid var(--line-2)",
+                            borderRadius: 4,
+                            maxWidth: "100%",
+                          }}
+                        >
+                          <Icon name="film" size={11} style={{ color: "var(--text-2)" }} />
+                          <span
+                            className="mono"
+                            style={{
+                              fontSize: 11,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 200,
+                            }}
+                          >
+                            {file.name}
+                          </span>
+                          <span
+                            className="mono nums"
+                            style={{ fontSize: 10, color: "var(--text-3)" }}
+                          >
+                            {(file.size / (1024 * 1024)).toFixed(1)}MB
+                          </span>
+                          <button
+                            onClick={() =>
+                              setMediaFiles(mediaFiles.filter((_, j) => j !== i))
+                            }
+                            style={{
+                              width: 16,
+                              height: 16,
+                              border: "none",
+                              background: "transparent",
+                              color: "var(--text-2)",
+                              cursor: "pointer",
+                              display: "grid",
+                              placeItems: "center",
+                              borderRadius: 3,
+                            }}
+                          >
+                            <Icon name="close" size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label
+                    onClick={() => {
+                      console.log("[picker] label clicked");
+                    }}
+                    style={{
+                      height: 32,
+                      border: "0.5px dashed var(--line-3)",
+                      background: "transparent",
+                      color: "var(--text-1)",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    + Add media
+                    <input
+                      type="file"
+                      accept="video/*,audio/*,image/*,.mp4,.mov,.webm,.mkv,.avi,.m4v,.mp3,.wav,.m4a,.aac"
+                      multiple
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const fileList = e.target.files;
+                        console.log("[picker] onChange fired", {
+                          fileCount: fileList?.length ?? 0,
+                          files: fileList
+                            ? Array.from(fileList).map((f) => ({
+                                name: f.name,
+                                size: f.size,
+                                type: f.type,
+                              }))
+                            : null,
+                        });
+                        setPickEvents((n) => n + 1);
+                        if (!fileList || fileList.length === 0) {
+                          setLastPickStatus("Picker fired but no files were selected.");
+                          return;
+                        }
+                        const picked = Array.from(fileList);
+                        setLastPickStatus(
+                          `Picked ${picked.length} file${picked.length === 1 ? "" : "s"}: ${picked
+                            .map((f) => `${f.name} (${(f.size / (1024 * 1024 * 1024)).toFixed(2)} GB)`)
+                            .join(", ")}`
+                        );
+                        setMediaFiles((prev) => {
+                          const next = [...prev, ...picked];
+                          console.log("[picker] mediaFiles now", next.length, next.map((f) => f.name));
+                          return next;
+                        });
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    marginTop: 8,
+                    fontSize: 11,
+                    color: pickEvents > 0 ? "var(--accent)" : "var(--text-3)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {pickEvents === 0
+                    ? "Files upload into the project on create. Large videos take a moment."
+                    : `Picker fired ${pickEvents}× · ${mediaFiles.length} file${mediaFiles.length === 1 ? "" : "s"} queued${lastPickStatus ? ` · ${lastPickStatus}` : ""}`}
                 </div>
               </div>
             )}
@@ -519,15 +1032,226 @@ export default function NewProjectModal({ open, onClose, onCreate }: NewProjectM
                 variant="primary"
                 size="lg"
                 onClick={handleCreate}
-                disabled={!prompt.trim() || creating}
-                icon="sparkle"
+                disabled={!canCreate() || creating}
+                icon={isSmartTrim ? "sparkle" : selectedSnippet ? "layers" : "sparkle"}
               >
-                {creating ? "Creating..." : "Create animation"}
+                {creating
+                  ? "Creating..."
+                  : isSmartTrim
+                    ? "Set up smart trim"
+                    : selectedSnippet
+                      ? `Create from ${selectedSnippet.name}`
+                      : animationType === "terminal" ? "Create recording" : "Create animation"}
               </Button>
             </div>
           </div>
         )}
       </div>
+      {phase.kind !== "idle" && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(5,5,8,0.88)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 460,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+              background: "var(--bg-2)",
+              border: "0.5px solid var(--line-2)",
+              borderRadius: "var(--r-lg)",
+              padding: 20,
+              boxShadow: "var(--sh-float)",
+            }}
+          >
+            {phase.kind === "creating-project" && (
+              <>
+                <div className="mono cap" style={{ color: "var(--text-2)", fontSize: 10 }}>
+                  Setting up project…
+                </div>
+                <div style={{ fontSize: 14, color: "var(--text-1)" }}>
+                  Creating the project on the server. The upload starts right after.
+                </div>
+                <div
+                  style={{
+                    height: 6,
+                    width: "100%",
+                    background: "var(--bg-3)",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: "30%",
+                      background: "var(--accent)",
+                      animation: "vt-indeterminate 1.4s ease-in-out infinite",
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {phase.kind === "uploading" && (
+              <>
+                <div className="mono cap" style={{ color: "var(--text-2)", fontSize: 10 }}>
+                  Uploading media · {phase.fileIndex + 1} of {mediaFiles.length}
+                </div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--text-0)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={phase.fileName}
+                >
+                  {phase.fileName}
+                </div>
+                <div
+                  style={{
+                    height: 6,
+                    width: "100%",
+                    background: "var(--bg-3)",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${Math.min(
+                        100,
+                        (phase.bytesUploadedTotal / Math.max(1, phase.totalBytes)) * 100
+                      ).toFixed(1)}%`,
+                      background: "var(--accent)",
+                      transition: "width 120ms linear",
+                    }}
+                  />
+                </div>
+                <div
+                  className="mono nums"
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 11,
+                    color: "var(--text-2)",
+                  }}
+                >
+                  <span>
+                    {formatBytes(phase.bytesUploadedTotal)} / {formatBytes(phase.totalBytes)}
+                  </span>
+                  <span>
+                    {(
+                      (phase.bytesUploadedTotal / Math.max(1, phase.totalBytes)) *
+                      100
+                    ).toFixed(0)}
+                    %
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                  Large files take a while — feel free to grab a coffee. Don&apos;t close this tab.
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <Button variant="outline" onClick={cancelUpload}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {phase.kind === "error" && (
+              <>
+                <div
+                  className="mono cap"
+                  style={{ color: "var(--danger, #ff5252)", fontSize: 10 }}
+                >
+                  Upload failed
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "var(--text-0)",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {phase.message}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                  Open the browser DevTools console for diagnostic logs prefixed with{" "}
+                  <code className="mono">[upload]</code> / <code className="mono">[create]</code>.
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <Button variant="outline" onClick={() => setPhase({ kind: "idle" })}>
+                    Dismiss
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </Modal>
+  );
+}
+
+function ModeCard({
+  active,
+  accent,
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  active: boolean;
+  accent: string;
+  icon: string;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "12px 14px",
+        minHeight: 86,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 6,
+        background: active
+          ? `color-mix(in oklab, ${accent} 14%, transparent)`
+          : "var(--bg-inset)",
+        border: `0.5px solid ${active ? accent : "var(--line-2)"}`,
+        borderRadius: "var(--r-sm)",
+        cursor: "pointer",
+        textAlign: "left",
+        color: "var(--text-0)",
+        transition: "all 120ms",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon name={icon} size={12} style={{ color: accent }} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
+      </div>
+      <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.35 }}>
+        {subtitle}
+      </span>
+    </button>
   );
 }

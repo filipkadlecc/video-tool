@@ -18,6 +18,7 @@ export interface RenderJob {
 const g = globalThis as unknown as {
   __renderQueue?: PQueue;
   __renderJobs?: Map<string, RenderJob>;
+  __rendersCleanupDone?: boolean;
 };
 
 if (!g.__renderQueue) {
@@ -25,6 +26,23 @@ if (!g.__renderQueue) {
 }
 if (!g.__renderJobs) {
   g.__renderJobs = new Map();
+}
+
+// Auto-cleanup: on first boot, remove rendered files older than 7 days.
+// Renders are a cache of past exports — not surfaced in the UI — so they're safe to expire.
+if (!g.__rendersCleanupDone) {
+  g.__rendersCleanupDone = true;
+  const dir = path.join(process.cwd(), "public", "renders");
+  if (fs.existsSync(dir)) {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const f of fs.readdirSync(dir)) {
+      const full = path.join(dir, f);
+      try {
+        const s = fs.statSync(full);
+        if (s.isFile() && s.mtimeMs < cutoff) fs.unlinkSync(full);
+      } catch {}
+    }
+  }
 }
 
 const queue = g.__renderQueue;
@@ -48,6 +66,49 @@ import { Composition } from "remotion";
 import React from "react";
 import SceneComponent from "${relativeScene}";
 
+// Block the renderer until Inter loads. Without this, Chromium falls back to
+// serif/Times for the first frame and the export looks nothing like the preview.
+// @remotion/google-fonts integrates with delayRender/continueRender so frames
+// are not captured until weights are available.
+import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
+loadInter("normal", { weights: ["400", "500", "600", "700", "900"] });
+
+// GT Walsheim is local-licensed; load via the standard FontFace API behind
+// delayRender so the renderer waits for it too.
+import { delayRender, continueRender, staticFile } from "remotion";
+const __gtWeights = [
+  { weight: "400", file: "GT-Walsheim-Regular.ttf" },
+  { weight: "500", file: "GT-Walsheim-Medium.ttf" },
+  { weight: "700", file: "GT-Walsheim-Bold.ttf" },
+  { weight: "900", file: "GT-Walsheim-Black.ttf" },
+];
+const __gtHandle = delayRender("Loading GT Walsheim");
+Promise.all(
+  __gtWeights.map(async ({ weight, file }) => {
+    const f = new FontFace("GT Walsheim", \`url(\${staticFile("fonts/" + file)})\`, {
+      weight,
+      style: "normal",
+      display: "block" as FontDisplay,
+    });
+    await f.load();
+    (document.fonts as FontFaceSet).add(f);
+  }),
+).finally(() => continueRender(__gtHandle));
+
+// Default the entire rendered document to Inter. Without this, any text in
+// the LLM-generated scene that forgets fontFamily inherits Chromium's serif
+// default (Times) — fonts load correctly but nothing uses them by name.
+// Injected as a constructable stylesheet so it covers every frame.
+if (typeof document !== "undefined") {
+  const __style = document.createElement("style");
+  __style.textContent = \`
+    html, body, #root, * {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+  \`;
+  document.head.appendChild(__style);
+}
+
 const Root: React.FC = () => {
   return (
     <Composition
@@ -68,7 +129,7 @@ registerRoot(Root);
   return entryPath;
 }
 
-export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed";
+export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed" | "qtrle";
 
 export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264"): RenderJob {
   const jobId = generateJobId();
@@ -93,7 +154,7 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 
     try {
       let fixedCode = fixImportPaths(code);
-      if (codec === "prores" || codec === "prores-xq") {
+      if (codec === "prores" || codec === "prores-xq" || codec === "qtrle") {
         fixedCode = stripBackgroundsForTransparency(fixedCode);
       }
       fs.writeFileSync(scenePath, fixedCode, "utf-8");
@@ -107,17 +168,27 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         `${jobId}.${ext}`
       );
 
+      // qtrle isn't supported natively by Remotion: render ProRes 4444 (with alpha)
+      // to a temp file, then transcode to qtrle .mov via ffmpeg.
+      const remotionOutputPath = codec === "qtrle"
+        ? path.join(process.cwd(), "public", "renders", `${jobId}.prores.mov`)
+        : outputPath;
+
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
       let stderrLog = "";
 
-      const remotionCodec = codec === "prores-xq" ? "prores" : codec === "uncompressed" ? "prores" : codec;
+      const remotionCodec =
+        codec === "prores-xq" ? "prores" :
+        codec === "uncompressed" ? "prores" :
+        codec === "qtrle" ? "prores" :
+        codec;
       const renderArgs = [
         "remotion",
         "render",
         entryPath,
         "Scene",
-        outputPath,
+        remotionOutputPath,
         "--codec",
         remotionCodec,
       ];
@@ -125,6 +196,8 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         renderArgs.push("--prores-profile", "4444", "--image-format", "png", "--pixel-format", "yuva444p10le");
       } else if (codec === "prores-xq") {
         renderArgs.push("--prores-profile", "4444-xq", "--image-format", "png", "--pixel-format", "yuva444p10le");
+      } else if (codec === "qtrle") {
+        renderArgs.push("--prores-profile", "4444", "--image-format", "png", "--pixel-format", "yuva444p10le");
       } else if (codec === "uncompressed") {
         // ProRes 4444 XQ is the highest quality Remotion supports natively.
         // For truly uncompressed, we render ProRes 4444 XQ and then rewrap via ffmpeg.
@@ -184,6 +257,24 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         proc.on("error", reject);
       });
 
+      if (codec === "qtrle") {
+        await new Promise<void>((resolve, reject) => {
+          const ff = spawn(
+            "ffmpeg",
+            ["-y", "-i", remotionOutputPath, "-c:v", "qtrle", "-pix_fmt", "argb", outputPath],
+            { cwd: process.cwd(), env: { ...process.env } }
+          );
+          let ffErr = "";
+          ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); });
+          ff.on("close", (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`ffmpeg qtrle transcode failed: ${ffErr.slice(-500).trim()}`));
+          });
+          ff.on("error", reject);
+        });
+        try { fs.unlinkSync(remotionOutputPath); } catch {}
+      }
+
       job.status = "done";
       job.progress = 100;
       job.outputPath = `/renders/${jobId}.${ext}`;
@@ -200,15 +291,31 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 }
 
 function stripBackgroundsForTransparency(code: string): string {
-  // Replace <Background /> usage with nothing (component stays defined but unused)
+  // 1. Remove <Background /> and <SceneBg /> — dedicated root-background components.
   let result = code.replace(/<Background\s*\/>/g, "{/* transparent */}");
-  // Replace BlackScreen solid bg with transparent
-  result = result.replace(/backgroundColor:\s*COLORS\.bg/g, 'backgroundColor: "transparent"');
-  // Also catch hex-based dark backgrounds in BlackScreen-like patterns
+  result = result.replace(/<SceneBg\s*\/>/g, "{/* transparent */}");
+
+  // 2. Remove the BlackScreen / Background component DEFINITIONS (keep the rest intact).
+  //    Only zero-out the backgroundColor inside these specific component declarations.
   result = result.replace(
-    /const\s+BlackScreen[\s\S]*?backgroundColor:\s*["']#[0-9a-fA-F]+["']/g,
-    (match) => match.replace(/backgroundColor:\s*["']#[0-9a-fA-F]+["']/, 'backgroundColor: "transparent"')
+    /const\s+(BlackScreen|Background|SceneBg)\s*[=:][^;{]*\{[\s\S]*?backgroundColor:\s*(?:COLORS\.bg|["']#[0-9a-fA-F]{3,8}["'])/g,
+    (match) => match.replace(/backgroundColor:\s*(?:COLORS\.bg|["']#[0-9a-fA-F]{3,8}["'])/, 'backgroundColor: "transparent"'),
   );
+
+  // 3. Make AbsoluteFill root backgrounds transparent — but ONLY when the AbsoluteFill
+  //    is the direct scene wrapper (i.e. it's the first element a component returns,
+  //    recognised by being at the start of a return statement).
+  //    Target pattern:  return ( <AbsoluteFill style={{ ... backgroundColor: COLORS.bg ... }}>
+  result = result.replace(
+    /(return\s*\(\s*\n?\s*<AbsoluteFill[^>]*style=\{\{[^}]*?)backgroundColor:\s*COLORS\.bg/g,
+    '$1backgroundColor: "transparent"',
+  );
+  // Same but with hex literals in a root AbsoluteFill
+  result = result.replace(
+    /(return\s*\(\s*\n?\s*<AbsoluteFill[^>]*style=\{\{[^}]*?)backgroundColor:\s*["']#[0-9a-fA-F]{3,8}["']/g,
+    '$1backgroundColor: "transparent"',
+  );
+
   return result;
 }
 
@@ -216,7 +323,10 @@ function fixImportPaths(code: string): string {
   return code
     .replace(/from\s+["']\.\.\/remotion\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']@\/remotion\/theme["']/g, 'from "../theme"')
-    .replace(/from\s+["']remotion\/theme["']/g, 'from "../theme"');
+    .replace(/from\s+["']remotion\/theme["']/g, 'from "../theme"')
+    .replace(/from\s+["']\.\.\/remotion\/motion["']/g, 'from "../motion"')
+    .replace(/from\s+["']@\/remotion\/motion["']/g, 'from "../motion"')
+    .replace(/from\s+["']remotion\/motion["']/g, 'from "../motion"');
 }
 
 export async function renderThumbnail(
