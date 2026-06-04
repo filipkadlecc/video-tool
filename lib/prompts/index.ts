@@ -1,0 +1,86 @@
+import { buildBasePrompt } from "./base";
+import { BROLL_DARK_PROMPT } from "./broll-dark";
+import { COLOR_SYSTEM_PROMPT } from "./colors";
+import { APIFY_LAYOUT_PROMPT } from "./apify-layout";
+import { buildVideoEditingPrompt } from "./video-editing";
+import { getStylePrompt } from "./styles";
+import { buildTerminalBase } from "./terminal-base";
+import { TERMINAL_EDIT_EXAMPLES } from "./terminal-examples";
+import type { AnimationType, ProjectSettings, StyleMode } from "../types";
+import { getResolution } from "../types";
+
+interface MediaFileInfo {
+  name: string;
+  path: string;
+  type: string;
+  sizeFormatted: string;
+}
+
+export function buildSystemPrompt(
+  animationType: AnimationType,
+  settings: ProjectSettings,
+  assetPaths?: string[],
+  videoContext?: { projectId: string; mediaFiles: MediaFileInfo[] },
+  styleMode?: StyleMode,
+  customTheme?: boolean,
+): string {
+  const { width, height } = getResolution(settings.orientation, settings.resolution);
+  const base = buildBasePrompt(width, height, settings.fps);
+
+  if (animationType === "terminal") {
+    return [buildTerminalBase(width, height, customTheme), TERMINAL_EDIT_EXAMPLES].join("\n\n");
+  }
+
+  let prompt = base + "\n\n" + COLOR_SYSTEM_PROMPT + "\n\n" + APIFY_LAYOUT_PROMPT + "\n\n" + BROLL_DARK_PROMPT;
+
+  // Append style preset (defaults to "default" if not provided).
+  prompt += "\n\n" + getStylePrompt(styleMode);
+
+  if (animationType === "video" && videoContext) {
+    prompt += "\n\n" + buildVideoEditingPrompt(videoContext.projectId, videoContext.mediaFiles);
+  }
+
+  if (assetPaths && assetPaths.length > 0) {
+    prompt += `\n\n=== AVAILABLE ASSETS ===\nUse staticFile() from remotion to reference these. Use the EXACT paths below — do not guess filenames.\n\n${assetPaths.map((p) => `- ${p}`).join("\n")}`;
+  }
+
+  return prompt;
+}
+
+export function buildUserMessage(
+  prompt: string,
+  code?: string,
+  notionContent?: string,
+  scriptWithTimestamps?: string,
+  animationType?: AnimationType,
+  currentTapeDurationMs?: number,
+): string {
+  const parts: string[] = [];
+
+  if (notionContent) {
+    parts.push(`=== REFERENCE CONTENT (from Notion) ===\n${notionContent}\n`);
+  }
+
+  if (scriptWithTimestamps) {
+    parts.push(`=== VIDEO SCRIPT WITH TIMESTAMPS ===\n${scriptWithTimestamps}\n`);
+  }
+
+  if (code) {
+    const lang = animationType === "terminal" ? "tape" : "tsx";
+    const label = animationType === "terminal" ? "Current .tape script" : "Current scene code";
+    parts.push(`${label}:\n\`\`\`${lang}\n${code}\n\`\`\``);
+  }
+
+  if (animationType === "terminal" && typeof currentTapeDurationMs === "number" && currentTapeDurationMs > 0) {
+    const seconds = (currentTapeDurationMs / 1000).toFixed(2);
+    parts.push(
+      `Current tape duration: ${seconds}s (server-computed from the script above). ` +
+        `If the user asks you to "extend" / "make longer" / "lengthen", the new duration MUST be greater than ${seconds}s. ` +
+        `If they ask for a specific length, hit it within 0.5s. Use trailing Sleep to pad — do not delete content the user didn't ask to remove.`,
+    );
+  }
+
+  parts.push(prompt);
+
+  return parts.join("\n\n");
+}
