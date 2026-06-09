@@ -140,7 +140,7 @@ registerRoot(Root);
   return entryPath;
 }
 
-export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed" | "qtrle";
+export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed" | "qtrle" | "hevc-alpha";
 
 export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264", svgContents?: { filename: string; content: string }[]): RenderJob {
   const jobId = generateJobId();
@@ -165,7 +165,7 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 
     try {
       let fixedCode = fixImportPaths(code);
-      if (codec === "prores" || codec === "prores-xq" || codec === "qtrle") {
+      if (codec === "prores" || codec === "prores-xq" || codec === "qtrle" || codec === "hevc-alpha") {
         fixedCode = stripBackgroundsForTransparency(fixedCode);
       }
       fs.writeFileSync(scenePath, fixedCode, "utf-8");
@@ -179,9 +179,9 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         `${jobId}.${ext}`
       );
 
-      // qtrle isn't supported natively by Remotion: render ProRes 4444 (with alpha)
-      // to a temp file, then transcode to qtrle .mov via ffmpeg.
-      const remotionOutputPath = codec === "qtrle"
+      // qtrle and hevc-alpha aren't supported natively by Remotion: render
+      // ProRes 4444 (with alpha) to a temp file, then transcode via ffmpeg.
+      const remotionOutputPath = (codec === "qtrle" || codec === "hevc-alpha")
         ? path.join(process.cwd(), "public", "renders", `${jobId}.prores.mov`)
         : outputPath;
 
@@ -193,6 +193,7 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         codec === "prores-xq" ? "prores" :
         codec === "uncompressed" ? "prores" :
         codec === "qtrle" ? "prores" :
+        codec === "hevc-alpha" ? "prores" :
         codec;
       const renderArgs = [
         "remotion",
@@ -208,6 +209,8 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       } else if (codec === "prores-xq") {
         renderArgs.push("--prores-profile", "4444-xq", "--image-format", "png", "--pixel-format", "yuva444p10le");
       } else if (codec === "qtrle") {
+        renderArgs.push("--prores-profile", "4444", "--image-format", "png", "--pixel-format", "yuva444p10le");
+      } else if (codec === "hevc-alpha") {
         renderArgs.push("--prores-profile", "4444", "--image-format", "png", "--pixel-format", "yuva444p10le");
       } else if (codec === "uncompressed") {
         // ProRes 4444 XQ is the highest quality Remotion supports natively.
@@ -285,6 +288,43 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
           ff.on("close", (code) => {
             if (code === 0) resolve();
             else reject(new Error(`ffmpeg qtrle transcode failed: ${ffErr.slice(-500).trim()}`));
+          });
+          ff.on("error", reject);
+        });
+        try { fs.unlinkSync(remotionOutputPath); } catch {}
+      }
+
+      // HEVC-with-alpha: Apple's native transparent-video format. Decoded by
+      // AVFoundation on macOS, so CapCut Mac / FCP / Motion / Safari handle
+      // it without the color-management games that break ProRes 4444 and
+      // QT-RLE imports. Encoder is macOS-only (hevc_videotoolbox). The alpha
+      // is stored as a sidecar HEVC layer inside the hvc1 track; ffprobe
+      // reports the main pix_fmt as yuv420p but decoded output is RGBA.
+      if (codec === "hevc-alpha") {
+        await new Promise<void>((resolve, reject) => {
+          const ff = spawn(
+            "ffmpeg",
+            [
+              "-y", "-i", remotionOutputPath,
+              "-c:v", "hevc_videotoolbox",
+              "-allow_sw", "1",
+              "-alpha_quality", "0.75",
+              "-tag:v", "hvc1",
+              "-pix_fmt", "yuva420p",
+              "-color_primaries", "bt709",
+              "-color_trc", "bt709",
+              "-colorspace", "bt709",
+              "-bsf:v", "hevc_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1",
+              "-movflags", "+faststart",
+              outputPath,
+            ],
+            { cwd: process.cwd(), env: { ...process.env } }
+          );
+          let ffErr = "";
+          ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); });
+          ff.on("close", (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`ffmpeg hevc-alpha transcode failed: ${ffErr.slice(-500).trim()}`));
           });
           ff.on("error", reject);
         });

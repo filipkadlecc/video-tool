@@ -21,6 +21,7 @@ const BUILT_IN_PRESETS: RenderPreset[] = [
   { name: "Color Grading", codec: "prores-xq", builtIn: true },
   { name: "Compositing", codec: "prores", builtIn: true },
   { name: "No Background", codec: "prores", builtIn: true },
+  { name: "CapCut (Transparent)", codec: "hevc-alpha", builtIn: true },
   { name: "OBS (Transparent .mov)", codec: "qtrle", builtIn: true },
 ];
 
@@ -218,7 +219,7 @@ export default function ExportDialog({
     { label: "Resolution", value: `${width}\u00d7${height}` },
     { label: "Duration", value: `${seconds}s` },
     { label: "FPS", value: String(fps) },
-    { label: "Codec", value: codec === "h264" ? "Classic" : codec === "prores" ? "Transparent Background" : codec === "prores-xq" ? "Color Grading" : "OBS" },
+    { label: "Codec", value: codec === "h264" ? "Classic" : codec === "prores" ? "Transparent Background" : codec === "prores-xq" ? "Color Grading" : codec === "hevc-alpha" ? "CapCut" : "OBS" },
   ];
 
   return (
@@ -396,6 +397,7 @@ export default function ExportDialog({
               options={[
                 { value: "h264", label: "Classic" },
                 { value: "prores", label: "Transparent Background" },
+                { value: "hevc-alpha", label: "CapCut" },
                 { value: "qtrle", label: "OBS" },
                 ...(showAdvanced ? [{ value: "prores-xq", label: "Color Grading" }] : []),
               ]}
@@ -452,6 +454,24 @@ export default function ExportDialog({
               >
                 <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
                 QuickTime Animation (RLE) — .mov with ARGB alpha channel. Drop into OBS as a Media Source. Large files.
+              </div>
+            )}
+            {codec === "hevc-alpha" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--accent-soft)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--accent-line)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                HEVC with alpha — .mov, transparent, Apple&apos;s native format. Best for CapCut Mac, Final Cut, Motion. Small file size. macOS only.
               </div>
             )}
             {codec === "prores-xq" && (
