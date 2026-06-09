@@ -13,6 +13,7 @@ import Segmented from "@/components/ui/Segmented";
 import TypeTile from "@/components/TypeTile";
 import SnippetParamsForm from "@/components/SnippetParamsForm";
 import { SNIPPET_SCHEMAS, buildDefaultValues } from "@/lib/snippet-schemas";
+import { SNIPPET_ICONS } from "@/lib/snippet-icons";
 import { renderSnippet } from "@/lib/snippet-template";
 
 interface SnippetSummary {
@@ -117,19 +118,6 @@ const SNIPPET_ACCENT: Record<string, string> = {
   ListReveal: "#20A34E",
   CodeSnippet: "#7DD3FC",
   SymbolBug: "#F86606",
-};
-
-const SNIPPET_ICON: Record<string, string> = {
-  IntroCard: "film",
-  LowerThird: "monitor",
-  EndCard: "check",
-  StatCallout: "bolt",
-  QuoteCard: "chat",
-  LogoBumper: "sparkle",
-  CalloutBanner: "info",
-  ListReveal: "list",
-  CodeSnippet: "code",
-  SymbolBug: "image",
 };
 
 function OrientationPreview({ ratio, active }: { ratio: string; active: boolean }) {
@@ -637,7 +625,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   </button>
                   {snippets.map((s) => {
                     const accent = SNIPPET_ACCENT[s.id] ?? "var(--accent)";
-                    const icon = SNIPPET_ICON[s.id] ?? "film";
+                    const icon = SNIPPET_ICONS[s.id] ?? "film";
                     const active = selectedSnippetId === s.id;
                     return (
                       <button

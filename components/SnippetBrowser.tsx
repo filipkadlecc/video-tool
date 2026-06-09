@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal";
 import Icon from "@/components/ui/Icon";
 import { BRAND } from "@/lib/brand";
 import { SNIPPET_SCHEMAS } from "@/lib/snippet-schemas";
+import { SNIPPET_ICONS } from "@/lib/snippet-icons";
 import { renderSnippet } from "@/lib/snippet-template";
 import SnippetParamsForm from "@/components/SnippetParamsForm";
 
@@ -41,25 +42,6 @@ const PREVIEW_COLORS: Record<string, string> = {
   FourQuadrant: BRAND.colors.orange,
   BeforeAfter: BRAND.colors.orange,
   EventCard: BRAND.colors.orange,
-};
-
-const PREVIEW_ICONS: Record<string, string> = {
-  IntroCard: "film",
-  LowerThird: "monitor",
-  EndCard: "check",
-  StatCallout: "bolt",
-  QuoteCard: "chat",
-  LogoBumper: "sparkle",
-  CalloutBanner: "info",
-  ListReveal: "list",
-  CodeSnippet: "code",
-  SymbolBug: "image",
-  PathReveal: "sparkle",
-  RisingStarsList: "list",
-  LogoGridStrip: "image",
-  FourQuadrant: "list",
-  BeforeAfter: "monitor",
-  EventCard: "info",
 };
 
 export default function SnippetBrowser({
@@ -195,7 +177,7 @@ export default function SnippetBrowser({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, padding: 20 }}>
             {snippets.map((s) => {
               const accent = PREVIEW_COLORS[s.id] ?? BRAND.colors.orange;
-              const icon = PREVIEW_ICONS[s.id] ?? "film";
+              const icon = SNIPPET_ICONS[s.id] ?? "film";
               const justCopied = confirmId === `copied:${s.id}`;
               return (
                 <div

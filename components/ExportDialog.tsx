@@ -70,6 +70,7 @@ export default function ExportDialog({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [presetOpen, setPresetOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [userPresets, setUserPresets] = useState<RenderPreset[]>([]);
   const [savePresetName, setSavePresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
@@ -103,6 +104,10 @@ export default function ExportDialog({
   useEffect(() => {
     setUserPresets(loadUserPresets());
   }, []);
+
+  useEffect(() => {
+    if (codec === "prores-xq") setShowAdvanced(true);
+  }, [codec]);
 
   useEffect(() => {
     if (open) refreshCacheStats();
@@ -213,7 +218,7 @@ export default function ExportDialog({
     { label: "Resolution", value: `${width}\u00d7${height}` },
     { label: "Duration", value: `${seconds}s` },
     { label: "FPS", value: String(fps) },
-    { label: "Codec", value: codec === "h264" ? "H.264" : codec === "prores" ? "ProRes 4444" : codec === "prores-xq" ? "ProRes 4444 XQ" : "QT Animation (RLE)" },
+    { label: "Codec", value: codec === "h264" ? "Classic" : codec === "prores" ? "Transparent Background" : codec === "prores-xq" ? "Color Grading" : "OBS" },
   ];
 
   return (
@@ -361,20 +366,58 @@ export default function ExportDialog({
 
         {/* Codec */}
         <div>
-          <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
-            Codec
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div className="mono cap" style={{ color: "var(--text-1)" }}>
+              Codec
+            </div>
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="mono cap"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 10,
+                background: "transparent",
+                border: "none",
+                color: "var(--text-3)",
+                cursor: "pointer",
+                padding: "2px 4px",
+              }}
+            >
+              <Icon name={showAdvanced ? "chevronDown" : "chevronRight"} size={10} />
+              Advanced
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <Segmented
               value={codec}
               onChange={(v) => setCodec(v as string)}
               options={[
-                { value: "h264", label: "H.264" },
-                { value: "prores", label: "ProRes 4444" },
-                { value: "prores-xq", label: "ProRes XQ" },
-                { value: "qtrle", label: "QT-RLE" },
+                { value: "h264", label: "Classic" },
+                { value: "prores", label: "Transparent Background" },
+                { value: "qtrle", label: "OBS" },
+                ...(showAdvanced ? [{ value: "prores-xq", label: "Color Grading" }] : []),
               ]}
             />
+            {codec === "h264" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--bg-inset)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--line-2)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--text-3)" }} />
+                H.264 — .mp4, no transparency. Best for YouTube, social, and most playback.
+              </div>
+            )}
             {codec === "prores" && (
               <div
                 style={{
@@ -393,24 +436,6 @@ export default function ExportDialog({
                 ProRes 4444 — .mov with alpha channel. Good for compositing.
               </div>
             )}
-            {codec === "prores-xq" && (
-              <div
-                style={{
-                  padding: 8,
-                  fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--accent-soft)",
-                  borderRadius: 4,
-                  border: "0.5px solid var(--accent-line)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
-                ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
-              </div>
-            )}
             {codec === "qtrle" && (
               <div
                 style={{
@@ -427,6 +452,24 @@ export default function ExportDialog({
               >
                 <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
                 QuickTime Animation (RLE) — .mov with ARGB alpha channel. Drop into OBS as a Media Source. Large files.
+              </div>
+            )}
+            {codec === "prores-xq" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--accent-soft)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--accent-line)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
               </div>
             )}
           </div>

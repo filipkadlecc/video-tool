@@ -71,7 +71,7 @@ export default function StatCallout() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 800,
+              fontWeight: 600,
               fontSize: numberSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.04em",

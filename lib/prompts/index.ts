@@ -40,8 +40,16 @@ export function buildSystemPrompt(
     prompt += "\n\n" + buildVideoEditingPrompt(videoContext.projectId, videoContext.mediaFiles);
   }
 
-  if (assetPaths && assetPaths.length > 0) {
-    prompt += `\n\n=== AVAILABLE ASSETS ===\nUse staticFile() from remotion to reference these. Use the EXACT paths below — do not guess filenames.\n\n${assetPaths.map((p) => `- ${p}`).join("\n")}`;
+  const BG_BLOCKLIST = new Set([
+    "assets/backgrounds/Backgroudn Green.png",
+    "assets/backgrounds/background_blue.png",
+    "assets/backgrounds/background.png",
+    "assets/backgrounds/Screep White Pink.png",
+  ]);
+  const filteredAssetPaths = (assetPaths ?? []).filter((p) => !BG_BLOCKLIST.has(p));
+
+  if (filteredAssetPaths.length > 0) {
+    prompt += `\n\n=== AVAILABLE ASSETS ===\nUse staticFile() from remotion to reference these. Use the EXACT paths below — do not guess filenames.\n\n${filteredAssetPaths.map((p) => `- ${p}`).join("\n")}`;
   }
 
   return prompt;

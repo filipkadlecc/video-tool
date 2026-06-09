@@ -98,7 +98,7 @@ export default function RisingStarsList() {
             <div
               style={{
                 fontFamily: BRAND.fonts.marketing,
-                fontWeight: 700,
+                fontWeight: 600,
                 fontSize: headlineSize,
                 color: BRAND.colors.text,
                 letterSpacing: "-0.02em",
@@ -155,7 +155,7 @@ export default function RisingStarsList() {
                       alignItems: "center",
                       justifyContent: "center",
                       fontFamily: BRAND.fonts.marketing,
-                      fontWeight: 700,
+                      fontWeight: 600,
                       fontSize: rankSize,
                       color: ACCENT,
                       flexShrink: 0,

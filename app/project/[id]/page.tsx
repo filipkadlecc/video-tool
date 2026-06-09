@@ -16,6 +16,7 @@ import { evalSceneCode } from "@/remotion/DynamicScene";
 import type { Project, ChatMessage, TerminalAnnotations, StyleMode } from "@/lib/types";
 import { getResolution } from "@/lib/types";
 import { buildTerminalExportPlan } from "@/lib/terminal-export";
+import { stripBackgroundsForTransparency } from "@/lib/transparent-bg";
 import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -58,6 +59,7 @@ export default function ProjectEditor() {
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [smartTrimOpen, setSmartTrimOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [bgRemovedFlash, setBgRemovedFlash] = useState(false);
   const [loading, setLoading] = useState(true);
   // Captured once on mount from ?action=, before we clean the URL via router.replace.
   const [initialAutoAction] = useState<string | null>(() => {
@@ -387,6 +389,25 @@ export default function ProjectEditor() {
         {!isTerminalProject && (
           <Button variant="outline" size="sm" icon="layers" onClick={() => setSnippetsOpen(true)}>
             Snippets
+          </Button>
+        )}
+        {hasTimeline && (
+          <Button
+            variant="outline"
+            size="sm"
+            icon="checkerboard"
+            title="Remove background (Cmd+Z to undo)"
+            disabled={!code.trim() || bgRemovedFlash}
+            onClick={() => {
+              const next = stripBackgroundsForTransparency(code);
+              if (next === code) return;
+              codeHistory.pushSnapshot(code);
+              setCode(next);
+              setBgRemovedFlash(true);
+              setTimeout(() => setBgRemovedFlash(false), 1500);
+            }}
+          >
+            {bgRemovedFlash ? "Removed" : "Remove background"}
           </Button>
         )}
         {isVideoProject && (

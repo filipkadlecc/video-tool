@@ -9,7 +9,7 @@ HEADER BAR
 HEADLINE
 - 1–2 lines max. GT Walsheim (or Inter as fallback) — \`fontFamily: BRAND.fonts.marketing\`.
 - Size: ~88–120px on a 1080-wide portrait canvas. Scale proportionally for other sizes (≈ canvas height / 10).
-- Color: \`BRAND.colors.text\` (#f4f4f5), weight 600–700, line-height 1.05.
+- Color: \`BRAND.colors.text\` (#f4f4f5), weight 600, line-height 1.05.
 - Exactly ONE phrase highlighted: wrap that phrase in a \`<span>\` with:
   \`background: BRAND.colors.orangeTint\`
   \`borderBottom: \`2px solid \${BRAND.colors.orange}\`\` (or full 1.5px border)
@@ -38,7 +38,6 @@ CTA PATTERN
 
 DECORATIVE MOTIFS (use sparingly — 2–4 per frame)
 - Subtle dotted/grid texture in a band at the bottom 15% of the frame — very low opacity orange dots.
-- Triangular wedge in a bottom corner for "Rising Stars" style (\`BRAND.colors.orangeDeep\`, ~20% opacity).
 - NEVER fill more than ~10% of the frame with decoration. The headline is the hero.
 - Do NOT add corner "+" / crosshair marks — they were removed from the design system.
 

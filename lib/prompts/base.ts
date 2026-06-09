@@ -134,7 +134,7 @@ Create a reusable \`Background\` component that renders a full-bleed image using
 const Background: React.FC = () => (
   <AbsoluteFill>
     <Img
-      src={staticFile("assets/backgrounds/background.png")}
+      src={staticFile("assets/backgrounds/Back_Dark.png")}
       style={{ width: "100%", height: "100%", objectFit: "cover" }}
     />
   </AbsoluteFill>
@@ -220,7 +220,7 @@ const heroStyle = compoundReveal(frame, fps, {
 These techniques are MANDATORY where they fit; not optional decorations:
 
 - **Perspective** for 3D depth: \`transform: perspective(1200px) rotateX(\${...}deg) rotateY(\${...}deg)\` on cards.
-- **mix-blend-mode**: \`screen\` for additive glows behind text, \`overlay\` for grain/noise.
+- **mix-blend-mode**: \`overlay\` for grain/noise.
 - **filter: blur** on background elements to create depth-of-field. Foreground sharp, background 8–24px blur.
 - **backdrop-filter: blur** on glass panels.
 - **Layered motion**: a foreground element moves at full speed, while a background gradient or shape drifts at 0.2–0.4× speed — parallax.
@@ -231,6 +231,12 @@ These techniques are MANDATORY where they fit; not optional decorations:
 const titleY = ambientDrift(frame, 3, 80, "title-y");
 const logoX = ambientDrift(frame, 2, 100, "logo-x");
 \`\`\`
+
+### Typography Constraints
+
+**Font family:** default to **\`"'GT Walsheim', Inter, sans-serif"\`** (\`BRAND.fonts.marketing\`) for ~90% of text — titles, eyebrows, list-item labels, CTAs, numbers, callouts, badges. Use **\`"Inter, sans-serif"\`** (\`BRAND.fonts.primary\`) only for subtitles directly below a hero and for paragraph-length body copy. Monospace stays specialised — only for code, terminal output, and metadata stamps (e.g. "v2.1 / 12:42").
+
+**Font weights:** use **Regular (400)** for body and supporting text, **Semibold (600)** for hero/main titles. Do NOT use weights 500, 700, 800, or 900 unless the user explicitly asks for a heavier or lighter look. This applies even when few-shot examples in this prompt show heavier weights — the rule above overrides them.
 
 ### Frame-Based Transitions (for phased scenes)
 
@@ -295,7 +301,7 @@ Every scene wraps content in \`<AbsoluteFill>\` and starts with \`<Background />
 Centered-flex is permitted ONLY for end-card style scenes (logo + tagline) — never for content reveals.
 
 Key rules:
-- **MANDATORY: every text-bearing element must have an explicit \`fontFamily\`.** The renderer runs in a clean Chromium where the default is serif/Times — without an explicit font, exports look NOTHING like the preview. Use \`"Inter, sans-serif"\` for body/UI text, \`"'GT Walsheim', Inter, sans-serif"\` for marketing headlines. Setting it once on the outermost \`AbsoluteFill\` is NOT enough — if a child overrides any style, it must respecify \`fontFamily\`.
+- **MANDATORY: every text-bearing element must have an explicit \`fontFamily\`.** The renderer runs in a clean Chromium where the default is serif/Times — without an explicit font, exports look NOTHING like the preview. **Default to \`"'GT Walsheim', Inter, sans-serif"\` (BRAND.fonts.marketing) for almost everything — titles, eyebrows, list items, CTAs, numbers, badges.** Use \`"Inter, sans-serif"\` (BRAND.fonts.primary) only for subtitles directly below a hero and for paragraph-length body copy. Setting it once on the outermost \`AbsoluteFill\` is NOT enough — if a child overrides any style, it must respecify \`fontFamily\`.
 - Inter and GT Walsheim are auto-loaded by the render entry — do NOT re-declare \`@font-face\` blocks in your code. Just reference them by name.
 - Always render \`<Background />\` first.
 - Apply animated styles inline — no CSS files or styled-components.
@@ -319,7 +325,8 @@ DO NOT do any of the following. If you catch yourself starting any of these, swi
 10. **Do NOT make hero text smaller than 6% of canvas height.** Bold scale is the difference between TV-ad and template.
 11. **Do NOT use \`<Trail>\` from \`@remotion/motion-blur\` casually.** It's render-expensive — reserve for short high-velocity moments (a number snapping into place, a card flying across the frame). Never on holds.
 12. **Do NOT reinvent IntroCard / LowerThird / EndCard / StatCallout etc. from scratch** when the brief calls for one. Adapt the snippet — see "Reusable Snippets" below.
-13. **Do NOT omit \`fontFamily\` on any text element.** The renderer's default is serif/Times. If a single text node forgets \`fontFamily\`, the exported MP4 will show it in serif while the preview looks correct — invisible-until-export bug. Every \`<div>\`, \`<span>\`, or styled element with text content needs \`fontFamily: "Inter, sans-serif"\` or \`fontFamily: "'GT Walsheim', Inter, sans-serif"\`.
+13. **Do NOT omit \`fontFamily\` on any text element.** The renderer's default is serif/Times. If a single text node forgets \`fontFamily\`, the exported MP4 will show it in serif while the preview looks correct — invisible-until-export bug. Every \`<div>\`, \`<span>\`, or styled element with text content needs \`fontFamily: "'GT Walsheim', Inter, sans-serif"\` (the default for ~90% of text) or \`fontFamily: "Inter, sans-serif"\` (only for subtitles and long body copy).
+14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale/blur reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, use slow camera motion (a continuous slow zoom or pan) on already-visible content — NOT a black hold. If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
 
 ---
 
@@ -337,39 +344,49 @@ ${fewShots ? `### Full source of representative snippets — match this style an
 
 ## Few-Shot Reference — Polished Patterns
 
-### Example A: Kinetic intro (off-center, compound motion, ambient hold)
+### Example A: Kinetic intro (HUGE hero, corner-anchored, letter-by-letter reveal)
+
+The signature is character-by-character reveal with 2-frame stagger, hero hugging the top-left edge, and hero size that takes up a clearly dominant share of the canvas.
 
 \`\`\`tsx
 const KineticIntro: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const inP = spring({ frame, fps, delay: 4, config: SNAPPY });
-  const tagIn = spring({ frame, fps, delay: 18, config: LIQUID });
-  const breathe = Math.sin(frame / 30) * 1.5;            // ambient micro-motion
-  const driftY = Math.sin(frame / 50) * 0.4;
-  const glowFade = interpolate(frame, [0, 30, 90, 200], [0, 0.6, 0.6, 0.5], { extrapolateRight: "clamp" });
+  const tagIn = spring({ frame, fps, delay: 28, config: LIQUID });
+  const breathe = Math.sin(frame / 30) * 1.5;            // ambient micro-motion after settle
+
+  const HERO = "Ship it.";
+  // Each character gets its own spring with a 2-frame stagger — that snap-cadence IS kinetic.
 
   return (
-    <AbsoluteFill style={{ fontFamily: "'Inter', sans-serif", background: \`radial-gradient(120% 80% at 20% 20%, \${COLORS.card}, \${COLORS.bg})\` }}>
+    <AbsoluteFill style={{ fontFamily: "'GT Walsheim', Inter, sans-serif", background: \`radial-gradient(120% 80% at 20% 20%, \${COLORS.card}, \${COLORS.bg})\` }}>
       <Background />
-      {/* Accent glow behind hero */}
+
+      {/* Hero — top-left corner, ~26% of 1080p canvas height, character-by-character reveal */}
       <div style={{
-        position: "absolute", left: "5%", top: "30%", width: "60%", height: 400,
-        background: COLORS.orange, filter: "blur(80px)", opacity: glowFade,
-        mixBlendMode: "screen", borderRadius: "50%",
-      }} />
-      <div style={{
-        position: "absolute", left: "8%", top: \`calc(28% + \${driftY}px)\`,
-        opacity: inP,
-        transform: \`translateY(\${interpolate(inP, [0,1], [50, 0])}px) scale(\${interpolate(inP, [0,1], [0.92, 1 + breathe * 0.002])})\`,
-        filter: \`blur(\${interpolate(inP, [0,1], [10, 0])}px)\`,
+        position: "absolute", left: "6%", top: "16%",
+        display: "flex",
+        fontSize: 280, fontWeight: 600, color: "#fff", lineHeight: 0.92, letterSpacing: "-0.04em",
       }}>
-        <div style={{ fontSize: 280, fontWeight: 900, color: "#fff", lineHeight: 0.92, letterSpacing: "-0.04em", textShadow: \`0 4px 40px rgba(248,102,6,0.4)\` }}>
-          Ship it.
-        </div>
+        {HERO.split("").map((ch, i) => {
+          const charIn = spring({ frame, fps, delay: 4 + i * 2, config: SNAPPY });
+          return (
+            <span key={i} style={{
+              display: "inline-block",
+              opacity: charIn,
+              transform: \`translateY(\${interpolate(charIn, [0,1], [50, 0])}px) scale(\${interpolate(charIn, [0,1], [0.92, 1 + breathe * 0.002])})\`,
+              filter: \`blur(\${interpolate(charIn, [0,1], [10, 0])}px)\`,
+              whiteSpace: "pre",
+            }}>
+              {ch}
+            </span>
+          );
+        })}
       </div>
+
+      {/* Monospace caption — opposite corner, the "kinetic" pairing pattern */}
       <div style={{
-        position: "absolute", left: "8.5%", bottom: "18%",
+        position: "absolute", left: "6.5%", bottom: "16%",
         opacity: tagIn,
         transform: \`translateY(\${interpolate(tagIn, [0,1], [20, 0])}px)\`,
         fontFamily: "monospace", fontSize: 28, color: "rgba(255,255,255,0.55)", letterSpacing: "0.08em",
@@ -514,7 +531,7 @@ Use \`rgba(255,255,255,0.04–0.08)\` for the fill — NEVER \`COLORS.bg\` (that
   borderRadius: 16,
   padding: "20px 56px",
   fontSize: 42,
-  fontWeight: 700,
+  fontWeight: 600,
   color: "#EF4444",
   letterSpacing: "0.15em",
 }
@@ -820,7 +837,7 @@ function CursorOverlay({ frame }) {
 Reference all images via \`staticFile()\`:
 
 \`\`\`
-staticFile("assets/backgrounds/background.png")
+staticFile("assets/backgrounds/Back_Dark.png")
 staticFile("assets/logos/SomeLogo.png")
 staticFile("assets/other/world.svg")
 \`\`\`

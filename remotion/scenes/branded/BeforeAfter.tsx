@@ -136,7 +136,7 @@ export default function BeforeAfter() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 700,
+              fontWeight: 600,
               fontSize: headlineSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.02em",

@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import PQueue from "p-queue";
+import { stripBackgroundsForTransparency } from "./transparent-bg";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -335,43 +336,16 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
   return job;
 }
 
-function stripBackgroundsForTransparency(code: string): string {
-  // 1. Remove <Background /> and <SceneBg /> — dedicated root-background components.
-  let result = code.replace(/<Background\s*\/>/g, "{/* transparent */}");
-  result = result.replace(/<SceneBg\s*\/>/g, "{/* transparent */}");
-
-  // 2. Remove the BlackScreen / Background component DEFINITIONS (keep the rest intact).
-  //    Only zero-out the backgroundColor inside these specific component declarations.
-  result = result.replace(
-    /const\s+(BlackScreen|Background|SceneBg)\s*[=:][^;{]*\{[\s\S]*?backgroundColor:\s*(?:COLORS\.bg|["']#[0-9a-fA-F]{3,8}["'])/g,
-    (match) => match.replace(/backgroundColor:\s*(?:COLORS\.bg|["']#[0-9a-fA-F]{3,8}["'])/, 'backgroundColor: "transparent"'),
-  );
-
-  // 3. Make AbsoluteFill root backgrounds transparent — but ONLY when the AbsoluteFill
-  //    is the direct scene wrapper (i.e. it's the first element a component returns,
-  //    recognised by being at the start of a return statement).
-  //    Target pattern:  return ( <AbsoluteFill style={{ ... backgroundColor: COLORS.bg ... }}>
-  result = result.replace(
-    /(return\s*\(\s*\n?\s*<AbsoluteFill[^>]*style=\{\{[^}]*?)backgroundColor:\s*COLORS\.bg/g,
-    '$1backgroundColor: "transparent"',
-  );
-  // Same but with hex literals in a root AbsoluteFill
-  result = result.replace(
-    /(return\s*\(\s*\n?\s*<AbsoluteFill[^>]*style=\{\{[^}]*?)backgroundColor:\s*["']#[0-9a-fA-F]{3,8}["']/g,
-    '$1backgroundColor: "transparent"',
-  );
-
-  return result;
-}
-
 function fixImportPaths(code: string): string {
   return code
     .replace(/from\s+["']\.\.\/remotion\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']@\/remotion\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']remotion\/theme["']/g, 'from "../theme"')
+    .replace(/from\s+["']\.\.\/\.\.\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']\.\.\/remotion\/motion["']/g, 'from "../motion"')
     .replace(/from\s+["']@\/remotion\/motion["']/g, 'from "../motion"')
     .replace(/from\s+["']remotion\/motion["']/g, 'from "../motion"')
+    .replace(/from\s+["']\.\.\/\.\.\/motion["']/g, 'from "../motion"')
     .replace(/from\s+["']@\/lib\/brand["']/g, 'from "../../lib/brand"');
 }
 

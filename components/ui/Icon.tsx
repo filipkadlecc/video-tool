@@ -44,6 +44,7 @@ const paths: Record<string, React.ReactNode> = {
   minimize: <path d="M6 3v3H3M10 3v3h3M10 13v-3h3M6 13v-3H3" />,
   movie: <g><rect x="2" y="5" width="12" height="8" rx="1" /><path d="M4 5l1-2h2l-1 2M8 5l1-2h2l-1 2M12 5l1-2" /></g>,
   bolt: <path d="M9 2L3 9h4l-1 5 6-7H8z" fill="currentColor" stroke="none" />,
+  checkerboard: <g><rect x="2" y="2" width="12" height="12" rx="1" /><rect x="2" y="2" width="6" height="6" fill="currentColor" stroke="none" /><rect x="8" y="8" width="6" height="6" fill="currentColor" stroke="none" /></g>,
 };
 
 interface IconProps extends React.SVGAttributes<SVGSVGElement> {

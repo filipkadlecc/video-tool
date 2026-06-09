@@ -5,7 +5,7 @@ export const Background: React.FC = () => {
   return (
     <AbsoluteFill>
       <Img
-        src={staticFile("assets/backgrounds/background.png")}
+        src={staticFile("assets/backgrounds/Back_Dark.png")}
         style={{
           width: "100%",
           height: "100%",

@@ -26,6 +26,7 @@ const META: Record<string, { name: string; subtitle: string }> = {
   FourQuadrant: { name: "Four quadrants", subtitle: "2×2 feature-card grid with partner row" },
   BeforeAfter: { name: "Before / after", subtitle: "Stacked comparison cards" },
   EventCard: { name: "Event card", subtitle: "Event title + date + sponsor logo" },
+  MCPLaunchFrame: { name: "MCP launch frame", subtitle: "Schematic-style line-draw frame" },
 };
 
 export async function GET() {

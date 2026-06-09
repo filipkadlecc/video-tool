@@ -43,3 +43,6 @@ next-env.d.ts
 
 # renders
 /public/renders/
+
+# user project data (per-machine; not part of the codebase)
+/data/projects/

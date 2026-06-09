@@ -84,7 +84,7 @@ export default function EventCard() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 800,
+              fontWeight: 600,
               fontSize: titleSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.03em",

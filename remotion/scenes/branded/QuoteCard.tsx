@@ -76,7 +76,7 @@ export default function QuoteCard() {
             <div
               style={{
                 fontFamily: BRAND.fonts.marketing,
-                fontWeight: 900,
+                fontWeight: 600,
                 fontSize: markSize,
                 color: ACCENT,
                 lineHeight: 0.6,
