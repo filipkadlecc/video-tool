@@ -12,6 +12,7 @@ import Icon from "@/components/ui/Icon";
 import Modal from "@/components/ui/Modal";
 import type { ProjectMeta, AnimationType } from "@/lib/types";
 import { ANIMATION_TYPES, getAnimationTypeMeta } from "@/lib/animation-types";
+import { version as APP_VERSION } from "../package.json";
 
 export default function Home() {
   const router = useRouter();
@@ -106,7 +107,7 @@ export default function Home() {
           <Logo />
           <div style={{ flex: 1 }} />
           <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 10 }}>
-            {projects.length} {projects.length === 1 ? "project" : "projects"}
+            {projects.length} {projects.length === 1 ? "project" : "projects"} · v{APP_VERSION}
           </div>
           <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
             Storage
@@ -206,7 +207,7 @@ export default function Home() {
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 8 }}>
-            {filtered.length} {filtered.length === 1 ? "project" : "projects"}
+            {filtered.length} {filtered.length === 1 ? "project" : "projects"} · v{APP_VERSION}
           </div>
           <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
             Storage
