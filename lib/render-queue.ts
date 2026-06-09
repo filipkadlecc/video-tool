@@ -290,6 +290,36 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         try { fs.unlinkSync(remotionOutputPath); } catch {}
       }
 
+      // Remotion's ProRes export writes pixels with `color_range=tv` but leaves
+      // color matrix/transfer/primaries unset. NLEs that don't see the matrix
+      // tag (CapCut, some Premiere setups) guess BT.601 or treat the file as
+      // full-range, which shifts saturated colors (Apify orange goes yellowy)
+      // and causes per-frame YUV→RGB rounding flicker. Re-tag in place via
+      // the prores_metadata bitstream filter — no re-encode, ~200ms.
+      if (codec === "prores" || codec === "prores-xq" || codec === "uncompressed") {
+        const tagged = outputPath.replace(/\.mov$/, ".tagged.mov");
+        await new Promise<void>((resolve, reject) => {
+          const ff = spawn(
+            "ffmpeg",
+            [
+              "-y", "-i", outputPath,
+              "-c", "copy",
+              "-bsf:v", "prores_metadata=color_primaries=bt709:color_trc=bt709:colorspace=bt709",
+              tagged,
+            ],
+            { cwd: process.cwd(), env: { ...process.env } },
+          );
+          let ffErr = "";
+          ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); });
+          ff.on("close", (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`ffmpeg prores re-tag failed: ${ffErr.slice(-500).trim()}`));
+          });
+          ff.on("error", reject);
+        });
+        fs.renameSync(tagged, outputPath);
+      }
+
       job.status = "done";
       job.progress = 100;
       job.outputPath = `/renders/${jobId}.${ext}`;
