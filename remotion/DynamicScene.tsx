@@ -6,6 +6,9 @@ import * as RemotionTransitions from "@remotion/transitions";
 import * as RemotionFade from "@remotion/transitions/fade";
 import * as RemotionSlide from "@remotion/transitions/slide";
 import * as RemotionWipe from "@remotion/transitions/wipe";
+import * as RemotionFlip from "@remotion/transitions/flip";
+import * as RemotionClockWipe from "@remotion/transitions/clock-wipe";
+import * as RemotionIris from "@remotion/transitions/iris";
 import * as RemotionAnimationUtils from "@remotion/animation-utils";
 import * as RemotionPaths from "@remotion/paths";
 import * as RemotionShapes from "@remotion/shapes";
@@ -13,12 +16,15 @@ import * as RemotionNoise from "@remotion/noise";
 import * as RemotionMotionBlur from "@remotion/motion-blur";
 import * as RemotionLayoutUtils from "@remotion/layout-utils";
 import { transform } from "sucrase";
-import { COLORS, FONT_WEIGHT, BRAND, BRAND_FONT_FACE_CSS } from "./theme";
+import { BRAND, BRAND_FONT_FACE_CSS } from "./theme";
 import * as Motion from "./motion";
+import * as Decor from "./decor";
+import * as Transitions from "./transitions";
+import { SvgFramesProvider, type SvgFrameSlot } from "./motion";
 
 const { AbsoluteFill } = RemotionLib;
 
-const THEME_MODULE = { COLORS, FONT_WEIGHT, BRAND, BRAND_FONT_FACE_CSS };
+const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS };
 
 const MODULE_MAP: Record<string, unknown> = {
   remotion: RemotionLib,
@@ -27,6 +33,9 @@ const MODULE_MAP: Record<string, unknown> = {
   "@remotion/transitions/fade": RemotionFade,
   "@remotion/transitions/slide": RemotionSlide,
   "@remotion/transitions/wipe": RemotionWipe,
+  "@remotion/transitions/flip": RemotionFlip,
+  "@remotion/transitions/clock-wipe": RemotionClockWipe,
+  "@remotion/transitions/iris": RemotionIris,
   "@remotion/animation-utils": RemotionAnimationUtils,
   "@remotion/paths": RemotionPaths,
   "@remotion/shapes": RemotionShapes,
@@ -41,6 +50,12 @@ const THEME_PATTERNS = [
   "@/remotion/theme",
   "remotion/theme",
   "../theme",
+  // AI-generated scenes follow the system prompt and import BRAND from
+  // "@/lib/brand". Resolve those to the same theme module the snippets use.
+  "@/lib/brand",
+  "lib/brand",
+  "../lib/brand",
+  "../../lib/brand",
 ];
 
 const MOTION_PATTERNS = [
@@ -50,6 +65,24 @@ const MOTION_PATTERNS = [
   "remotion/motion",
   "../motion",
   "../../motion",
+];
+
+const DECOR_PATTERNS = [
+  "../remotion/decor",
+  "./decor",
+  "@/remotion/decor",
+  "remotion/decor",
+  "../decor",
+  "../../decor",
+];
+
+const TRANSITIONS_PATTERNS = [
+  "../remotion/transitions",
+  "./transitions",
+  "@/remotion/transitions",
+  "remotion/transitions",
+  "../transitions",
+  "../../transitions",
 ];
 
 function fakeRequire(moduleName: string) {
@@ -62,6 +95,14 @@ function fakeRequire(moduleName: string) {
 
   if (MOTION_PATTERNS.some((p) => moduleName.endsWith(p) || moduleName === p)) {
     return Motion;
+  }
+
+  if (DECOR_PATTERNS.some((p) => moduleName.endsWith(p) || moduleName === p)) {
+    return Decor;
+  }
+
+  if (TRANSITIONS_PATTERNS.some((p) => moduleName.endsWith(p) || moduleName === p)) {
+    return Transitions;
   }
 
   for (const key of Object.keys(MODULE_MAP)) {
@@ -184,7 +225,7 @@ export function evalSceneCode(code: string): EvalResult | null {
   }
 }
 
-export const DynamicScene: React.FC<{ code?: string }> = ({ code }) => {
+export const DynamicScene: React.FC<{ code?: string; svgContents?: SvgFrameSlot[] }> = ({ code, svgContents }) => {
   const Component = useMemo(() => {
     if (!code) return null;
     const result = evalSceneCode(code);
@@ -209,5 +250,9 @@ export const DynamicScene: React.FC<{ code?: string }> = ({ code }) => {
     );
   }
 
-  return <Component />;
+  return (
+    <SvgFramesProvider value={svgContents ?? []}>
+      <Component />
+    </SvgFramesProvider>
+  );
 };

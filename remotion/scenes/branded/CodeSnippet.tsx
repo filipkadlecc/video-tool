@@ -6,39 +6,91 @@ import {
   interpolate,
 } from "remotion";
 import { BRAND, BRAND_FONT_FACE_CSS } from "../../theme";
-import { springIn, staggeredSpring } from "../../motion";
+import { springIn, staggeredSpring, TIMING, inOutEnvelope } from "../../motion";
 
 export const fps = 30;
-export const durationInFrames = 150;
+export const durationInFrames = 165;
+
+// Editor-style code card — monochrome (orange keywords + textMuted strings).
+// No rainbow syntax: the brand is orange-only.
 
 const FILENAME = "main.ts";
-const LINES = [
-  { tokens: [["import", "kw"], [" { Actor } ", "txt"], ["from", "kw"], [" ", "txt"], ['"apify"', "str"], [";", "txt"]] },
-  { tokens: [] },
-  { tokens: [["await", "kw"], [" Actor.init();", "txt"]] },
-  { tokens: [] },
-  { tokens: [["const", "kw"], [" input = ", "txt"], ["await", "kw"], [" Actor.getInput", "fn"], ["();", "txt"]] },
-  { tokens: [["console", "fn"], [".", "txt"], ["log", "fn"], ["(", "txt"], ['"Hello, "', "str"], [", input.name);", "txt"]] },
-  { tokens: [] },
-  { tokens: [["await", "kw"], [" Actor.exit();", "txt"]] },
+const LINES: string[] = [
+  "import { Actor } from \"apify\";",
+  "",
+  "await Actor.init();",
+  "",
+  "const input = await Actor.getInput();",
+  " console.log(\"Hello, \", input.name);",
+  "",
+  "await Actor.exit();",
 ];
 
-const TOKEN_COLOR: Record<string, string> = {
-  kw: BRAND.colors.pink,
-  str: BRAND.colors.green,
-  fn: "#7DD3FC",
-  txt: BRAND.colors.text,
-};
-
 const MONO = "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace";
+
+// Light heuristic syntax color so the monochrome card still reads as code.
+// Orange for control-flow keywords, muted gray for string literals, text for
+// everything else. No tokenizer — just per-character span splitting at render.
+const KEYWORDS = new Set([
+  "import", "from", "const", "let", "var", "await", "async", "function",
+  "return", "if", "else", "for", "while", "true", "false", "null", "undefined",
+  "new", "class", "extends", "this",
+]);
+
+function renderCodeLine(line: string) {
+  const parts: { text: string; color: string }[] = [];
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i];
+    // Whitespace — emit as-is.
+    if (ch === " " || ch === "\t") {
+      let j = i;
+      while (j < line.length && (line[j] === " " || line[j] === "\t")) j++;
+      parts.push({ text: line.slice(i, j), color: BRAND.colors.text });
+      i = j;
+      continue;
+    }
+    // String literal — match until closing quote.
+    if (ch === '"' || ch === "'" || ch === "`") {
+      const quote = ch;
+      let j = i + 1;
+      while (j < line.length && line[j] !== quote) {
+        if (line[j] === "\\\\" && j + 1 < line.length) j += 2;
+        else j++;
+      }
+      j = Math.min(j + 1, line.length);
+      parts.push({ text: line.slice(i, j), color: BRAND.colors.textMuted });
+      i = j;
+      continue;
+    }
+    // Word — letters / digits / underscore.
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i;
+      while (j < line.length && /[A-Za-z0-9_]/.test(line[j])) j++;
+      const word = line.slice(i, j);
+      parts.push({
+        text: word,
+        color: KEYWORDS.has(word) ? BRAND.colors.orange : BRAND.colors.text,
+      });
+      i = j;
+      continue;
+    }
+    // Punctuation / single character.
+    parts.push({ text: ch, color: BRAND.colors.text });
+    i++;
+  }
+  return parts;
+}
+const ACCENT = BRAND.colors.orange;
 
 export default function CodeSnippet() {
   const frame = useCurrentFrame();
   const { fps: vfps, width, height } = useVideoConfig();
   const base = Math.min(width, height);
 
-  // Card glides in with LIQUID (smooth, premium feel for the editor frame).
-  const cardIn = springIn(frame, vfps, 0, "LIQUID");
+  const envelope = inOutEnvelope(frame, vfps, durationInFrames);
+
+  const cardIn = springIn(frame, vfps, TIMING.entrance, "LIQUID");
 
   return (
     <>
@@ -46,100 +98,116 @@ export default function CodeSnippet() {
       <AbsoluteFill
         style={{
           background: BRAND.colors.bg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: width * 0.08,
+          opacity: envelope,
         }}
       >
         <div
           style={{
-            opacity: cardIn,
-            transform: `translateY(${interpolate(cardIn, [0, 1], [30, 0])}px)`,
-            background: "#0B0B12",
-            border: `0.5px solid rgba(255,255,255,0.08)`,
-            borderRadius: base * 0.012,
-            boxShadow: `0 ${base * 0.018}px ${base * 0.06}px rgba(0,0,0,0.6)`,
-            overflow: "hidden",
-            minWidth: width * 0.5,
-            maxWidth: width * 0.8,
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: `${base * 0.14}px ${base * 0.08}px ${base * 0.08}px`,
           }}
         >
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: base * 0.008,
-              padding: `${base * 0.012}px ${base * 0.02}px`,
-              borderBottom: "0.5px solid rgba(255,255,255,0.06)",
+              opacity: cardIn,
+              transform: `translateY(${interpolate(cardIn, [0, 1], [24, 0])}px)`,
+              background: BRAND.colors.card,
+              border: `1px solid ${BRAND.colors.border}`,
+              borderRadius: base * 0.016,
+              overflow: "hidden",
+              width: "100%",
+              maxWidth: width * 0.78,
             }}
           >
-            {[BRAND.colors.pink, "#FFAB45", BRAND.colors.green].map((c, i) => (
-              <div
-                key={i}
-                style={{
-                  width: base * 0.012,
-                  height: base * 0.012,
-                  borderRadius: "50%",
-                  background: c,
-                  opacity: 0.85,
-                }}
-              />
-            ))}
             <div
               style={{
-                marginLeft: base * 0.012,
-                fontFamily: MONO,
-                fontSize: base * 0.018,
-                color: BRAND.colors.textMuted,
+                display: "flex",
+                alignItems: "center",
+                gap: base * 0.01,
+                padding: `${base * 0.014}px ${base * 0.022}px`,
+                borderBottom: `1px solid ${BRAND.colors.border}`,
               }}
             >
-              {FILENAME}
-            </div>
-          </div>
-          <div
-            style={{
-              padding: `${base * 0.025}px ${base * 0.03}px`,
-              fontFamily: MONO,
-              fontSize: base * 0.023,
-              lineHeight: 1.6,
-              color: BRAND.colors.text,
-            }}
-          >
-            {LINES.map((line, i) => {
-              // SNAPPY per-line typing cadence with a 6-frame stagger.
-              const lineIn = staggeredSpring(frame, vfps, i, 8, 6, "SNAPPY");
-              return (
+              {/* Three orange-dim "+" dots — branded swap for the rainbow traffic lights. */}
+              {[0.9, 0.6, 0.35].map((opacity, i) => (
                 <div
                   key={i}
                   style={{
-                    display: "flex",
-                    gap: base * 0.018,
-                    minHeight: base * 0.036,
-                    opacity: lineIn,
-                    transform: `translateX(${interpolate(lineIn, [0, 1], [-12, 0])}px)`,
+                    width: base * 0.011,
+                    height: base * 0.011,
+                    borderRadius: "50%",
+                    background: ACCENT,
+                    opacity,
                   }}
-                >
-                  <span
+                />
+              ))}
+              <div
+                style={{
+                  marginLeft: base * 0.012,
+                  fontFamily: MONO,
+                  fontSize: base * 0.018,
+                  color: BRAND.colors.textMuted,
+                }}
+              >
+                {FILENAME}
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: `${base * 0.025}px ${base * 0.03}px`,
+                fontFamily: MONO,
+                fontSize: base * 0.022,
+                lineHeight: 1.65,
+                color: BRAND.colors.text,
+              }}
+            >
+              {LINES.map((line, i) => {
+                const lineIn = staggeredSpring(
+                  frame,
+                  vfps,
+                  i,
+                  TIMING.entrance + 10,
+                  6,
+                  "GENTLE",
+                );
+                return (
+                  <div
+                    key={i}
                     style={{
-                      color: "rgba(255,255,255,0.25)",
-                      width: base * 0.025,
-                      textAlign: "right",
-                      flexShrink: 0,
+                      display: "flex",
+                      gap: base * 0.018,
+                      minHeight: base * 0.036,
+                      opacity: lineIn,
+                      transform: `translateX(${interpolate(lineIn, [0, 1], [-10, 0])}px)`,
                     }}
                   >
-                    {i + 1}
-                  </span>
-                  <span style={{ whiteSpace: "pre" }}>
-                    {line.tokens.map(([t, k], j) => (
-                      <span key={j} style={{ color: TOKEN_COLOR[k] ?? BRAND.colors.text }}>
-                        {t}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              );
-            })}
+                    <span
+                      style={{
+                        color: BRAND.colors.textSubtle,
+                        width: base * 0.025,
+                        textAlign: "right",
+                        flexShrink: 0,
+                        opacity: 0.7,
+                      }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span style={{ whiteSpace: "pre" }}>
+                      {renderCodeLine(line).map((part, j) => (
+                        <span key={j} style={{ color: part.color }}>
+                          {part.text}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </AbsoluteFill>

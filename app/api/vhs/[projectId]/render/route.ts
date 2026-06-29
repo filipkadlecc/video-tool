@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import { getProject } from "@/lib/projects";
+import { normalizeTapeQuotes } from "@/lib/tape-parser";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -27,8 +28,11 @@ export async function POST(
 
   // Force the output path: strip whatever Output lines the user wrote and
   // prepend a single `Output out.mp4`. We spawn vhs with cwd=projectDir so a
-  // relative path lands the .mp4 next to project.json.
-  const stripped = tape.replace(/^[ \t]*Output[ \t]+\S+.*$/gim, "").trimStart();
+  // relative path lands the .mp4 next to project.json. We also normalize
+  // backslash-escaped quotes in Type lines — VHS doesn't accept them — so
+  // legacy or hand-edited scripts auto-fix instead of erroring.
+  const normalized = normalizeTapeQuotes(tape);
+  const stripped = normalized.replace(/^[ \t]*Output[ \t]+\S+.*$/gim, "").trimStart();
   const wrappedTape = `Output out.mp4\n${stripped}`;
   const tapePath = path.join(projectDir, "tape.tape");
   const outPath = path.join(projectDir, "out.mp4");

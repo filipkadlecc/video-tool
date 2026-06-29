@@ -1,0 +1,75 @@
+{
+  "id": "82a782fb-92a8-449d-9cad-d583085212b6",
+  "name": "Lower 3rd Stepan/Jakub",
+  "animationType": "animation",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import React from \"react\";\nimport {\n  AbsoluteFill,\n  useCurrentFrame,\n  useVideoConfig,\n  interpolate,\n} from \"remotion\";\nimport { TransitionSeries, linearTiming } from \"@remotion/transitions\";\nimport { fade } from \"@remotion/transitions/fade\";\nimport { BRAND, BRAND_FONT_FACE_CSS } from \"../../theme\";\nimport { springIn } from \"../../motion\";\n\nexport const fps = 25;\n\n// === EDIT THESE for a name tag ===\nconst NAME = \"Štěpán Škopek\";\nconst TITLE = \"Core Services Engineer\";\nconst ALIGN: \"left\" | \"right\" = \"left\";\n// === Optional: enable dual-speaker mode ===\nconst DUAL = false;\nconst PARTNER_NAME = \"Partner Name\";\nconst PARTNER_TITLE = \"Partner Role\";\nconst TRANSITION = 8;\nconst SCENE_FRAMES = 375; // 15s of hold time at 25fps (2x faster)\n\n// 5 (intro black) + 5 (transition) + 375 + 8 (transition) + 13 (outro black)\nexport const durationInFrames = 388;\n\nconst ACCENT = BRAND.colors.orange;\n\ninterface PersonCardProps {\n  name: string;\n  title: string;\n  align: \"left\" | \"right\";\n  entranceDelay: number;\n}\n\nconst PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDelay }) => {\n  const frame = useCurrentFrame();\n  const { fps: vfps, width, height } = useVideoConfig();\n  const base = Math.min(width, height);\n\n  // Card slides in LIQUID (smooth panel feel), inner elements pop with\n  // SNAPPY/ELASTIC for personality. Delays halved for 2x speed.\n  const containerProgress = springIn(frame, vfps, entranceDelay, \"LIQUID\");\n  const nameProgress = springIn(frame, vfps, entranceDelay + 14, \"SNAPPY\");\n  const lineProgress = springIn(frame, vfps, entranceDelay + 18, \"ELASTIC\");\n  const titleProgress = springIn(frame, vfps, entranceDelay + 22, \"GENTLE\");\n\n  const exitStart = SCENE_FRAMES - 20;\n  const exitEnd = SCENE_FRAMES - 3;\n  const exitProgress = interpolate(frame, [exitStart, exitEnd], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\",\n  });\n\n  const offsetIn = interpolate(containerProgress, [0, 1], [base * 0.055, 0]);\n  const offsetOut = interpolate(exitProgress, [0, 1], [0, base * 0.055]);\n  const containerY = offsetIn + offsetOut;\n  const containerOpacity = Math.min(\n    containerProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n\n  const nameOpacity = Math.min(\n    nameProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n  const nameX = interpolate(\n    nameProgress,\n    [0, 1],\n    [align === \"left\" ? base * 0.018 : -base * 0.018, 0]\n  );\n\n  const titleOpacity = Math.min(\n    titleProgress,\n    interpolate(exitProgress, [0, 1], [1, 0])\n  );\n  const titleX = interpolate(\n    titleProgress,\n    [0, 1],\n    [align === \"left\" ? base * 0.018 : -base * 0.018, 0]\n  );\n\n  const lineWidth = interpolate(lineProgress, [0, 1], [0, 100]);\n\n  return (\n    <div\n      style={{\n        opacity: containerOpacity,\n        transform: `translateY(${containerY}px)`,\n        display: \"flex\",\n        flexDirection: \"row\",\n        alignItems: \"stretch\",\n      }}\n    >\n      <div\n        style={{\n          backgroundColor: BRAND.colors.card,\n          border: `1px solid ${BRAND.colors.border}`,\n          borderRadius: base * 0.007,\n          padding: `${base * 0.022}px ${base * 0.037}px ${base * 0.022}px ${base * 0.030}px`,\n          display: \"flex\",\n          flexDirection: \"row\",\n          alignItems: \"center\",\n          gap: base * 0.030,\n          boxShadow: `0 ${base * 0.006}px ${base * 0.028}px rgba(0,0,0,0.6), 0 ${base * 0.002}px ${base * 0.006}px rgba(0,0,0,0.4)`,\n          whiteSpace: \"nowrap\",\n        }}\n      >\n        {/* Name + accent line + title */}\n        <div\n          style={{\n            display: \"flex\",\n            flexDirection: \"column\",\n            gap: base * 0.005,\n            alignItems: align === \"right\" ? \"flex-end\" : \"flex-start\",\n          }}\n        >\n          <div\n            style={{\n              opacity: nameOpacity,\n              transform: `translateX(${nameX}px)`,\n              fontSize: base * 0.030,\n              fontWeight: 600,\n              color: BRAND.colors.text,\n              letterSpacing: \"0.01em\",\n              lineHeight: 1,\n              whiteSpace: \"nowrap\",\n              fontFamily: BRAND.fonts.marketing,\n            }}\n          >\n            {name}\n          </div>\n\n          <div\n            style={{\n              width: `${lineWidth}%`,\n              height: Math.max(2, base * 0.0015),\n              backgroundColor: ACCENT,\n              borderRadius: 2,\n              opacity: titleOpacity,\n            }}\n          />\n\n          <div\n            style={{\n              opacity: titleOpacity,\n              transform: `translateX(${titleX}px)`,\n              fontSize: base * 0.022,\n              fontWeight: 500,\n              color: ACCENT,\n              letterSpacing: \"0.01em\",\n              lineHeight: 1,\n              whiteSpace: \"nowrap\",\n              fontFamily: BRAND.fonts.primary,\n            }}\n          >\n            {title}\n          </div>\n        </div>\n      </div>\n    </div>\n  );\n};\n\nconst SingleLowerThird: React.FC = () => {\n  const { width, height } = useVideoConfig();\n  const base = Math.min(width, height);\n  // Anchor to the chosen lower corner — name tags don't sit centered.\n  const anchorStyle: React.CSSProperties =\n    ALIGN === \"left\"\n      ? { left: base * 0.046, bottom: base * 0.075 }\n      : { right: base * 0.046, bottom: base * 0.075 };\n  return (\n    <AbsoluteFill style={{ fontFamily: BRAND.fonts.primary }}>\n      <div style={{ position: \"absolute\", ...anchorStyle }}>\n        <PersonCard name={NAME} title={TITLE} entranceDelay={3} align={ALIGN} />\n      </div>\n    </AbsoluteFill>\n  );\n};\n\nconst DualLowerThird: React.FC = () => {\n  const { width, height } = useVideoConfig();\n  const base = Math.min(width, height);\n  return (\n    <AbsoluteFill style={{ fontFamily: BRAND.fonts.primary }}>\n      <AbsoluteFill\n        style={{\n          display: \"flex\",\n          flexDirection: \"row\",\n          alignItems: \"flex-end\",\n          justifyContent: \"space-between\",\n          padding: `0 ${base * 0.046}px ${base * 0.075}px ${base * 0.046}px`,\n        }}\n      >\n        <PersonCard name={NAME} title={TITLE} entranceDelay={3} align=\"left\" />\n        <PersonCard\n          name={PARTNER_NAME}\n          title={PARTNER_TITLE}\n          entranceDelay={3}\n          align=\"right\"\n        />\n      </AbsoluteFill>\n    </AbsoluteFill>\n  );\n};\n\nconst BlackScreen: React.FC = () => (\n  <AbsoluteFill style={{ backgroundColor: \"transparent\" }} />\n);\n\nconst Composition: React.FC = () => (\n  <>\n    <style>{BRAND_FONT_FACE_CSS}</style>\n    <TransitionSeries>\n      <TransitionSeries.Sequence durationInFrames={5}>\n        <BlackScreen />\n      </TransitionSeries.Sequence>\n      <TransitionSeries.Transition\n        presentation={fade()}\n        timing={linearTiming({ durationInFrames: 5 })}\n      />\n\n      <TransitionSeries.Sequence durationInFrames={SCENE_FRAMES + TRANSITION}>\n        {DUAL ? <DualLowerThird /> : <SingleLowerThird />}\n      </TransitionSeries.Sequence>\n      <TransitionSeries.Transition\n        presentation={fade()}\n        timing={linearTiming({ durationInFrames: TRANSITION })}\n      />\n\n      <TransitionSeries.Sequence durationInFrames={13}>\n        <BlackScreen />\n      </TransitionSeries.Sequence>\n    </TransitionSeries>\n  </>\n);\n\nexport default Composition;",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "can you make it 2x faster pls?"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "Change name to \"Jakub Kopecký\"\nAnd 2nd line to \"Engineer at AI\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "oh one last: can you flip it to the other side pls?"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you change it to AI Engineer?"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "okay, now do Štěpán Škopek and the down below to be Core services Engineer"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "push it to the other side pls"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can u push it to the left"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "Started from Lower third",
+  "styleMode": "default",
+  "useSfx": true,
+  "collectionId": "fbe54163-c3f3-4f1f-8012-2049dcfd0b48",
+  "createdAt": "2026-06-17T16:08:40.202Z",
+  "updatedAt": "2026-06-22T08:01:27.149Z"
+}

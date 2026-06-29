@@ -15,11 +15,9 @@ Motion:
 
 Typography:
 - Hero text: 8-14% of canvas height. Tight leading (line-height: 0.95-1.05). Negative letter-spacing on display sizes (-0.02em to -0.04em).
-- Mix weights aggressively in the same line — 800 against 300 reads as designed.
 - One accent color, used sparingly (a pill, a number, a single word).
 
 Depth:
 - Background: a subtle radial or linear gradient, not flat color. Add a faint vignette via box-shadow inset.
 - Cards/panels: rgba(255,255,255,0.04-0.08) backgrounds with a 0.5px inner stroke at rgba(255,255,255,0.08). Slight blur backdrop where it reads.
-- Drop shadows on hero text — chromatic if the brand allows (e.g. \`text-shadow: 0 4px 24px rgba(accent, 0.4)\`).
 `;

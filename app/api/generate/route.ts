@@ -2,9 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import fs from "fs";
 import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
+import { listSfx } from "@/lib/sfx";
+import { getApifyReferenceImages, APIFY_REFERENCE_INTRO } from "@/lib/prompts/reference-images";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
-import type { AnimationType, ProjectSettings, ChatMessage, SvgFile, StyleMode } from "@/lib/types";
+import { analyzeSvgs, manifestForPrompt, diffForPrompt } from "@/lib/svg-analyzer";
+import { parseTape } from "@/lib/tape-parser";
+import type { AnimationType, Engine, ProjectSettings, ChatMessage, SvgFile, StyleMode, TransitionStyle } from "@/lib/types";
 
 const anthropic = new Anthropic();
 
@@ -65,6 +69,9 @@ export async function POST(request: Request) {
     svgContents,
     projectId,
     styleMode,
+    transitionStyle,
+    useSfx,
+    engine,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -75,6 +82,9 @@ export async function POST(request: Request) {
     svgContents?: SvgFile[];
     projectId?: string;
     styleMode?: StyleMode;
+    transitionStyle?: TransitionStyle;
+    useSfx?: boolean;
+    engine?: Engine;
   };
 
   if (!messages || !messages.length) {
@@ -93,22 +103,77 @@ export async function POST(request: Request) {
     }
   }
 
-  const systemPrompt = buildSystemPrompt(animationType, projectSettings, assetPaths, videoContext, styleMode);
+  // For terminal projects, read the customTheme flag so the prompt can either
+  // force the Apify default (when false/unset) or preserve the user's theme.
+  // Also pre-compute the current tape duration server-side so the model can
+  // do real math when the user says "extend" / "make it 10s" / etc.
+  let customTheme: boolean | undefined;
+  let currentTapeDurationMs: number | undefined;
+  if (animationType === "terminal") {
+    if (projectId) customTheme = getProject(projectId)?.customTheme;
+    if (currentCode && currentCode.trim()) {
+      currentTapeDurationMs = parseTape(currentCode).totalDurationMs;
+    }
+  }
+
+  // SFX are only relevant for non-terminal compositions (terminal is VHS .tape).
+  const sfx = animationType !== "terminal" ? listSfx() : [];
+  const systemPrompt = buildSystemPrompt(animationType, projectSettings, assetPaths, videoContext, styleMode, customTheme, useSfx, sfx, engine, transitionStyle);
+
+  // Attach Apify style reference images on the FIRST user turn only — keeps
+  // follow-up edits cheap (the visual grammar is also encoded in the system prompt).
+  const isTerminal = animationType === "terminal";
+  const firstUserTurnIndex = messages.findIndex((m) => m.role === "user");
+  const referenceImages = !isTerminal ? getApifyReferenceImages() : [];
 
   // Build Anthropic messages from chat history
   // Enhance the last user message with context
   const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg, i) => {
-    if (msg.role === "user" && i === messages.length - 1) {
-      let userContent = buildUserMessage(msg.content, currentCode, notionContent, scriptWithTimestamps, animationType);
+    const isLastUser = msg.role === "user" && i === messages.length - 1;
+    const isFirstUser = msg.role === "user" && i === firstUserTurnIndex;
+    const attachReferences = isFirstUser && referenceImages.length > 0;
+
+    if (isLastUser) {
+      let userContent = buildUserMessage(msg.content, currentCode, notionContent, scriptWithTimestamps, animationType, currentTapeDurationMs, engine);
       if (svgContents && svgContents.length > 0) {
-        const svgBlock = svgContents
-          .map((svg, i) => `[SVG ${i + 1}: ${svg.filename}]\n${svg.content}\n[END SVG ${i + 1}]`)
-          .join("\n\n");
-        userContent = `${svgBlock}\n\n${userContent}`;
+        const { manifests, sequenceDiff } = analyzeSvgs(svgContents);
+        const parts: string[] = [];
+        svgContents.forEach((svg, i) => {
+          const m = manifests[i];
+          if (m) {
+            parts.push(
+              `[SVG ${i + 1} MANIFEST]\n${JSON.stringify(manifestForPrompt(m), null, 2)}\n[END MANIFEST ${i + 1}]`
+            );
+          }
+          parts.push(`[SVG ${i + 1}: ${svg.filename}]\n${svg.content}\n[END SVG ${i + 1}]`);
+        });
+        if (sequenceDiff) {
+          parts.push(
+            `[SEQUENCE DIFF — these SVGs share a viewBox and form a UI flow. Animate the deltas, not whole-frame crossfades.]\n${JSON.stringify(diffForPrompt(sequenceDiff), null, 2)}\n[END SEQUENCE DIFF]`
+          );
+        }
+        userContent = `${parts.join("\n\n")}\n\n${userContent}`;
       }
+      if (attachReferences) {
+        return {
+          role: "user" as const,
+          content: [
+            { type: "text", text: APIFY_REFERENCE_INTRO },
+            ...referenceImages,
+            { type: "text", text: userContent },
+          ],
+        };
+      }
+      return { role: "user" as const, content: userContent };
+    }
+    if (attachReferences) {
       return {
         role: "user" as const,
-        content: userContent,
+        content: [
+          { type: "text", text: APIFY_REFERENCE_INTRO },
+          ...referenceImages,
+          { type: "text", text: msg.content },
+        ],
       };
     }
     return {
@@ -118,8 +183,7 @@ export async function POST(request: Request) {
   });
 
   // Terminal projects use cheap Sonnet — the .tape prompt is simple.
-  // Everything else gets Opus 4.7 with extended thinking for design-grade code.
-  const isTerminal = animationType === "terminal";
+  // Everything else gets Opus 4.8 with extended thinking for design-grade code.
   const stream = isTerminal
     ? anthropic.messages.stream({
         model: "claude-sonnet-4-6",
@@ -128,7 +192,7 @@ export async function POST(request: Request) {
         messages: anthropicMessages,
       })
     : anthropic.messages.stream({
-        model: "claude-opus-4-7",
+        model: "claude-opus-4-8",
         max_tokens: 32000,
         system: systemPrompt,
         messages: anthropicMessages,

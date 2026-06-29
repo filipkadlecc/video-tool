@@ -88,7 +88,7 @@ const EditedVideo: React.FC = () => {
       borderRadius: 12,
       opacity: titleProgress,
     }}>
-      <div style={{ fontSize: 48, fontWeight: 700, color: "#fff" }}>Speaker Name</div>
+      <div style={{ fontSize: 48, fontWeight: 600, color: "#fff" }}>Speaker Name</div>
       <div style={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }}>Title / Role</div>
     </div>
   </AbsoluteFill>

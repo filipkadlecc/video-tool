@@ -1,0 +1,40 @@
+{
+  "id": "f6fe22cb-f453-4ea4-b891-955d9cb5452e",
+  "name": "asdfasda",
+  "animationType": "terminal",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "Output out.mp4\nSet Width 3840\nSet Height 2160\nSet Theme { \"background\": \"#161718\", \"foreground\": \"#F4F4F5\", \"cursor\": \"#F86606\", \"selection\": \"#3D3F43\", \"black\": \"#161718\", \"white\": \"#F4F4F5\" }\nSet FontSize 32\nSet TypingSpeed 80ms\nSleep 1s\nType 'apify actors search \"instagram\"'\nSleep 300ms\nEnter\nSleep 6.17s",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "Terminal input: \napify actors search \"instagram\""
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "extend it to 10s"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "Terminal input: \napify actors search \"instagram\"",
+  "createdAt": "2026-06-03T20:32:10.603Z",
+  "updatedAt": "2026-06-03T20:34:05.849Z",
+  "styleMode": "default",
+  "terminalAnnotations": {
+    "videoDurationFrames": 73,
+    "videoWidth": 3840,
+    "videoHeight": 2160,
+    "fps": 25,
+    "zooms": []
+  }
+}

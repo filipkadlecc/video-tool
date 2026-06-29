@@ -6,6 +6,9 @@ import {
   docFromCode,
   codeFromDoc,
   moveClip,
+  trimClipLeft,
+  trimClipRight,
+  splitClip,
   type EditableDoc,
 } from "@/lib/editable-timeline";
 import Icon from "@/components/ui/Icon";
@@ -15,17 +18,23 @@ interface TimelineProps {
   fps: number;
   durationInFrames: number;
   /**
-   * When provided, the video track becomes draggable. Each pointer-up commit
+   * When provided, the timeline becomes draggable. Each pointer-up commit
    * regenerates the composition code and calls this with the new source.
-   * Returns the parent the responsibility for snapshotting (codeHistory) and
-   * persisting.
+   * The parent is responsible for snapshotting (codeHistory) and persisting.
+   *
+   * Works for video-clip compositions and for scene-only compositions
+   * (animation / broll / svg) — see lib/editable-timeline.ts.
    */
   onCodeChange?: (next: string) => void;
 }
 
+type DragMode = "move" | "trim-left" | "trim-right";
+
 interface DragState {
   clipId: string;
+  mode: DragMode;
   originalFrom: number;
+  originalDuration: number;
   startX: number;
   pixelsPerFrame: number;
   deltaFrames: number;
@@ -76,7 +85,14 @@ export default function Timeline({
       setDragState((prev) => {
         if (!prev || !editableDoc || !onCodeChange) return null;
         if (prev.deltaFrames !== 0) {
-          const updated = moveClip(editableDoc, prev.clipId, prev.deltaFrames);
+          let updated: EditableDoc;
+          if (prev.mode === "trim-right") {
+            updated = trimClipRight(editableDoc, prev.clipId, prev.deltaFrames);
+          } else if (prev.mode === "trim-left") {
+            updated = trimClipLeft(editableDoc, prev.clipId, prev.deltaFrames);
+          } else {
+            updated = moveClip(editableDoc, prev.clipId, prev.deltaFrames);
+          }
           onCodeChange(codeFromDoc(updated));
         }
         return null;
@@ -119,7 +135,14 @@ export default function Timeline({
   if (dragState && editableDoc) {
     const drag = editableDoc.clips.find((c) => c.id === dragState.clipId);
     if (drag) {
-      const pendingEnd = Math.max(0, drag.from + dragState.deltaFrames) + drag.durationInFrames;
+      let pendingEnd: number;
+      if (dragState.mode === "trim-right") {
+        pendingEnd = drag.from + Math.max(1, drag.durationInFrames + dragState.deltaFrames);
+      } else if (dragState.mode === "trim-left") {
+        pendingEnd = drag.from + drag.durationInFrames;
+      } else {
+        pendingEnd = Math.max(0, drag.from + dragState.deltaFrames) + drag.durationInFrames;
+      }
       totalFrames = Math.max(totalFrames, pendingEnd);
     }
   }
@@ -131,37 +154,48 @@ export default function Timeline({
     markers.push(t);
   }
 
-  // Group clips by track. For the video track, when editable, replace the
-  // parsed clips with editableDoc.clips so we have stable ids for drag.
+  // Group clips by track. When editable, walk editableDoc.clips in parallel so
+  // each parsed clip gets the matching stable id for drag handles.
   const tracks: { label: string; icon: string; clips: (TimelineClip & { index: number; editableId?: string })[] }[] = [
     { label: "Video", icon: "film", clips: [] },
+    { label: "Scenes", icon: "layers", clips: [] },
     { label: "Audio", icon: "monitor", clips: [] },
     { label: "Overlay", icon: "layers", clips: [] },
   ];
 
   let videoIdx = 0;
+  let sceneIdx = 0;
   clips.forEach((clip, i) => {
     const tagged: TimelineClip & { index: number; editableId?: string } = { ...clip, index: i };
     if (clip.type === "video") {
-      if (isEditable && editableDoc) {
+      if (isEditable && editableDoc?.mode === "video") {
         const eid = editableDoc.clips[videoIdx]?.id;
         if (eid) tagged.editableId = eid;
       }
       videoIdx++;
       tracks[0].clips.push(tagged);
     } else if (clip.type === "audio") {
+      tracks[2].clips.push(tagged);
+    } else if (clip.type === "scene") {
+      if (isEditable && editableDoc?.mode === "scene") {
+        const eid = editableDoc.clips[sceneIdx]?.id;
+        if (eid) tagged.editableId = eid;
+      }
+      sceneIdx++;
       tracks[1].clips.push(tagged);
     } else {
-      tracks[2].clips.push(tagged);
+      tracks[3].clips.push(tagged);
     }
   });
 
   const activeTracks = tracks.filter((t) => t.clips.length > 0);
 
-  function handlePointerDownOnClip(
+  function startDrag(
     e: React.PointerEvent<HTMLDivElement>,
     editableId: string,
-    originalFrom: number
+    originalFrom: number,
+    originalDuration: number,
+    mode: DragMode,
   ) {
     if (!isEditable || !trackRef.current) return;
     const trackWidth = trackRef.current.clientWidth;
@@ -170,7 +204,9 @@ export default function Timeline({
     e.stopPropagation();
     setDragState({
       clipId: editableId,
+      mode,
       originalFrom,
+      originalDuration,
       startX: e.clientX,
       pixelsPerFrame: trackWidth / totalFrames,
       deltaFrames: 0,
@@ -207,7 +243,7 @@ export default function Timeline({
               letterSpacing: "0.05em",
               textTransform: "uppercase",
             }}
-            title="Drag video clips to reposition"
+            title="Drag clips to reposition · drag edges to trim · alt-click to split"
           >
             Editable
           </span>
@@ -271,7 +307,7 @@ export default function Timeline({
 
           {/* Tracks */}
           {activeTracks.map((track, ti) => {
-            const isVideoTrack = track.label === "Video";
+            const isEditableTrack = track.label === "Video" || track.label === "Scenes";
             return (
               <div key={ti} style={{ display: "flex", alignItems: "stretch", minHeight: 36 }}>
                 {/* Track label */}
@@ -294,7 +330,7 @@ export default function Timeline({
 
                 {/* Track content */}
                 <div
-                  ref={isVideoTrack ? trackRef : undefined}
+                  ref={isEditableTrack ? trackRef : undefined}
                   style={{
                     flex: 1,
                     position: "relative",
@@ -308,15 +344,27 @@ export default function Timeline({
                   {track.clips.map((clip) => {
                     const isDragging =
                       dragState != null && clip.editableId === dragState.clipId;
-                    const renderFrom = isDragging
-                      ? Math.max(0, dragState.originalFrom + dragState.deltaFrames)
-                      : clip.from;
+                    let renderFrom = clip.from;
+                    let renderDuration = clip.durationInFrames;
+                    if (isDragging && dragState) {
+                      if (dragState.mode === "move") {
+                        renderFrom = Math.max(0, dragState.originalFrom + dragState.deltaFrames);
+                      } else if (dragState.mode === "trim-right") {
+                        renderDuration = Math.max(1, dragState.originalDuration + dragState.deltaFrames);
+                      } else if (dragState.mode === "trim-left") {
+                        const maxDelta = dragState.originalDuration - 1;
+                        const minDelta = -dragState.originalFrom;
+                        const clamped = Math.max(minDelta, Math.min(maxDelta, dragState.deltaFrames));
+                        renderFrom = dragState.originalFrom + clamped;
+                        renderDuration = dragState.originalDuration - clamped;
+                      }
+                    }
                     const left = (renderFrom / totalFrames) * 100;
-                    const width = (clip.durationInFrames / totalFrames) * 100;
+                    const width = (renderDuration / totalFrames) * 100;
                     const color = getClipColor(clip.index);
                     const isHovered = hoveredClip === clip.index;
                     const draggable =
-                      isEditable && isVideoTrack && clip.editableId != null;
+                      isEditable && isEditableTrack && clip.editableId != null;
 
                     return (
                       <div
@@ -324,9 +372,23 @@ export default function Timeline({
                         onMouseEnter={() => !isDragging && setHoveredClip(clip.index)}
                         onMouseLeave={() => setHoveredClip(null)}
                         onPointerDown={(e) => {
-                          if (draggable && clip.editableId) {
-                            handlePointerDownOnClip(e, clip.editableId, clip.from);
+                          if (!draggable || !clip.editableId) return;
+                          // Alt-click splits the clip at the cursor X.
+                          if (e.altKey && editableDoc && onCodeChange && trackRef.current) {
+                            const rect = trackRef.current.getBoundingClientRect();
+                            const localX = e.clientX - rect.left;
+                            const frame = Math.round(
+                              (localX / rect.width) * totalFrames,
+                            );
+                            const next = splitClip(editableDoc, clip.editableId, frame);
+                            if (next !== editableDoc) {
+                              onCodeChange(codeFromDoc(next));
+                            }
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
                           }
+                          startDrag(e, clip.editableId, clip.from, clip.durationInFrames, "move");
                         }}
                         style={{
                           position: "absolute",
@@ -389,6 +451,58 @@ export default function Timeline({
                           )}
                         </div>
 
+                        {/* Trim handles (edges) — only on editable video clips */}
+                        {draggable && clip.editableId && (isHovered || isDragging) && (
+                          <>
+                            <div
+                              onPointerDown={(e) => {
+                                if (clip.editableId) {
+                                  startDrag(e, clip.editableId, clip.from, clip.durationInFrames, "trim-left");
+                                }
+                              }}
+                              style={{
+                                position: "absolute",
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: 6,
+                                cursor: "ew-resize",
+                                background:
+                                  isDragging && dragState?.mode === "trim-left"
+                                    ? color
+                                    : `color-mix(in oklab, ${color} 60%, transparent)`,
+                                borderTopLeftRadius: 3,
+                                borderBottomLeftRadius: 3,
+                                touchAction: "none",
+                                zIndex: 2,
+                              }}
+                            />
+                            <div
+                              onPointerDown={(e) => {
+                                if (clip.editableId) {
+                                  startDrag(e, clip.editableId, clip.from, clip.durationInFrames, "trim-right");
+                                }
+                              }}
+                              style={{
+                                position: "absolute",
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: 6,
+                                cursor: "ew-resize",
+                                background:
+                                  isDragging && dragState?.mode === "trim-right"
+                                    ? color
+                                    : `color-mix(in oklab, ${color} 60%, transparent)`,
+                                borderTopRightRadius: 3,
+                                borderBottomRightRadius: 3,
+                                touchAction: "none",
+                                zIndex: 2,
+                              }}
+                            />
+                          </>
+                        )}
+
                         {/* Tooltip on hover (suppressed during drag) */}
                         {isHovered && !isDragging && (
                           <div
@@ -422,8 +536,8 @@ export default function Timeline({
                           </div>
                         )}
 
-                        {/* Live drag indicator: show new from-position */}
-                        {isDragging && (
+                        {/* Live drag indicator: per-mode readout */}
+                        {isDragging && dragState && (
                           <div
                             style={{
                               position: "absolute",
@@ -440,7 +554,9 @@ export default function Timeline({
                               pointerEvents: "none",
                             }}
                           >
-                            {formatTime(renderFrom, fps)}
+                            {dragState.mode === "move"
+                              ? formatTime(renderFrom, fps)
+                              : `${formatTime(renderDuration, fps)} (${formatFrames(renderDuration)})`}
                           </div>
                         )}
                       </div>

@@ -3,6 +3,15 @@ export const EDITORIAL_STYLE_PROMPT = `
 
 Inspired by Stripe Press, The Browser Company, NYT digital essays. Considered, literary, quiet confidence. Whitespace does the work.
 
+**MANDATORY SIGNATURES — must appear in every editorial scene. These override any composition you see in the few-shot snippets.**
+
+1. Asymmetric 12-column grid layout — hero spans columns 2-7, supporting content in columns 8-11. Columns 1 and 12 stay empty for breathing room.
+2. Small uppercase monospace section label always visible ("01 / Section", "Chapter II", etc.) in 22-28px monospace, color rgba(255,255,255,0.45), letterSpacing 0.18em, textTransform uppercase.
+3. Reveals use opacity + translateY ONLY. NO scale on reveals, NO rotation, NO blur ramp. LIQUID springs only.
+4. Hero is RESTRAINED — 5-9% of canvas height. Authority through size restraint, not loudness.
+5. Patient staggers — 8-15 frames between sibling element reveals. Never less than 8.
+6. If any element acts as a featured block / pull-quote, give it a thick (3-4px) orange left-border with generous left padding (≥32px).
+
 Composition:
 - Asymmetric magazine grid. Imagine a 12-column grid; place hero text in columns 2-7, supporting elements in columns 9-11. Leave columns 1, 8, 12 empty for breathing room.
 - Hero text is MEDIUM — 5-8% of canvas height. Authority through restraint.
@@ -17,9 +26,9 @@ Motion:
 - Hold phases include a slow opacity drift (e.g. 0.85 → 0.95 → 0.85 over 4 seconds) — never static, but never flashy.
 
 Typography:
-- Hero: a serif (Georgia, "Times New Roman", or a display serif). Mid weight 500-600. Slight tracking (0.005-0.01em).
-- Body: Inter or system sans, weight 400. Line-height 1.5-1.65 for legibility.
-- Mix serif HERO with sans BODY and monospace LABELS — the three-way contrast is the signature.
+- Hero: sans (BRAND.fonts.marketing), weight 600. Slight tracking (0.005-0.01em).
+- Body: Inter or system sans (BRAND.fonts.primary), weight 400. Line-height 1.5-1.65 for legibility.
+- Mix sans HERO with sans BODY and monospace LABELS — the contrast comes from size + tracking + color hierarchy, NOT font family.
 - Color hierarchy: 100% white for hero, 65% white for body, 40% white for labels/metadata.
 
 Depth & color:

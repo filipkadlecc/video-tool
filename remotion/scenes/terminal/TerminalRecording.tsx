@@ -15,12 +15,34 @@ import { BRAND, BRAND_FONT_FACE_CSS } from "../../theme";
 // Apple-style: snap into zoom quickly, drift back out slowly.
 const RAMP_IN_FRAMES = 8;
 const RAMP_OUT_FRAMES = 24;
+export const DEFAULT_RAMP_IN_FRAMES = RAMP_IN_FRAMES;
+export const DEFAULT_RAMP_OUT_FRAMES = RAMP_OUT_FRAMES;
 export const END_CARD_FRAMES = 120;
 
 // expo-out: fast start, smooth settle.
 const EASE_IN = Easing.bezier(0.16, 1, 0.3, 1);
 // smooth symmetric ease for the drift back to neutral.
 const EASE_OUT = Easing.bezier(0.4, 0, 0.6, 1);
+
+type ZoomEasing = "snap" | "smooth" | "linear";
+
+// Resolve a per-zoom easing preset into [in, out] bezier/linear functions.
+function easingPair(name: ZoomEasing | undefined): {
+  ease: (t: number) => number;
+  out: (t: number) => number;
+} {
+  switch (name) {
+    case "smooth": {
+      const css = Easing.bezier(0.25, 0.1, 0.25, 1);
+      return { ease: css, out: css };
+    }
+    case "linear":
+      return { ease: Easing.linear, out: Easing.linear };
+    case "snap":
+    default:
+      return { ease: EASE_IN, out: EASE_OUT };
+  }
+}
 
 interface FreezeT {
   id: string;
@@ -37,6 +59,9 @@ export interface TerminalRecordingProps {
       startFrame: number;
       endFrame: number;
       rect: { x: number; y: number; w: number; h: number };
+      rampInFrames?: number;
+      rampOutFrames?: number;
+      easing?: ZoomEasing;
     }>;
     freezes?: FreezeT[];
     banner?: {
@@ -65,7 +90,7 @@ export function terminalTotalFrames(a: TerminalRecordingProps["annotations"]): n
 // keeping the original center. In normalized coords (x/w against compWidth,
 // y/h against compHeight) the rect matches the composition aspect when
 // w === h, so we use max(w, h) for both and clamp inside [0,1].
-function normalizeRectToCompAspect(rect: { x: number; y: number; w: number; h: number }) {
+export function normalizeRectToCompAspect(rect: { x: number; y: number; w: number; h: number }) {
   const target = Math.max(rect.w, rect.h);
   const cx = rect.x + rect.w / 2;
   const cy = rect.y + rect.h / 2;
@@ -142,24 +167,31 @@ const ZoomedVideo: React.FC<{
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
 
-  const active = zooms.find(
-    (z) => frame >= z.startFrame - RAMP_IN_FRAMES && frame <= z.endFrame + RAMP_OUT_FRAMES,
-  );
+  // For overlap detection we need each zoom's own ramp window, not the global
+  // defaults — a zoom with a longer ramp-in must "claim" the frame earlier.
+  const active = zooms.find((z) => {
+    const rin = Math.max(0, z.rampInFrames ?? RAMP_IN_FRAMES);
+    const rout = Math.max(0, z.rampOutFrames ?? RAMP_OUT_FRAMES);
+    return frame >= z.startFrame - rin && frame <= z.endFrame + rout;
+  });
 
   let transform = "";
   if (active) {
+    const rin = Math.max(0, active.rampInFrames ?? RAMP_IN_FRAMES);
+    const rout = Math.max(0, active.rampOutFrames ?? RAMP_OUT_FRAMES);
+    const { ease: easeIn, out: easeOut } = easingPair(active.easing);
     const { s, tx, ty } = computeZoom(active.rect, width, height);
     const inP = interpolate(
       frame,
-      [active.startFrame - RAMP_IN_FRAMES, active.startFrame],
+      [active.startFrame - rin, active.startFrame],
       [0, 1],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: EASE_IN },
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeIn },
     );
     const outP = interpolate(
       frame,
-      [active.endFrame, active.endFrame + RAMP_OUT_FRAMES],
+      [active.endFrame, active.endFrame + rout],
       [1, 0],
-      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: EASE_OUT },
+      { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeOut },
     );
     const progress = Math.min(inP, outP);
     const liveS = 1 + (s - 1) * progress;
@@ -169,7 +201,7 @@ const ZoomedVideo: React.FC<{
   }
 
   return (
-    <AbsoluteFill style={{ overflow: "hidden", background: "#333538" }}>
+    <AbsoluteFill style={{ overflow: "hidden", background: "#161718" }}>
       <div
         style={{
           width,
@@ -240,7 +272,7 @@ const BannerOverlay: React.FC<{
             style={{
               width: Math.max(3, base * 0.004),
               height: base * 0.045,
-              background: BRAND.colors.pink,
+              background: BRAND.colors.orange,
               borderRadius: 2,
             }}
           />
@@ -301,7 +333,7 @@ const EndCardOverlay: React.FC<{ title: string; subtitle?: string; url?: string 
   return (
     <AbsoluteFill
       style={{
-        background: "#333538",
+        background: "#161718",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -366,7 +398,7 @@ const TerminalRecording: React.FC<TerminalRecordingProps> = ({ videoSrc, annotat
   const videoPortion = annotations.videoDurationFrames + totalFreezeFrames(freezes);
   const endCardStart = annotations.endCard?.startFrame ?? videoPortion;
   return (
-    <AbsoluteFill style={{ background: "#333538" }}>
+    <AbsoluteFill style={{ background: "#161718" }}>
       <Sequence durationInFrames={videoPortion}>
         <ZoomedVideo
           videoSrc={videoSrc}

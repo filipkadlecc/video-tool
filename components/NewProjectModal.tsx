@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { STYLE_MODES } from "@/lib/prompts/styles";
-import type { AnimationType, Resolution, Orientation, FPS, SvgFile, StyleMode } from "@/lib/types";
+import { TRANSITION_MODES } from "@/lib/prompts/transitions";
+import type { AnimationType, Engine, Resolution, Orientation, FPS, SvgFile, StyleMode, TransitionStyle, Collection } from "@/lib/types";
 import { getAnimationTypeMeta } from "@/lib/animation-types";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
@@ -11,6 +12,11 @@ import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Segmented from "@/components/ui/Segmented";
 import TypeTile from "@/components/TypeTile";
+import SnippetParamsForm from "@/components/SnippetParamsForm";
+import { SNIPPET_SCHEMAS, buildDefaultValues } from "@/lib/snippet-schemas";
+import { SNIPPET_ICONS } from "@/lib/snippet-icons";
+import { renderSnippet } from "@/lib/snippet-template";
+import StylePreviewModal from "@/components/StylePreviewModal";
 
 interface SnippetSummary {
   id: string;
@@ -116,19 +122,6 @@ const SNIPPET_ACCENT: Record<string, string> = {
   SymbolBug: "#F86606",
 };
 
-const SNIPPET_ICON: Record<string, string> = {
-  IntroCard: "film",
-  LowerThird: "monitor",
-  EndCard: "check",
-  StatCallout: "bolt",
-  QuoteCard: "chat",
-  LogoBumper: "sparkle",
-  CalloutBanner: "info",
-  ListReveal: "list",
-  CodeSnippet: "code",
-  SymbolBug: "image",
-};
-
 function OrientationPreview({ ratio, active }: { ratio: string; active: boolean }) {
   const dims =
     ratio === "16:9" ? { w: 36, h: 20 } : ratio === "9:16" ? { w: 20, h: 36 } : { w: 28, h: 28 };
@@ -167,6 +160,16 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [fps, setFps] = useState<FPS>(25);
   const [orientation, setOrientation] = useState<Orientation>("horizontal");
   const [animationType, setAnimationType] = useState<AnimationType>(initialType ?? "broll");
+  // Rendering engine. Remotion (default) or HyperFrames (opt-in testing).
+  const [engine, setEngine] = useState<Engine>("remotion");
+  // HyperFrames: 24/25/30 fps (25 is captured at 30 then conformed to 25 on
+  // export). Coerce away unsupported rates (e.g. 50) when this engine is chosen.
+  useEffect(() => {
+    if (engine === "hyperframes" && fps !== 24 && fps !== 25 && fps !== 30) setFps(30);
+  }, [engine, fps]);
+  // HyperFrames is offered for standard animated scenes only (not terminal/video in v1).
+  const engineEligible = animationType !== "terminal" && animationType !== "video";
+  const effectiveEngine: Engine = engineEligible ? engine : "remotion";
   const typeLocked = initialType !== undefined;
   const typeMeta = getAnimationTypeMeta(animationType);
 
@@ -187,8 +190,34 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
 
   const [snippets, setSnippets] = useState<SnippetSummary[]>([]);
   const [selectedSnippetId, setSelectedSnippetId] = useState<string | null>(null);
+  const [snippetValues, setSnippetValues] = useState<Record<string, unknown>>({});
   const [videoMode, setVideoMode] = useState<VideoMode>("smarttrim");
   const [styleMode, setStyleMode] = useState<StyleMode>("default");
+  const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>("cut");
+  const [stylePreviewOpen, setStylePreviewOpen] = useState(false);
+  const [useSfx, setUseSfx] = useState(true);
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collectionId, setCollectionId] = useState<string>("");
+
+  // Load collections so the user can file the new project into one at creation.
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/collections")
+      .then((r) => r.json())
+      .then(setCollections)
+      .catch(() => setCollections([]));
+  }, [open]);
+
+  // Reset the params form whenever the user picks a different snippet — each
+  // snippet has its own schema and defaults.
+  useEffect(() => {
+    if (!selectedSnippetId) {
+      setSnippetValues({});
+      return;
+    }
+    const schema = SNIPPET_SCHEMAS[selectedSnippetId];
+    if (schema) setSnippetValues(buildDefaultValues(schema));
+  }, [selectedSnippetId]);
 
   useEffect(() => {
     if (open) {
@@ -231,6 +260,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     setSvgFiles([]);
     setMediaFiles([]);
     setSelectedSnippetId(null);
+    setSnippetValues({});
     setVideoMode("smarttrim");
     setPhase({ kind: "idle" });
     setPickEvents(0);
@@ -286,17 +316,27 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     const projectBody = {
       name: name.trim(),
       animationType,
+      engine: effectiveEngine,
       settings: { resolution, orientation, fps },
       initialPrompt: isSmartTrim
         ? prompt.trim() || "Smart trim recording"
         : selectedSnippet
           ? prompt.trim() || `Started from ${selectedSnippet.name}`
           : prompt.trim(),
-      initialCode: selectedSnippet?.code,
+      initialCode: selectedSnippet
+        ? (() => {
+            const schema = SNIPPET_SCHEMAS[selectedSnippet.id];
+            if (!schema || Object.keys(schema.params).length === 0) return selectedSnippet.code;
+            return renderSnippet(selectedSnippet.code, schema, snippetValues);
+          })()
+        : undefined,
       notionContent,
       scriptWithTimestamps: scriptWithTimestamps.trim() || undefined,
       svgContents: svgFiles.length > 0 ? svgFiles : undefined,
       styleMode: animationType === "terminal" || isVideo ? undefined : styleMode,
+      transitionStyle: animationType === "terminal" || isVideo ? undefined : transitionStyle,
+      useSfx: animationType === "terminal" ? false : useSfx,
+      collectionId: collectionId || undefined,
     };
 
     try {
@@ -385,6 +425,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     o === "horizontal" ? "16:9" : o === "vertical" ? "9:16" : "1:1";
 
   return (
+    <>
     <Modal
       open={open}
       onClose={handleClose}
@@ -422,7 +463,40 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 onChange={setName}
                 placeholder="e.g. Product Launch Teaser"
                 autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && name.trim()) {
+                    e.preventDefault();
+                    setStep(2);
+                  }
+                }}
               />
+            </div>
+
+            <div>
+              <FieldLabel hint="Optional — group several projects for one video">Collection</FieldLabel>
+              <select
+                value={collectionId}
+                onChange={(e) => setCollectionId(e.target.value)}
+                className="mono"
+                style={{
+                  width: "100%",
+                  height: 34,
+                  padding: "0 10px",
+                  background: "var(--bg-inset)",
+                  border: "0.5px solid var(--line-2)",
+                  borderRadius: "var(--r-sm)",
+                  color: "var(--text-0)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                <option value="">None</option>
+                {collections.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {!typeLocked && (
@@ -458,15 +532,42 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 <Segmented
                   value={fps}
                   onChange={(v) => setFps(v as FPS)}
-                  options={[
-                    { value: 24, label: "24" },
-                    { value: 25, label: "25" },
-                    { value: 30, label: "30" },
-                    { value: 50, label: "50" },
-                  ]}
+                  options={
+                    effectiveEngine === "hyperframes"
+                      ? [
+                          { value: 24, label: "24" },
+                          { value: 25, label: "25" },
+                          { value: 30, label: "30" },
+                        ]
+                      : [
+                          { value: 24, label: "24" },
+                          { value: 25, label: "25" },
+                          { value: 30, label: "30" },
+                          { value: 50, label: "50" },
+                        ]
+                  }
                 />
               </div>
             </div>
+
+            {engineEligible && (
+              <div>
+                <FieldLabel>Engine</FieldLabel>
+                <Segmented
+                  value={engine}
+                  onChange={(v) => setEngine(v as Engine)}
+                  options={[
+                    { value: "remotion", label: "Remotion" },
+                    { value: "hyperframes", label: "HyperFrames" },
+                  ]}
+                />
+                {engine === "hyperframes" && (
+                  <div className="mono cap" style={{ color: "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
+                    Experimental HTML/GSAP engine. Same Apify look + motion; exports MP4 (24/25/30 fps).
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <FieldLabel>Orientation</FieldLabel>
@@ -615,7 +716,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   </button>
                   {snippets.map((s) => {
                     const accent = SNIPPET_ACCENT[s.id] ?? "var(--accent)";
-                    const icon = SNIPPET_ICON[s.id] ?? "film";
+                    const icon = SNIPPET_ICONS[s.id] ?? "film";
                     const active = selectedSnippetId === s.id;
                     return (
                       <button
@@ -653,11 +754,61 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </div>
             )}
 
+            {selectedSnippet && (() => {
+              const schema = SNIPPET_SCHEMAS[selectedSnippet.id];
+              if (!schema || Object.keys(schema.params).length === 0) return null;
+              return (
+                <div>
+                  <FieldLabel hint="Fill in the values — the snippet is generated deterministically from your inputs">
+                    Snippet parameters
+                  </FieldLabel>
+                  <div
+                    style={{
+                      padding: 14,
+                      background: "var(--bg-inset)",
+                      border: "0.5px solid var(--line-2)",
+                      borderRadius: "var(--r-sm)",
+                    }}
+                  >
+                    <SnippetParamsForm
+                      schema={schema}
+                      values={snippetValues}
+                      onValuesChange={setSnippetValues}
+                      hideFooter
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
             {!isSmartTrim && !isVideo && animationType !== "terminal" && (
               <div>
-                <FieldLabel hint="Visual style for the AI — kinetic/editorial/cinematic produce noticeably different looks">
-                  Style
-                </FieldLabel>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <FieldLabel hint="Visual style for the AI — kinetic/editorial/cinematic produce noticeably different looks">
+                    Style
+                  </FieldLabel>
+                  <button
+                    type="button"
+                    onClick={() => setStylePreviewOpen(true)}
+                    title="Preview the styles"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      marginBottom: 8,
+                      padding: "2px 8px",
+                      fontSize: 10,
+                      color: "var(--text-2)",
+                      background: "var(--bg-inset)",
+                      border: "0.5px solid var(--line-2)",
+                      borderRadius: "var(--r-sm)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Icon name="info" size={11} />
+                    Preview
+                  </button>
+                </div>
                 <Segmented
                   value={styleMode}
                   onChange={(v) => setStyleMode(v as StyleMode)}
@@ -666,6 +817,38 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6 }}>
                   {STYLE_MODES.find((m) => m.id === styleMode)?.description}
                 </div>
+              </div>
+            )}
+
+            {!isSmartTrim && !isVideo && animationType !== "terminal" && (
+              <div>
+                <FieldLabel hint="How scenes hand off — cut (clean), blend (soft), or camera (a dolly push). The background stays continuous in all three.">
+                  Transition style
+                </FieldLabel>
+                <Segmented
+                  value={transitionStyle}
+                  onChange={(v) => setTransitionStyle(v as TransitionStyle)}
+                  options={TRANSITION_MODES.map((m) => ({ label: m.label, value: m.id }))}
+                />
+                <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6 }}>
+                  {TRANSITION_MODES.find((m) => m.id === transitionStyle)?.description}
+                </div>
+              </div>
+            )}
+
+            {animationType !== "terminal" && (
+              <div>
+                <FieldLabel hint="Let the AI add tasteful whooshes / pops / impacts where they fit">
+                  Sound effects
+                </FieldLabel>
+                <Segmented
+                  value={useSfx ? "on" : "off"}
+                  onChange={(v) => setUseSfx(v === "on")}
+                  options={[
+                    { label: "On", value: "on" },
+                    { label: "Off", value: "off" },
+                  ]}
+                />
               </div>
             )}
 
@@ -694,6 +877,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                         : "Describe the animation you want..."
                   }
                   style={undefined}
+                  onKeyDown={(e) => {
+                    // Enter creates; Shift+Enter inserts a newline.
+                    if (e.key === "Enter" && !e.shiftKey && canCreate() && !creating) {
+                      e.preventDefault();
+                      handleCreate();
+                    }
+                  }}
                 />
               </div>
             )}
@@ -743,6 +933,19 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     gap: 10,
                   }}
                 >
+                  {svgFiles.length >= 2 && (() => {
+                    const viewBoxes = svgFiles.map((s) => {
+                      const m = s.content.match(/viewBox="([\d.\-\s]+)"/);
+                      return m ? m[1].trim().replace(/\s+/g, " ") : null;
+                    });
+                    const allMatch = viewBoxes.every((v) => v !== null && v === viewBoxes[0]);
+                    if (!allMatch) return null;
+                    return (
+                      <div style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>
+                        Detected animation sequence — Claude will animate the deltas between frames.
+                      </div>
+                    );
+                  })()}
                   {svgFiles.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {svgFiles.map((svg, i) => (
@@ -1206,6 +1409,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         </div>
       )}
     </Modal>
+    <StylePreviewModal
+      open={stylePreviewOpen}
+      onClose={() => setStylePreviewOpen(false)}
+      selected={styleMode}
+      onSelect={(m) => setStyleMode(m)}
+    />
+    </>
   );
 }
 

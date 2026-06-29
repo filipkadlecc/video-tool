@@ -1,5 +1,11 @@
 export type AnimationType = "broll" | "animation" | "svg" | "video" | "terminal";
+// Rendering engine for a project. Remotion (React/`useCurrentFrame`) is the
+// default and original engine; HyperFrames (HTML + GSAP, rendered by its own
+// CLI) is opt-in for testing. Absent on legacy projects → treated as remotion.
+export type Engine = "remotion" | "hyperframes";
 export type StyleMode = "default" | "kinetic" | "editorial" | "cinematic";
+// How scenes hand off to each other. Absent on legacy projects → treated as "cut".
+export type TransitionStyle = "cut" | "blend" | "camera";
 export type Resolution = "1080p" | "4k";
 export type Orientation = "horizontal" | "vertical" | "square";
 export type FPS = 24 | 25 | 30 | 50;
@@ -27,11 +33,19 @@ export interface TerminalZoomRect {
   h: number;
 }
 
+export type TerminalZoomEasing = "snap" | "smooth" | "linear";
+
 export interface TerminalZoom {
   id: string;
   startFrame: number;
   endFrame: number;
   rect: TerminalZoomRect;
+  // Optional per-zoom timing overrides. Defaults live in
+  // remotion/scenes/terminal/TerminalRecording.tsx (RAMP_IN_FRAMES,
+  // RAMP_OUT_FRAMES, and "snap" easing).
+  rampInFrames?: number;
+  rampOutFrames?: number;
+  easing?: TerminalZoomEasing;
 }
 
 export interface TerminalEndCard {
@@ -69,6 +83,8 @@ export interface Project {
   id: string;
   name: string;
   animationType: AnimationType;
+  // Which renderer owns `code`. Optional for backward compat — undefined means remotion.
+  engine?: Engine;
   settings: ProjectSettings;
   code: string;
   chatHistory: ChatMessage[];
@@ -78,12 +94,28 @@ export interface Project {
   svgContents?: SvgFile[];
   mediaFolder?: string;
   terminalAnnotations?: TerminalAnnotations;
+  // Terminal projects only: when true, the AI is told to preserve any user-set
+  // `Set Theme {...}` line instead of forcing the Apify default.
+  customTheme?: boolean;
   styleMode?: StyleMode;
+  // How scenes transition (cut / blend / camera). Undefined → "cut".
+  transitionStyle?: TransitionStyle;
+  // When true (default for non-terminal types), the AI may add tasteful SFX.
+  useSfx?: boolean;
+  // Optional cross-type grouping — several projects for one final video.
+  collectionId?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export type ProjectMeta = Omit<Project, "chatHistory" | "code" | "notionContent" | "scriptWithTimestamps" | "svgContents">;
+
+export interface Collection {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 const RESOLUTION_MAP: Record<`${Orientation}-${Resolution}`, { width: number; height: number }> = {
   "horizontal-4k": { width: 3840, height: 2160 },

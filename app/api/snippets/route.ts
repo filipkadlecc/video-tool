@@ -10,17 +10,24 @@ interface Snippet {
 }
 
 const META: Record<string, { name: string; subtitle: string }> = {
-  IntroCard: { name: "Intro card", subtitle: "Logo + title hero — start your video" },
-  LowerThird: { name: "Lower third", subtitle: "Dual-card name + Apify wordmark + green accent" },
-  EndCard: { name: "End card", subtitle: "Logo + CTA + URL closer" },
-  StatCallout: { name: "Stat callout", subtitle: "Big animated number reveal" },
-  QuoteCard: { name: "Quote card", subtitle: "Pull quote with attribution" },
-  LogoBumper: { name: "Logo bumper", subtitle: "Short Apify symbol reveal — opener/closer" },
-  CalloutBanner: { name: "Callout banner", subtitle: "Top banner with title + subtitle" },
-  ListReveal: { name: "List reveal", subtitle: "Staggered bullet list — feature highlights" },
-  CodeSnippet: { name: "Code snippet", subtitle: "Syntax-highlighted code card with line reveals" },
+  IntroCard: { name: "Intro card", subtitle: "Wordmark + headline with highlighted phrase" },
+  LowerThird: { name: "Lower third", subtitle: "Name tag with orange accent rule (single or dual)" },
+  EndCard: { name: "End card", subtitle: "Outlined CTA pill + QR + promo code" },
+  StatCallout: { name: "Stat callout", subtitle: "Big animated number with orange highlight" },
+  QuoteCard: { name: "Quote card", subtitle: "Testimonial card with orange quotemark" },
+  LogoBumper: { name: "Logo bumper", subtitle: "Apify symbol reveal — opener/closer" },
+  CalloutBanner: { name: "Callout banner", subtitle: "Headline strip overlay with highlighted phrase" },
+  ListReveal: { name: "List reveal", subtitle: "Checkmark feature list inside a card" },
+  CodeSnippet: { name: "Code snippet", subtitle: "Editor card — monochrome orange syntax" },
   SymbolBug: { name: "Symbol bug", subtitle: "Corner watermark — overlay this on footage" },
-  PathReveal: { name: "Path reveal", subtitle: "Animated SVG path — title with hand-drawn underline" },
+  PathReveal: { name: "Path reveal", subtitle: "Headline with hand-drawn orange underline" },
+  RisingStarsList: { name: "Rising Stars list", subtitle: "Numbered Actor cards + corner wedge" },
+  LogoGridStrip: { name: "Logo grid", subtitle: '"Works with" partner-logo strip' },
+  FourQuadrant: { name: "Four quadrants", subtitle: "2×2 feature-card grid with partner row" },
+  BeforeAfter: { name: "Before / after", subtitle: "Stacked comparison cards" },
+  EventCard: { name: "Event card", subtitle: "Event title + date + sponsor logo" },
+  MCPLaunchFrame: { name: "MCP launch frame", subtitle: "Schematic-style line-draw frame" },
+  PromptBox: { name: "Prompt box", subtitle: "Claude composer — typewriter prompt reveal (transparent)" },
 };
 
 export async function GET() {

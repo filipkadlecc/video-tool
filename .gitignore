@@ -42,3 +42,15 @@ next-env.d.ts
 
 # renders
 /public/renders/
+
+# user-submitted feedback (local runtime logs)
+/data/feedback/
+
+# hyperframes engine port experiment (sandbox)
+/hyperframes-test/
+
+# too large for GitHub (>100MB) — kept locally / in backups, use Git LFS if it must be tracked
+/public/assets/brand-deal-spy-src.mp4
+
+# unrelated data export (X mentions scrape)
+/apify_x_mentions_*.json

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import type { Project, ProjectMeta, AnimationType, ProjectSettings, SvgFile, StyleMode } from "./types";
+import type { Project, ProjectMeta, AnimationType, Engine, ProjectSettings, SvgFile, StyleMode, TransitionStyle } from "./types";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -27,8 +27,11 @@ export function listProjects(): ProjectMeta[] {
         id: raw.id,
         name: raw.name,
         animationType: raw.animationType,
+        engine: raw.engine,
         settings: raw.settings,
         initialPrompt: raw.initialPrompt,
+        collectionId: raw.collectionId,
+        useSfx: raw.useSfx,
         createdAt: raw.createdAt,
         updatedAt: raw.updatedAt,
       });
@@ -54,6 +57,7 @@ export function getProject(id: string): Project | null {
 export interface CreateProjectData {
   name: string;
   animationType: AnimationType;
+  engine?: Engine;
   settings: ProjectSettings;
   initialPrompt: string;
   initialCode?: string;
@@ -61,6 +65,9 @@ export interface CreateProjectData {
   scriptWithTimestamps?: string;
   svgContents?: SvgFile[];
   styleMode?: StyleMode;
+  transitionStyle?: TransitionStyle;
+  useSfx?: boolean;
+  collectionId?: string;
 }
 
 export function getProjectMediaDir(id: string): string {
@@ -77,7 +84,7 @@ Output out.mp4
 Set FontSize 22
 Set Width 1200
 Set Height 600
-Set Theme { "background": "#333538", "foreground": "#FFFFFF", "cursor": "#FFFFFF", "selection": "#4A4D50", "black": "#333538", "white": "#FFFFFF" }
+Set Theme { "background": "#161718", "foreground": "#F4F4F5", "cursor": "#F86606", "selection": "#3D3F43", "black": "#161718", "white": "#F4F4F5" }
 Set TypingSpeed 50ms
 
 Type "echo 'Hello from VHS'"
@@ -111,6 +118,7 @@ export function createProject(data: CreateProjectData): Project {
     id,
     name: data.name,
     animationType: data.animationType,
+    engine: data.engine ?? "remotion",
     settings: data.settings,
     code:
       data.initialCode != null
@@ -125,6 +133,10 @@ export function createProject(data: CreateProjectData): Project {
     svgContents: data.svgContents,
     mediaFolder,
     styleMode: data.styleMode,
+    transitionStyle: data.transitionStyle,
+    // SFX defaults on for everything except terminal recordings.
+    useSfx: data.useSfx ?? data.animationType !== "terminal",
+    collectionId: data.collectionId,
     createdAt: now,
     updatedAt: now,
   };

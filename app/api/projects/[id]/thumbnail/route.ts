@@ -39,7 +39,7 @@ export async function POST(
   const { width, height } = getResolution(project.settings.orientation, project.settings.resolution);
 
   try {
-    await renderThumbnail(id, project.code, project.settings.fps, width, height);
+    await renderThumbnail(id, project.code, project.settings.fps, width, height, undefined, project.svgContents);
     return Response.json({ success: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Thumbnail render failed";

@@ -1,0 +1,8 @@
+[
+  { "file": "whoosh-fast.mp3", "category": "whoosh", "useWhen": "Fast directional transitions, text or shapes sliding in, quick camera moves" },
+  { "file": "pop-soft.mp3", "category": "pop", "useWhen": "A single element, word, or icon popping into view" },
+  { "file": "impact-deep.mp3", "category": "impact", "useWhen": "A big stat, hero word, or logo landing hard on the beat" },
+  { "file": "riser-short.mp3", "category": "riser", "useWhen": "Building anticipation in the ~15 frames just before a reveal" },
+  { "file": "click-tick.mp3", "category": "click", "useWhen": "List items appearing one by one, UI ticks, subtle metronome beats" },
+  { "file": "swish-transition.mp3", "category": "transition", "useWhen": "Scene-to-scene wipes or section changes" }
+]

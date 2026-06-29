@@ -3,6 +3,7 @@
 import React, { useMemo, Component, type ReactNode } from "react";
 import { Player } from "@remotion/player";
 import { evalSceneCode } from "@/remotion/DynamicScene";
+import { SvgFramesProvider, type SvgFrameSlot } from "@/remotion/motion";
 import { AbsoluteFill } from "remotion";
 
 const Fallback: React.FC = () => (
@@ -68,9 +69,10 @@ interface PreviewPanelProps {
   code: string;
   width?: number;
   height?: number;
+  svgContents?: SvgFrameSlot[];
 }
 
-export default function PreviewPanel({ code, width = 3840, height = 2160 }: PreviewPanelProps) {
+export default function PreviewPanel({ code, width = 3840, height = 2160, svgContents }: PreviewPanelProps) {
   const aspectRatio = `${width}/${height}`;
   const { SceneComponent, durationInFrames, fps } = useMemo(() => {
     if (!code || !code.trim()) {
@@ -80,12 +82,18 @@ export default function PreviewPanel({ code, width = 3840, height = 2160 }: Prev
     if (!result) {
       return { SceneComponent: Fallback, durationInFrames: 250, fps: 25 };
     }
+    const Inner = result.component;
+    const Wrapped: React.FC = () => (
+      <SvgFramesProvider value={svgContents ?? []}>
+        <Inner />
+      </SvgFramesProvider>
+    );
     return {
-      SceneComponent: result.component,
+      SceneComponent: Wrapped,
       durationInFrames: result.durationInFrames,
       fps: result.fps,
     };
-  }, [code]);
+  }, [code, svgContents]);
 
   const seconds = (durationInFrames / fps).toFixed(1);
 

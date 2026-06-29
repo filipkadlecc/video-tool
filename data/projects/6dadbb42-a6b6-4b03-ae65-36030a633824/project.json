@@ -1,0 +1,15 @@
+{
+  "id": "6dadbb42-a6b6-4b03-ae65-36030a633824",
+  "name": "Background dots pop-in",
+  "animationType": "animation",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import React from \"react\";\nimport { AbsoluteFill, useCurrentFrame, interpolate, Easing } from \"remotion\";\n\nexport const fps = 25;\nexport const durationInFrames = 100;\n\nconst DOT_COLOR = \"#84300A\";\n\nconst VB_WIDTH = 3846;\nconst VB_HEIGHT = 2459;\n\nconst TILE_W = 269.64;\nconst TILE_H = 224.7;\nconst SCALE = 3.21;\n\nconst DOT_OFFSETS_PATTERN: Array<[number, number]> = [\n  [7, 7], [7, 30], [7, 52],\n  [36, 7], [36, 30], [36, 52],\n  [65, 7], [65, 30], [65, 52],\n];\n\nconst DOTS: Array<{ x: number; y: number }> = (() => {\n  const out: Array<{ x: number; y: number }> = [];\n  const cols = Math.ceil(VB_WIDTH / TILE_W) + 1;\n  const rows = Math.ceil(VB_HEIGHT / TILE_H) + 1;\n  for (let ty = 0; ty < rows; ty++) {\n    for (let tx = 0; tx < cols; tx++) {\n      for (const [px, py] of DOT_OFFSETS_PATTERN) {\n        const x = tx * TILE_W + px * SCALE;\n        const y = ty * TILE_H + py * SCALE;\n        if (x < 0 || x > VB_WIDTH || y < 0 || y > VB_HEIGHT) continue;\n        out.push({ x, y });\n      }\n    }\n  }\n  return out;\n})();\n\nconst DIAG_MAX = VB_WIDTH + VB_HEIGHT;\nconst STAGGER_FRAMES = 45;\nconst POP_FRAMES = 22;\nconst DECELERATE = Easing.out(Easing.exp);\n\nexport default function BackgroundDots() {\n  const frame = useCurrentFrame();\n  return (\n    <AbsoluteFill>\n      <svg\n        width=\"100%\"\n        height=\"100%\"\n        viewBox={`0 0 ${VB_WIDTH} ${VB_HEIGHT}`}\n        preserveAspectRatio=\"xMidYMid slice\"\n        xmlns=\"http://www.w3.org/2000/svg\"\n      >\n        {DOTS.map((d, i) => {\n          const delay = ((d.x + d.y) / DIAG_MAX) * STAGGER_FRAMES;\n          const scale = interpolate(\n            frame - delay,\n            [0, POP_FRAMES],\n            [0, 1],\n            {\n              extrapolateLeft: \"clamp\",\n              extrapolateRight: \"clamp\",\n              easing: DECELERATE,\n            }\n          );\n          return (\n            <circle\n              key={i}\n              cx={d.x}\n              cy={d.y}\n              r={SCALE * scale}\n              fill={DOT_COLOR}\n            />\n          );\n        })}\n      </svg>\n    </AbsoluteFill>\n  );\n}\n",
+  "chatHistory": [],
+  "initialPrompt": "Remotion animation of Background_Dots.svg: dots pop in from 0 to 100% scale one by one, staggered diagonally from top-left to bottom-right. 4K horizontal 16:9 at 25fps. Preserves the source SVG colors (#161718 bg, #84300A dots, black border).",
+  "createdAt": "2026-06-03T00:00:00.000Z",
+  "updatedAt": "2026-06-03T00:00:00.000Z"
+}

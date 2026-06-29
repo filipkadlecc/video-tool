@@ -3,10 +3,12 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import Icon from "@/components/ui/Icon";
 import TapeExamplesPicker from "@/components/TapeExamplesPicker";
+import TerminalTimeline from "@/components/TerminalTimeline";
 import { Player, type PlayerRef } from "@remotion/player";
 import TerminalRecording, {
   END_CARD_FRAMES,
   terminalTotalFrames,
+  normalizeRectToCompAspect,
 } from "@/remotion/scenes/terminal/TerminalRecording";
 import type {
   TerminalAnnotations,
@@ -22,6 +24,8 @@ interface TerminalPreviewProps {
   onReplaceCode?: (next: string) => void;
   annotations?: TerminalAnnotations;
   onAnnotationsChange?: (next: TerminalAnnotations | undefined) => void;
+  customTheme?: boolean;
+  onCustomThemeChange?: (next: boolean) => void;
 }
 
 interface ProbeResult {
@@ -72,6 +76,8 @@ export default function TerminalPreview({
   onReplaceCode,
   annotations,
   onAnnotationsChange,
+  customTheme,
+  onCustomThemeChange,
 }: TerminalPreviewProps) {
   const [src, setSrc] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -472,6 +478,34 @@ export default function TerminalPreview({
 
         <div style={{ flex: 1 }} />
 
+        {onCustomThemeChange && (
+          <button
+            onClick={() => onCustomThemeChange(!customTheme)}
+            title={
+              customTheme
+                ? "Custom theme is ON — AI will preserve your Set Theme line."
+                : "Click to enable custom theme. While off, AI forces the Apify default theme."
+            }
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              height: 26,
+              background: customTheme ? "var(--accent)" : "var(--bg-3)",
+              color: customTheme ? "var(--accent-ink)" : "var(--text-1)",
+              border: customTheme ? "none" : "0.5px solid var(--line-2)",
+              borderRadius: "var(--r-sm)",
+              fontSize: 11,
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            <Icon name="sparkle" size={11} />
+            {customTheme ? "Custom theme" : "Brand theme"}
+          </button>
+        )}
+
         {onReplaceCode && (
           <button
             onClick={() => setExamplesOpen(true)}
@@ -625,13 +659,11 @@ export default function TerminalPreview({
                       </div>
                     )}
                     {drawRect && (() => {
-                      const t = Math.max(drawRect.w, drawRect.h);
-                      const cx = drawRect.x + drawRect.w / 2;
-                      const cy = drawRect.y + drawRect.h / 2;
-                      const nx = Math.max(0, Math.min(1 - t, cx - t / 2));
-                      const ny = Math.max(0, Math.min(1 - t, cy - t / 2));
+                      const norm = normalizeRectToCompAspect(drawRect);
+                      const expanded = Math.abs(norm.w - drawRect.w) > 0.005 || Math.abs(norm.h - drawRect.h) > 0.005;
                       return (
                         <>
+                          {/* User's draw rectangle (what they actually dragged). */}
                           <div
                             style={{
                               position: "absolute",
@@ -639,22 +671,42 @@ export default function TerminalPreview({
                               top: `${drawRect.y * 100}%`,
                               width: `${drawRect.w * 100}%`,
                               height: `${drawRect.h * 100}%`,
-                              border: "1px dashed rgba(255,100,184,0.6)",
+                              border: "1px dashed rgba(255,255,255,0.5)",
                               pointerEvents: "none",
                             }}
                           />
+                          {/* Ghost: the rect actually zoomed into (squared to comp aspect). */}
                           <div
                             style={{
                               position: "absolute",
-                              left: `${nx * 100}%`,
-                              top: `${ny * 100}%`,
-                              width: `${t * 100}%`,
-                              height: `${t * 100}%`,
+                              left: `${norm.x * 100}%`,
+                              top: `${norm.y * 100}%`,
+                              width: `${norm.w * 100}%`,
+                              height: `${norm.h * 100}%`,
                               border: "2px solid var(--accent)",
                               background: "rgba(255,100,184,0.18)",
                               pointerEvents: "none",
                             }}
                           />
+                          {expanded && drawRect.w > 0.02 && drawRect.h > 0.02 && (
+                            <div
+                              className="mono"
+                              style={{
+                                position: "absolute",
+                                left: `${norm.x * 100}%`,
+                                top: `calc(${(norm.y + norm.h) * 100}% + 4px)`,
+                                padding: "2px 6px",
+                                fontSize: 10,
+                                color: "var(--accent-ink)",
+                                background: "var(--accent)",
+                                borderRadius: 3,
+                                whiteSpace: "nowrap",
+                                pointerEvents: "none",
+                              }}
+                            >
+                              Expanded to match composition aspect
+                            </div>
+                          )}
                         </>
                       );
                     })()}
@@ -760,6 +812,7 @@ export default function TerminalPreview({
 
         {canAnnotate && (
           <AnnotatorPanel
+            code={code}
             annotations={annotations!}
             currentFrame={currentFrame}
             drawMode={drawMode}
@@ -859,9 +912,158 @@ export default function TerminalPreview({
   );
 }
 
+/* ---------- Zoom row (timing + easing controls) ---------- */
+
+const ZOOM_EASING_OPTIONS: { value: "snap" | "smooth" | "linear"; label: string }[] = [
+  { value: "snap", label: "Snap" },
+  { value: "smooth", label: "Smooth" },
+  { value: "linear", label: "Linear" },
+];
+
+interface ZoomRowProps {
+  zoom: TerminalZoom;
+  fps: number;
+  videoDurationFrames: number;
+  onUpdate: (partial: Partial<TerminalZoom>) => void;
+  onDelete: () => void;
+}
+
+function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRowProps) {
+  const holdFrames = Math.max(1, zoom.endFrame - zoom.startFrame);
+  const rampIn = zoom.rampInFrames ?? 8;
+  const rampOut = zoom.rampOutFrames ?? 24;
+  const easing = zoom.easing ?? "snap";
+
+  const setHold = (frames: number) => {
+    const clamped = Math.max(1, Math.min(videoDurationFrames - zoom.startFrame - 1, frames));
+    onUpdate({ endFrame: zoom.startFrame + clamped });
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 9,
+    color: "var(--text-3)",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: 44,
+    padding: "1px 4px",
+    fontSize: 10,
+    background: "var(--bg-2)",
+    color: "var(--text-1)",
+    border: "0.5px solid var(--line-2)",
+    borderRadius: 3,
+    fontFamily: "var(--mono)",
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        padding: "6px 8px",
+        background: "var(--bg-3)",
+        border: "0.5px solid var(--line-2)",
+        borderRadius: 4,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 11,
+          color: "var(--text-2)",
+        }}
+      >
+        <span style={{ color: "var(--accent)" }}>●</span>
+        <span className="mono nums">
+          zoom · {(zoom.startFrame / fps).toFixed(2)}s → {(zoom.endFrame / fps).toFixed(2)}s
+        </span>
+        <span style={{ color: "var(--text-3)" }}>
+          rect {(zoom.rect.w * 100).toFixed(0)}×{(zoom.rect.h * 100).toFixed(0)}%
+        </span>
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={onDelete}
+          style={{
+            padding: "2px 6px",
+            fontSize: 10,
+            background: "transparent",
+            color: "var(--text-3)",
+            border: "0.5px solid var(--line-2)",
+            borderRadius: 3,
+            cursor: "pointer",
+          }}
+        >
+          remove
+        </button>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={labelStyle}>Hold</span>
+          <input
+            type="number"
+            min={1}
+            value={holdFrames}
+            onChange={(e) => setHold(Number(e.target.value) || 1)}
+            style={inputStyle}
+          />
+          <span style={{ ...labelStyle, textTransform: "none" }}>frames</span>
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={labelStyle}>Ramp in</span>
+          <input
+            type="number"
+            min={0}
+            value={rampIn}
+            onChange={(e) => onUpdate({ rampInFrames: Math.max(0, Number(e.target.value) || 0) })}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={labelStyle}>Ramp out</span>
+          <input
+            type="number"
+            min={0}
+            value={rampOut}
+            onChange={(e) => onUpdate({ rampOutFrames: Math.max(0, Number(e.target.value) || 0) })}
+            style={inputStyle}
+          />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={labelStyle}>Easing</span>
+          <select
+            value={easing}
+            onChange={(e) => onUpdate({ easing: e.target.value as "snap" | "smooth" | "linear" })}
+            style={{
+              padding: "1px 4px",
+              fontSize: 10,
+              background: "var(--bg-2)",
+              color: "var(--text-1)",
+              border: "0.5px solid var(--line-2)",
+              borderRadius: 3,
+              fontFamily: "var(--mono)",
+            }}
+          >
+            {ZOOM_EASING_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Annotator panel ---------- */
 
 interface AnnotatorPanelProps {
+  code: string;
   annotations: TerminalAnnotations;
   currentFrame: number;
   drawMode: boolean;
@@ -880,6 +1082,7 @@ interface AnnotatorPanelProps {
 }
 
 function AnnotatorPanel({
+  code,
   annotations,
   currentFrame,
   drawMode,
@@ -896,7 +1099,6 @@ function AnnotatorPanel({
   onUpdateEndCard,
   onSeek,
 }: AnnotatorPanelProps) {
-  const trackRef = useRef<HTMLDivElement>(null);
   const freezes = annotations.freezes ?? [];
   const freezeTotalFrames = freezes.reduce((sum, f) => sum + f.durationFrames, 0);
   const { videoDurationFrames, fps } = annotations;
@@ -956,140 +1158,28 @@ function AnnotatorPanel({
         </div>
       </div>
 
-      {/* Timeline strip */}
-      <div
-        ref={trackRef}
-        style={{
-          position: "relative",
-          height: 28,
-          background: "var(--bg-3)",
-          border: "0.5px solid var(--line-2)",
-          borderRadius: 4,
-          overflow: "hidden",
-        }}
-      >
-        {(() => {
-          const videoPortion = videoDurationFrames + freezeTotalFrames;
-          const total = videoPortion + (annotations.endCard ? END_CARD_FRAMES : 0);
-          return (
-            <>
-              {/* video region marker */}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: 0,
-                  width: `${(videoPortion / total) * 100}%`,
-                  background: "rgba(255,255,255,0.04)",
-                }}
-              />
-              {freezes.map((f) => (
-                <FreezeChip
-                  key={f.id}
-                  freeze={f}
-                  total={total}
-                  trackRef={trackRef}
-                  videoPortion={videoPortion}
-                  onUpdate={(partial) => onUpdateFreeze(f.id, partial)}
-                  onSeek={() => onSeek(f.atCompFrame)}
-                />
-              ))}
-              {annotations.zooms.map((z) => (
-                <ZoomChip
-                  key={z.id}
-                  zoom={z}
-                  total={total}
-                  videoDurationFrames={videoPortion}
-                  trackRef={trackRef}
-                  onUpdate={(partial) => onUpdateZoom(z.id, partial)}
-                  onSeek={() => onSeek(z.startFrame)}
-                />
-              ))}
-              {annotations.banner && (
-                <div
-                  title={`Banner ${annotations.banner.startFrame}–${annotations.banner.endFrame}`}
-                  onClick={() => onSeek(annotations.banner!.startFrame)}
-                  style={{
-                    position: "absolute",
-                    top: 4,
-                    bottom: 4,
-                    left: `${(annotations.banner.startFrame / total) * 100}%`,
-                    width: `${((annotations.banner.endFrame - annotations.banner.startFrame) / total) * 100}%`,
-                    background: "rgba(100,180,255,0.35)",
-                    border: "1px solid #5aa8ff",
-                    borderRadius: 2,
-                    cursor: "pointer",
-                  }}
-                />
-              )}
-              {annotations.endCard && (
-                <EndCardChip
-                  endCard={annotations.endCard}
-                  total={total}
-                  videoPortion={videoPortion}
-                  trackRef={trackRef}
-                  onUpdate={onUpdateEndCard}
-                  onSeek={() => onSeek(annotations.endCard?.startFrame ?? videoPortion)}
-                />
-              )}
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: `${(currentFrame / Math.max(1, total)) * 100}%`,
-                  width: 1,
-                  background: "var(--text-1)",
-                  pointerEvents: "none",
-                }}
-              />
-            </>
-          );
-        })()}
-      </div>
+      <TerminalTimeline
+        code={code}
+        annotations={annotations}
+        currentFrame={currentFrame}
+        onSeek={onSeek}
+        onUpdateZoom={onUpdateZoom}
+        onUpdateFreeze={onUpdateFreeze}
+        onUpdateEndCard={onUpdateEndCard}
+      />
 
       {/* Lists */}
       {annotations.zooms.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {annotations.zooms.map((z) => (
-            <div
+            <ZoomRow
               key={z.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                fontSize: 11,
-                color: "var(--text-2)",
-                padding: "4px 8px",
-                background: "var(--bg-3)",
-                border: "0.5px solid var(--line-2)",
-                borderRadius: 4,
-              }}
-            >
-              <span style={{ color: "var(--accent)" }}>●</span>
-              <span className="mono nums">
-                zoom · {(z.startFrame / fps).toFixed(2)}s → {(z.endFrame / fps).toFixed(2)}s
-              </span>
-              <span style={{ color: "var(--text-3)" }}>
-                rect {(z.rect.w * 100).toFixed(0)}×{(z.rect.h * 100).toFixed(0)}%
-              </span>
-              <div style={{ flex: 1 }} />
-              <button
-                onClick={() => onDeleteZoom(z.id)}
-                style={{
-                  padding: "2px 6px",
-                  fontSize: 10,
-                  background: "transparent",
-                  color: "var(--text-3)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: 3,
-                  cursor: "pointer",
-                }}
-              >
-                remove
-              </button>
-            </div>
+              zoom={z}
+              fps={fps}
+              videoDurationFrames={annotations.videoDurationFrames}
+              onUpdate={(partial) => onUpdateZoom(z.id, partial)}
+              onDelete={() => onDeleteZoom(z.id)}
+            />
           ))}
         </div>
       )}
@@ -1209,260 +1299,6 @@ function AnnotatorPanel({
   );
 }
 
-interface ZoomChipProps {
-  zoom: TerminalZoom;
-  total: number;
-  videoDurationFrames: number;
-  trackRef: React.RefObject<HTMLDivElement | null>;
-  onUpdate: (partial: Partial<TerminalZoom>) => void;
-  onSeek: () => void;
-}
-
-function ZoomChip({ zoom, total, videoDurationFrames, trackRef, onUpdate, onSeek }: ZoomChipProps) {
-  const dragRef = useRef<{
-    mode: "move" | "left" | "right";
-    startX: number;
-    pxPerFrame: number;
-    origStart: number;
-    origEnd: number;
-    moved: boolean;
-  } | null>(null);
-
-  const beginDrag = (mode: "move" | "left" | "right") => (e: React.MouseEvent) => {
-    if (!trackRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = trackRef.current.getBoundingClientRect();
-    const pxPerFrame = rect.width / total;
-    dragRef.current = {
-      mode,
-      startX: e.clientX,
-      pxPerFrame,
-      origStart: zoom.startFrame,
-      origEnd: zoom.endFrame,
-      moved: false,
-    };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const d = dragRef.current;
-      const deltaFrames = Math.round((ev.clientX - d.startX) / d.pxPerFrame);
-      if (Math.abs(deltaFrames) >= 1) d.moved = true;
-      const cap = videoDurationFrames - 1;
-      if (d.mode === "move") {
-        const len = d.origEnd - d.origStart;
-        let nextStart = Math.max(0, Math.min(cap - len, d.origStart + deltaFrames));
-        onUpdate({ startFrame: nextStart, endFrame: nextStart + len });
-      } else if (d.mode === "left") {
-        const nextStart = Math.max(0, Math.min(d.origEnd - 1, d.origStart + deltaFrames));
-        onUpdate({ startFrame: nextStart });
-      } else {
-        const nextEnd = Math.max(d.origStart + 1, Math.min(cap, d.origEnd + deltaFrames));
-        onUpdate({ endFrame: nextEnd });
-      }
-    };
-    const onUp = () => {
-      const didMove = dragRef.current?.moved ?? false;
-      dragRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      if (!didMove) onSeek();
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  return (
-    <div
-      title={`Zoom ${zoom.startFrame}–${zoom.endFrame}`}
-      onMouseDown={beginDrag("move")}
-      style={{
-        position: "absolute",
-        top: 4,
-        bottom: 4,
-        left: `${(zoom.startFrame / total) * 100}%`,
-        width: `${((zoom.endFrame - zoom.startFrame) / total) * 100}%`,
-        background: "rgba(255,100,184,0.45)",
-        border: "1px solid var(--accent)",
-        borderRadius: 2,
-        cursor: "grab",
-      }}
-    >
-      <div
-        onMouseDown={beginDrag("left")}
-        style={{
-          position: "absolute",
-          left: -2,
-          top: -1,
-          bottom: -1,
-          width: 6,
-          cursor: "ew-resize",
-          background: "var(--accent)",
-          borderRadius: 1,
-        }}
-      />
-      <div
-        onMouseDown={beginDrag("right")}
-        style={{
-          position: "absolute",
-          right: -2,
-          top: -1,
-          bottom: -1,
-          width: 6,
-          cursor: "ew-resize",
-          background: "var(--accent)",
-          borderRadius: 1,
-        }}
-      />
-    </div>
-  );
-}
-
-interface EndCardChipProps {
-  endCard: TerminalEndCard;
-  total: number;
-  videoPortion: number;
-  trackRef: React.RefObject<HTMLDivElement | null>;
-  onUpdate: (partial: Partial<TerminalEndCard>) => void;
-  onSeek: () => void;
-}
-
-function EndCardChip({ endCard, total, videoPortion, trackRef, onUpdate, onSeek }: EndCardChipProps) {
-  const start = endCard.startFrame ?? videoPortion;
-  const dragRef = useRef<{ startX: number; pxPerFrame: number; origStart: number; moved: boolean } | null>(null);
-
-  const onMouseDown = (e: React.MouseEvent) => {
-    if (!trackRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = trackRef.current.getBoundingClientRect();
-    dragRef.current = { startX: e.clientX, pxPerFrame: rect.width / total, origStart: start, moved: false };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const d = dragRef.current;
-      const delta = Math.round((ev.clientX - d.startX) / d.pxPerFrame);
-      if (Math.abs(delta) >= 1) d.moved = true;
-      const next = Math.max(0, d.origStart + delta);
-      onUpdate({ startFrame: next });
-    };
-    const onUp = () => {
-      const didMove = dragRef.current?.moved ?? false;
-      dragRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      if (!didMove) onSeek();
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  return (
-    <div
-      title="End card (drag to reposition)"
-      onMouseDown={onMouseDown}
-      style={{
-        position: "absolute",
-        top: 4,
-        bottom: 4,
-        left: `${(start / total) * 100}%`,
-        width: `${(END_CARD_FRAMES / total) * 100}%`,
-        background: "rgba(150,255,180,0.35)",
-        border: "1px solid #6cd99a",
-        borderRadius: 2,
-        cursor: "grab",
-      }}
-    />
-  );
-}
-
-interface FreezeChipProps {
-  freeze: TerminalFreeze;
-  total: number;
-  videoPortion: number;
-  trackRef: React.RefObject<HTMLDivElement | null>;
-  onUpdate: (partial: Partial<TerminalFreeze>) => void;
-  onSeek: () => void;
-}
-
-function FreezeChip({ freeze, total, videoPortion, trackRef, onUpdate, onSeek }: FreezeChipProps) {
-  const dragRef = useRef<{
-    mode: "move" | "right";
-    startX: number;
-    pxPerFrame: number;
-    origAt: number;
-    origDur: number;
-    moved: boolean;
-  } | null>(null);
-
-  const beginDrag = (mode: "move" | "right") => (e: React.MouseEvent) => {
-    if (!trackRef.current) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const rect = trackRef.current.getBoundingClientRect();
-    const pxPerFrame = rect.width / total;
-    dragRef.current = {
-      mode,
-      startX: e.clientX,
-      pxPerFrame,
-      origAt: freeze.atCompFrame,
-      origDur: freeze.durationFrames,
-      moved: false,
-    };
-    const onMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const d = dragRef.current;
-      const deltaFrames = Math.round((ev.clientX - d.startX) / d.pxPerFrame);
-      if (Math.abs(deltaFrames) >= 1) d.moved = true;
-      if (d.mode === "move") {
-        const nextAt = Math.max(0, Math.min(videoPortion - d.origDur, d.origAt + deltaFrames));
-        onUpdate({ atCompFrame: nextAt });
-      } else {
-        const nextDur = Math.max(2, d.origDur + deltaFrames);
-        onUpdate({ durationFrames: nextDur });
-      }
-    };
-    const onUp = () => {
-      const didMove = dragRef.current?.moved ?? false;
-      dragRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      if (!didMove) onSeek();
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
-  return (
-    <div
-      title={`Freeze at ${freeze.atCompFrame} for ${freeze.durationFrames}`}
-      onMouseDown={beginDrag("move")}
-      style={{
-        position: "absolute",
-        top: 4,
-        bottom: 4,
-        left: `${(freeze.atCompFrame / total) * 100}%`,
-        width: `${(freeze.durationFrames / total) * 100}%`,
-        background: "rgba(230,196,92,0.45)",
-        border: "1px solid #e6c45c",
-        borderRadius: 2,
-        cursor: "grab",
-      }}
-    >
-      <div
-        onMouseDown={beginDrag("right")}
-        style={{
-          position: "absolute",
-          right: -2,
-          top: -1,
-          bottom: -1,
-          width: 6,
-          cursor: "ew-resize",
-          background: "#e6c45c",
-          borderRadius: 1,
-        }}
-      />
-    </div>
-  );
-}
 
 const panelButtonStyle: React.CSSProperties = {
   padding: "5px 10px",

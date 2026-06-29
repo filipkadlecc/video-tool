@@ -53,6 +53,118 @@ function resolveNumericExpr(expr: string, constants: Record<string, number>): nu
   return null;
 }
 
+/**
+ * Source-mapped view of a `<Sequence from={N} durationInFrames={N}>...</Sequence>`
+ * block. Used by the editable-timeline scene mode to patch numeric attributes
+ * in place without regenerating the whole composition.
+ *
+ * Only handles plain `<Sequence>`; `TransitionSeries.Sequence` /
+ * `Series.Sequence` are excluded because their `from` is implicit.
+ */
+export interface SequenceBlock {
+  from: number;
+  durationInFrames: number;
+  blockStart: number;          // index of the opening "<"
+  blockEnd: number;            // index just past the closing "</Sequence>"
+  fromValueStart: number;      // index of the first char of the value inside from={...}
+  fromValueEnd: number;        // index of the closing "}" of from={...}
+  durationValueStart: number;
+  durationValueEnd: number;
+  hasNonNumericFrom: boolean;       // true if the attribute value isn't a bare integer
+  hasNonNumericDuration: boolean;
+}
+
+function findAttrValueRange(
+  source: string,
+  openTagStart: number,
+  openTagEnd: number,
+  attrName: string,
+): { start: number; end: number; raw: string } | null {
+  const slice = source.slice(openTagStart, openTagEnd);
+  const re = new RegExp(`\\b${attrName}\\s*=\\s*\\{`);
+  const m = re.exec(slice);
+  if (!m) return null;
+  // Find the matching brace from the opening `{`.
+  const openIdx = openTagStart + m.index + m[0].length - 1; // index of `{`
+  let depth = 0;
+  for (let i = openIdx; i < openTagEnd; i++) {
+    const ch = source[i];
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return { start: openIdx + 1, end: i, raw: source.slice(openIdx + 1, i) };
+      }
+    }
+  }
+  return null;
+}
+
+export function parseSequenceBlocks(code: string, fps: number): SequenceBlock[] {
+  if (!code || !code.trim()) return [];
+
+  const constants: Record<string, number> = { fps };
+  const constRegex = /(?:const|let|var)\s+(\w+)\s*=\s*(\d+)/g;
+  let cm: RegExpExecArray | null;
+  while ((cm = constRegex.exec(code)) !== null) {
+    constants[cm[1]] = parseInt(cm[2], 10);
+  }
+  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*=\s*(\d+)/);
+  if (fpsExport) constants.fps = parseInt(fpsExport[1], 10);
+
+  const blocks: SequenceBlock[] = [];
+  // Match opening tag <Sequence ...> (NOT TransitionSeries.Sequence / Series.Sequence).
+  const openRe = /<Sequence\b([^>]*)>/g;
+  let om: RegExpExecArray | null;
+  while ((om = openRe.exec(code)) !== null) {
+    const openStart = om.index;
+    const openEnd = om.index + om[0].length;
+    // Find matching </Sequence>, allowing nested <Sequence> within (shouldn't
+    // happen for our use case, but cheap to support).
+    let depth = 1;
+    const nestedRe = /<Sequence\b|<\/Sequence>/g;
+    nestedRe.lastIndex = openEnd;
+    let blockEnd = -1;
+    let nm: RegExpExecArray | null;
+    while ((nm = nestedRe.exec(code)) !== null) {
+      if (nm[0] === "</Sequence>") {
+        depth--;
+        if (depth === 0) {
+          blockEnd = nm.index + nm[0].length;
+          break;
+        }
+      } else {
+        depth++;
+      }
+    }
+    if (blockEnd === -1) continue;
+
+    const fromRange = findAttrValueRange(code, openStart, openEnd, "from");
+    const durRange = findAttrValueRange(code, openStart, openEnd, "durationInFrames");
+    if (!fromRange || !durRange) continue;
+
+    const fromVal = resolveNumericExpr(fromRange.raw, constants);
+    const durVal = resolveNumericExpr(durRange.raw, constants);
+    if (fromVal === null || durVal === null) continue;
+
+    blocks.push({
+      from: fromVal,
+      durationInFrames: durVal,
+      blockStart: openStart,
+      blockEnd,
+      fromValueStart: fromRange.start,
+      fromValueEnd: fromRange.end,
+      durationValueStart: durRange.start,
+      durationValueEnd: durRange.end,
+      hasNonNumericFrom: !/^\s*\d+\s*$/.test(fromRange.raw),
+      hasNonNumericDuration: !/^\s*\d+\s*$/.test(durRange.raw),
+    });
+  }
+
+  blocks.sort((a, b) => a.blockStart - b.blockStart);
+  return blocks;
+}
+
 export function parseTimeline(code: string, fps: number): TimelineClip[] {
   if (!code || !code.trim()) return [];
 

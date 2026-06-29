@@ -1,17 +1,36 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
-import type { ChatMessage, SvgFile } from "@/lib/types";
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import type { ChatMessage, SvgFile, Engine } from "@/lib/types";
 import Icon from "@/components/ui/Icon";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
+import { normalizeTapeQuotes } from "@/lib/tape-parser";
 
-function extractCodeFromResponse(text: string): string {
-  const fenceMatch = text.match(/```(?:tsx|typescript|jsx)?\s*\n([\s\S]*?)```/);
-  if (fenceMatch) return fenceMatch[1].trim();
-  const openFence = text.match(/```(?:tsx|typescript|jsx)?\s*\n([\s\S]*)/);
-  if (openFence) return openFence[1].trim();
-  return text.trim();
+function extractCodeFromResponse(text: string, animationType?: string): string {
+  // Accept tsx/js/html fences — HyperFrames scenes come back as ```js (or ```html).
+  const fenceMatch = text.match(/```(?:tsx|typescript|jsx|js|javascript|html|tape|vhs)?\s*\n([\s\S]*?)```/);
+  let extracted = "";
+  if (fenceMatch) {
+    extracted = fenceMatch[1].trim();
+  } else {
+    const openFence = text.match(/```(?:tsx|typescript|jsx|js|javascript|html|tape|vhs)?\s*\n([\s\S]*)/);
+    if (openFence) {
+      extracted = openFence[1].trim();
+    } else if (animationType === "terminal" && text.trim().length > 0) {
+      // No code fence. For terminal projects, the AI is instructed to emit only
+      // the .tape content, so an unfenced response is the script itself.
+      extracted = text.trim();
+    }
+    // For non-terminal types with no fence, the model usually returns
+    // prose-only; returning that would clobber Scene.tsx with markdown, so we
+    // signal "no code" and preserve the existing file.
+  }
+  if (!extracted) return "";
+  // VHS doesn't support backslash-escaped quotes; the AI occasionally emits
+  // them anyway. Rewrite Type lines to use a quote style that actually parses.
+  if (animationType === "terminal") extracted = normalizeTapeQuotes(extracted);
+  return extracted;
 }
 
 interface SvgAttachment {
@@ -23,6 +42,13 @@ interface SvgAttachment {
 interface SvgAssetOption {
   name: string;
   path: string;
+}
+
+export interface ChatPanelHandle {
+  /** Programmatically send a prompt as if the user had typed it.
+   *  Pass `overrideCode` when the caller has just mutated the editor code
+   *  and React hasn't yet propagated the new value into our props. */
+  runWithPrompt(prompt: string, opts?: { overrideCode?: string }): void;
 }
 
 interface ChatPanelProps {
@@ -39,6 +65,7 @@ interface ChatPanelProps {
     fps: number;
   };
   animationType: string;
+  engine?: Engine;
   notionContent?: string;
   scriptWithTimestamps?: string;
   svgContents?: SvgFile[];
@@ -48,28 +75,40 @@ interface ChatPanelProps {
   sceneError?: string;
   styleMode?: import("@/lib/types").StyleMode;
   onStyleModeChange?: (mode: import("@/lib/types").StyleMode) => void;
+  transitionStyle?: import("@/lib/types").TransitionStyle;
+  onTransitionStyleChange?: (mode: import("@/lib/types").TransitionStyle) => void;
+  useSfx?: boolean;
+  onUseSfxChange?: (v: boolean) => void;
 }
 
-export default function ChatPanel({
-  projectId,
-  chatHistory,
-  initialPrompt,
-  onCodeUpdate,
-  onChatUpdate,
-  isGenerating,
-  setIsGenerating,
-  projectSettings,
-  animationType,
-  notionContent,
-  scriptWithTimestamps,
-  svgContents,
-  currentCode,
-  autoSend,
-  onGenerationComplete,
-  sceneError,
-  styleMode,
-  onStyleModeChange,
-}: ChatPanelProps) {
+const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel(
+  {
+    projectId,
+    chatHistory,
+    initialPrompt,
+    onCodeUpdate,
+    onChatUpdate,
+    isGenerating,
+    setIsGenerating,
+    projectSettings,
+    animationType,
+    engine,
+    notionContent,
+    scriptWithTimestamps,
+    svgContents,
+    currentCode,
+    autoSend,
+    onGenerationComplete,
+    sceneError,
+    styleMode,
+    onStyleModeChange,
+    transitionStyle,
+    onTransitionStyleChange,
+    useSfx,
+    onUseSfxChange,
+  },
+  ref,
+) {
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
@@ -80,6 +119,11 @@ export default function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoSentRef = useRef(false);
   const svgPickerRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // Synchronous mirror of isGenerating — the prop's setter is async, so we
+  // can't rely on the React state to gate re-entry inside sendMessage when
+  // runWithPrompt fires while a stream is already in flight.
+  const generatingRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -138,9 +182,38 @@ export default function ChatPanel({
     }
   }
 
-  async function sendMessage(text: string) {
-    if (!text.trim() || isGenerating) return;
+  useImperativeHandle(
+    ref,
+    () => ({
+      runWithPrompt(prompt, opts) {
+        // Force preemption: if an autoSend / earlier prompt is mid-stream,
+        // abort it and start the new one immediately. Without this the snippet
+        // customize silently bails when autoSend is racing with the click.
+        sendMessage(prompt, opts?.overrideCode, { force: true });
+      },
+    }),
+    // sendMessage is stable for the lifetime of the component (defined inline),
+    // but its closure captures props — re-bind the handle whenever any prop
+    // sendMessage reads changes, otherwise runWithPrompt would use stale state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, transitionStyle, useSfx, attachedSvgs, sceneError],
+  );
 
+  async function sendMessage(text: string, overrideCode?: string, opts: { force?: boolean } = {}) {
+    if (!text.trim()) return;
+    if (generatingRef.current) {
+      if (opts.force && abortRef.current) {
+        // Cancel the in-flight stream. Its catch branch handles AbortError
+        // silently and won't append a stale assistant message.
+        abortRef.current.abort();
+      } else {
+        return;
+      }
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    generatingRef.current = true;
     setIsGenerating(true);
     setStreamingContent("");
 
@@ -172,6 +245,7 @@ export default function ChatPanel({
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: messagesForAI,
           projectSettings,
@@ -179,9 +253,12 @@ export default function ChatPanel({
           notionContent,
           scriptWithTimestamps,
           svgContents,
-          currentCode,
+          currentCode: overrideCode ?? currentCode,
           projectId,
           styleMode,
+          transitionStyle,
+          useSfx,
+          engine,
         }),
       });
 
@@ -210,7 +287,7 @@ export default function ChatPanel({
               const parsed = JSON.parse(data);
               if (parsed.text) {
                 fullResponse += parsed.text;
-                const extracted = extractCodeFromResponse(fullResponse);
+                const extracted = extractCodeFromResponse(fullResponse, animationType);
                 if (extracted && extracted.length > 50) {
                   onCodeUpdate(extracted);
                 }
@@ -222,12 +299,19 @@ export default function ChatPanel({
         }
       }
 
-      const finalCode = extractCodeFromResponse(fullResponse);
+      const finalCode = extractCodeFromResponse(fullResponse, animationType);
       if (finalCode && finalCode.length > 50) {
         onCodeUpdate(finalCode);
       }
 
-      const textOnly = fullResponse.replace(/```[\s\S]*?```/g, "").trim();
+      // For terminal projects, the AI may emit the entire .tape script without
+      // any fences (legacy responses) — treat the whole thing as code so it
+      // doesn't get duplicated into the chat as prose.
+      const hadFence = /```[\s\S]*?```/.test(fullResponse);
+      const textOnly =
+        animationType === "terminal" && !hadFence && finalCode && finalCode.length > 50
+          ? ""
+          : fullResponse.replace(/```[\s\S]*?```/g, "").trim();
       let doneNote: string;
       if (!fullResponse.trim()) {
         doneNote =
@@ -249,12 +333,24 @@ export default function ChatPanel({
         onGenerationComplete(finalCode, finalHistory);
       }
     } catch (err) {
+      // Preempted by a later runWithPrompt — drop the partial state silently.
+      // The new sendMessage call has already taken over generatingRef / abortRef
+      // and will emit its own chat updates.
+      if ((err as { name?: string } | null)?.name === "AbortError") {
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Unknown error";
       const errorMessage: ChatMessage = { role: "assistant", content: `Error: ${msg}` };
       onChatUpdate([...updatedHistory, errorMessage]);
     } finally {
-      setIsGenerating(false);
-      setStreamingContent("");
+      // Only clear the global flags if this invocation still owns them — a
+      // preempting call will have swapped abortRef.current to its own controller.
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        generatingRef.current = false;
+        setIsGenerating(false);
+        setStreamingContent("");
+      }
     }
   }
 
@@ -266,7 +362,8 @@ export default function ChatPanel({
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    // Enter sends; Shift+Enter inserts a newline.
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -310,6 +407,45 @@ export default function ChatPanel({
             <option value="editorial">style: editorial</option>
             <option value="cinematic">style: cinematic</option>
           </select>
+        )}
+        {onTransitionStyleChange && animationType !== "terminal" && animationType !== "video" && (
+          <select
+            value={transitionStyle ?? "cut"}
+            onChange={(e) => onTransitionStyleChange(e.target.value as import("@/lib/types").TransitionStyle)}
+            title="How scenes transition — affects the AI's scene handoffs"
+            style={{
+              fontSize: 10,
+              fontFamily: "var(--mono)",
+              padding: "3px 6px",
+              background: "var(--bg-3)",
+              color: "var(--text-1)",
+              border: "0.5px solid var(--line-2)",
+              borderRadius: 3,
+              cursor: "pointer",
+            }}
+          >
+            <option value="cut">transition: cut</option>
+            <option value="blend">transition: blend</option>
+            <option value="camera">transition: camera</option>
+          </select>
+        )}
+        {onUseSfxChange && animationType !== "terminal" && (
+          <button
+            onClick={() => onUseSfxChange(!useSfx)}
+            title="Toggle whether the AI may add sound effects"
+            className="mono"
+            style={{
+              fontSize: 10,
+              padding: "3px 6px",
+              background: useSfx ? "var(--accent-soft)" : "var(--bg-3)",
+              color: useSfx ? "var(--accent)" : "var(--text-2)",
+              border: `0.5px solid ${useSfx ? "var(--accent-line)" : "var(--line-2)"}`,
+              borderRadius: 3,
+              cursor: "pointer",
+            }}
+          >
+            sfx: {useSfx ? "on" : "off"}
+          </button>
         )}
         <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)" }}>
           {chatHistory.length} msgs
@@ -580,7 +716,7 @@ export default function ChatPanel({
             </div>
             <div style={{ flex: 1 }} />
             <span className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>
-              <Kbd>&#8984;</Kbd> <Kbd>&#9166;</Kbd>
+              <Kbd>&#9166;</Kbd>
             </span>
             <Button variant="primary" size="sm" onClick={handleSend} disabled={!input.trim() || isGenerating} icon="send">
               Send
@@ -590,7 +726,9 @@ export default function ChatPanel({
       </div>
     </div>
   );
-}
+});
+
+export default ChatPanel;
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (

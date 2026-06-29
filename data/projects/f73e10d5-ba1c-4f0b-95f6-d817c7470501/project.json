@@ -1,0 +1,49 @@
+{
+  "id": "f73e10d5-ba1c-4f0b-95f6-d817c7470501",
+  "name": "YouTube 4",
+  "animationType": "animation",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import React from \"react\";\nimport {\n  AbsoluteFill,\n  useCurrentFrame,\n  useVideoConfig,\n  interpolate,\n} from \"remotion\";\nimport { BRAND } from \"@/lib/brand\";\n\nexport const fps = 25;\n\nconst COLORS = {\n  card: BRAND.colors.card,\n  border: BRAND.colors.border,\n  text: BRAND.colors.text,\n  textMuted: BRAND.colors.textMuted,\n  textSubtle: BRAND.colors.textSubtle,\n  orange: BRAND.colors.orange,\n};\n\n// ============================================================\n// SPREADSHEET — YouTube scraping for AI video ideation\n// ============================================================\nconst SCENE_DURATION = 150;\n\nconst SpreadsheetCard: React.FC<{\n  fillProgress: number;\n}> = ({ fillProgress }) => {\n  const rows: [string, string, string][] = [\n    [\"I built an AI agent in 10 minutes\", \"2.4M\", \"9.8\"],\n    [\"The truth about GPT-5 for coding\", \"1.8M\", \"9.5\"],\n    [\"Why Claude beats ChatGPT in 2025\", \"1.3M\", \"9.2\"],\n    [\"I replaced my team with AI agents\", \"2.1M\", \"9.6\"],\n    [\"The AI tools nobody talks about\", \"2.7M\", \"9.9\"],\n  ];\n\n  return (\n    <div\n      style={{\n        width: 1600,\n        background: COLORS.card,\n        border: `1px solid ${COLORS.border}`,\n        borderRadius: 36,\n        display: \"flex\",\n        flexDirection: \"column\",\n        overflow: \"hidden\",\n        boxShadow: `0 40px 100px rgba(0,0,0,0.5)`,\n      }}\n    >\n      {/* Title bar */}\n      <div\n        style={{\n          padding: \"44px 56px\",\n          borderBottom: `1px solid ${COLORS.border}`,\n          display: \"flex\",\n          alignItems: \"center\",\n          gap: 28,\n        }}\n      >\n        <div\n          style={{\n            width: 96,\n            height: 96,\n            borderRadius: 20,\n            background: \"rgba(52, 168, 83, 0.15)\",\n            border: \"1.5px solid rgba(52, 168, 83, 0.5)\",\n            display: \"flex\",\n            alignItems: \"center\",\n            justifyContent: \"center\",\n            fontFamily: \"'GT Walsheim', Inter, sans-serif\",\n            fontSize: 52,\n            fontWeight: 800,\n            color: \"#34A853\",\n          }}\n        >\n          ⊞\n        </div>\n        <div style={{ display: \"flex\", flexDirection: \"column\", gap: 6 }}>\n          <div\n            style={{\n              fontFamily: \"Inter, sans-serif\",\n              fontSize: 30,\n              color: COLORS.textSubtle,\n              fontWeight: 500,\n              letterSpacing: \"0.08em\",\n              textTransform: \"uppercase\",\n            }}\n          >\n            YouTube Scraper\n          </div>\n          <div\n            style={{\n              fontFamily: \"'GT Walsheim', Inter, sans-serif\",\n              fontSize: 52,\n              color: COLORS.text,\n              fontWeight: 700,\n              letterSpacing: \"-0.02em\",\n            }}\n          >\n            ai_video_ideas.csv\n          </div>\n        </div>\n      </div>\n\n      {/* Column headers */}\n      <div\n        style={{\n          display: \"grid\",\n          gridTemplateColumns: \"100px 1fr 240px 200px\",\n          padding: \"28px 56px\",\n          background: \"rgba(255,255,255,0.03)\",\n          borderBottom: `1px solid ${COLORS.border}`,\n          gap: 28,\n        }}\n      >\n        {[\"#\", \"Video title\", \"Views\", \"Idea score\"].map((h, i) => (\n          <div\n            key={i}\n            style={{\n              fontFamily: \"Inter, sans-serif\",\n              fontSize: 26,\n              color: COLORS.textSubtle,\n              fontWeight: 600,\n              letterSpacing: \"0.08em\",\n              textTransform: \"uppercase\",\n            }}\n          >\n            {h}\n          </div>\n        ))}\n      </div>\n\n      {/* Data rows */}\n      <div style={{ padding: \"0 56px\" }}>\n        {rows.map((row, i) => {\n          const rowProgress = interpolate(\n            fillProgress,\n            [i / rows.length, (i + 1) / rows.length],\n            [0, 1],\n            { extrapolateLeft: \"clamp\", extrapolateRight: \"clamp\" }\n          );\n          return (\n            <div\n              key={i}\n              style={{\n                display: \"grid\",\n                gridTemplateColumns: \"100px 1fr 240px 200px\",\n                padding: \"36px 0\",\n                borderBottom:\n                  i < rows.length - 1 ? `1px solid ${COLORS.border}` : \"none\",\n                gap: 28,\n                opacity: rowProgress,\n                transform: `translateX(${interpolate(\n                  rowProgress,\n                  [0, 1],\n                  [-20, 0]\n                )}px)`,\n              }}\n            >\n              <div\n                style={{\n                  fontFamily: \"Inter, sans-serif\",\n                  fontSize: 32,\n                  color: COLORS.textSubtle,\n                  fontWeight: 500,\n                  fontVariantNumeric: \"tabular-nums\",\n                }}\n              >\n                {i + 1}\n              </div>\n              <div\n                style={{\n                  fontFamily: \"Inter, sans-serif\",\n                  fontSize: 34,\n                  color: COLORS.text,\n                  fontWeight: 600,\n                  whiteSpace: \"nowrap\",\n                  overflow: \"hidden\",\n                  textOverflow: \"ellipsis\",\n                }}\n              >\n                {row[0]}\n              </div>\n              <div\n                style={{\n                  fontFamily: \"Inter, sans-serif\",\n                  fontSize: 32,\n                  color: COLORS.textMuted,\n                  fontVariantNumeric: \"tabular-nums\",\n                }}\n              >\n                {row[1]}\n              </div>\n              <div\n                style={{\n                  fontFamily: \"Inter, sans-serif\",\n                  fontSize: 32,\n                  color: COLORS.orange,\n                  fontWeight: 700,\n                  fontVariantNumeric: \"tabular-nums\",\n                }}\n              >\n                ★ {row[2]}\n              </div>\n            </div>\n          );\n        })}\n      </div>\n    </div>\n  );\n};\n\nconst Scene: React.FC = () => {\n  const frame = useCurrentFrame();\n  const { fps } = useVideoConfig();\n\n  // Rows fill in over 50 frames (2s @ 25fps), starting from frame 0\n  const fillProgress = interpolate(frame, [0, 50], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\",\n  });\n\n  return (\n    <AbsoluteFill\n      style={{\n        fontFamily: \"Inter, sans-serif\",\n        display: \"flex\",\n        alignItems: \"center\",\n        justifyContent: \"center\",\n      }}\n    >\n      <SpreadsheetCard fillProgress={fillProgress} />\n    </AbsoluteFill>\n  );\n};\n\nexport const durationInFrames = SCENE_DURATION;\n\nexport default Scene;",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "I need an animation of a Apify Actor + a Spreadsheet and after that, a 20 minute clock going up fast (for a line that says \"in about 20 minutes\")"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "can you please only give me the spreadsheet itself? make it shorter, not wiggle around and on a transparent background\nIt is also only used for \"YouTube Scraping\" use case for ideating videos"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "the topics are about AI \nalso, make only 5 rows and adjust the height respectivly"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "make the rows appear in 2s max\nalso, no fade in animation, just start from the blank spreadsheet"
+    },
+    {
+      "role": "assistant",
+      "content": "Animation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "I need an animation of a Apify Actor + a Spreadsheet and after that, a 20 minute clock going up fast (for a line that says \"in about 20 minutes\")",
+  "styleMode": "default",
+  "createdAt": "2026-06-03T18:35:37.896Z",
+  "updatedAt": "2026-06-03T18:55:54.299Z"
+}

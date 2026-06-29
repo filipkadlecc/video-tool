@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import GeneratingOverlay from "@/components/GeneratingOverlay";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import ChatPanel from "@/components/ChatPanel";
+import ChatPanel, { type ChatPanelHandle } from "@/components/ChatPanel";
 import AssetBrowser from "@/components/AssetBrowser";
 import SnippetBrowser from "@/components/SnippetBrowser";
 import SmartTrimDialog from "@/components/SmartTrimDialog";
@@ -13,9 +13,11 @@ import TerminalPreview from "@/components/TerminalPreview";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
 import Timeline from "@/components/Timeline";
 import { evalSceneCode } from "@/remotion/DynamicScene";
-import type { Project, ChatMessage, TerminalAnnotations, StyleMode } from "@/lib/types";
+import { parseSceneMeta } from "@/lib/hyperframes/template";
+import type { Project, ChatMessage, TerminalAnnotations, StyleMode, TransitionStyle } from "@/lib/types";
 import { getResolution } from "@/lib/types";
 import { buildTerminalExportPlan } from "@/lib/terminal-export";
+import { stripBackgroundsForTransparency } from "@/lib/transparent-bg";
 import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -24,6 +26,15 @@ import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 
 const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
+  ssr: false,
+  loading: () => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
+      Loading preview...
+    </div>
+  ),
+});
+
+const HyperframesPreview = dynamic(() => import("@/components/HyperframesPreview"), {
   ssr: false,
   loading: () => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
@@ -51,12 +62,16 @@ export default function ProjectEditor() {
   const [code, setCode] = useState("");
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [terminalAnnotations, setTerminalAnnotations] = useState<TerminalAnnotations | undefined>(undefined);
+  const [customTheme, setCustomTheme] = useState<boolean>(false);
   const [styleMode, setStyleMode] = useState<StyleMode>("default");
+  const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>("cut");
+  const [useSfx, setUseSfx] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [smartTrimOpen, setSmartTrimOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [bgRemovedFlash, setBgRemovedFlash] = useState(false);
   const [loading, setLoading] = useState(true);
   // Captured once on mount from ?action=, before we clean the URL via router.replace.
   const [initialAutoAction] = useState<string | null>(() => {
@@ -67,6 +82,7 @@ export default function ProjectEditor() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef<{ code: string; chatLength: number; annotations: string; styleMode: StyleMode }>({ code: "", chatLength: 0, annotations: "", styleMode: "default" });
   const codeHistory = useCodeHistory();
+  const chatRef = useRef<ChatPanelHandle>(null);
 
   // Load project
   useEffect(() => {
@@ -81,8 +97,14 @@ export default function ProjectEditor() {
         setProject(data);
         setCode(data.code);
         setChatHistory(data.chatHistory);
+        // Seed version history with the loaded state so the first generation
+        // can be undone back to it (code + chat together).
+        codeHistory.pushSnapshot(data.code, data.chatHistory);
         setTerminalAnnotations(data.terminalAnnotations);
+        setCustomTheme(Boolean(data.customTheme));
         setStyleMode(data.styleMode ?? "default");
+        setTransitionStyle(data.transitionStyle ?? "cut");
+        setUseSfx(data.useSfx ?? data.animationType !== "terminal");
         lastSavedRef.current = {
           code: data.code,
           chatLength: data.chatHistory.length,
@@ -96,6 +118,10 @@ export default function ProjectEditor() {
       }
     }
     load();
+    // codeHistory is intentionally omitted — the hook returns a fresh object
+    // each render, so including it would re-run this loader (and re-fetch) every
+    // render. Its methods are stable, so calling pushSnapshot here is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, router]);
 
   // Honor ?action=smartTrim once: open the dialog and clean the URL.
@@ -139,6 +165,49 @@ export default function ProjectEditor() {
     };
   }, [code, chatHistory, terminalAnnotations, styleMode, project, projectId]);
 
+  // Toggle customTheme with an immediate PATCH so the next AI request reads
+  // the new value (the debounced save would race against fast chat sends).
+  const handleCustomThemeChange = useCallback(async (next: boolean) => {
+    setCustomTheme(next);
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customTheme: next }),
+      });
+    } catch {
+      // silent — local state is already updated; user can retry
+    }
+  }, [projectId]);
+
+  // Immediate-PATCH so the next AI request reads the new transition style.
+  const handleTransitionStyleChange = useCallback(async (next: TransitionStyle) => {
+    setTransitionStyle(next);
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transitionStyle: next }),
+      });
+    } catch {
+      // silent — local state is already updated; user can retry
+    }
+  }, [projectId]);
+
+  // Same immediate-PATCH pattern so the next AI request reads the new value.
+  const handleUseSfxChange = useCallback(async (next: boolean) => {
+    setUseSfx(next);
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useSfx: next }),
+      });
+    } catch {
+      // silent — local state is already updated; user can retry
+    }
+  }, [projectId]);
+
   // Force save (Cmd+S)
   const forceSave = useCallback(async () => {
     if (!project) return;
@@ -177,7 +246,7 @@ export default function ProjectEditor() {
         if (!inMonaco) {
           e.preventDefault();
           const prev = codeHistory.undo();
-          if (prev !== null) setCode(prev);
+          if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); }
         }
       } else if (mod && e.key === "z" && e.shiftKey) {
         const active = document.activeElement;
@@ -185,22 +254,13 @@ export default function ProjectEditor() {
         if (!inMonaco) {
           e.preventDefault();
           const next = codeHistory.redo();
-          if (next !== null) setCode(next);
+          if (next !== null) { setCode(next.code); setChatHistory(next.chat); }
         }
       }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [forceSave, code, codeHistory]);
-
-  // Snapshot code before AI generation starts
-  const prevGeneratingRef = useRef(false);
-  useEffect(() => {
-    if (isGenerating && !prevGeneratingRef.current && code) {
-      codeHistory.pushSnapshot(code);
-    }
-    prevGeneratingRef.current = isGenerating;
-  }, [isGenerating, code, codeHistory]);
 
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode);
@@ -212,7 +272,7 @@ export default function ProjectEditor() {
 
   // Immediate save when generation completes (no debounce), then generate thumbnail
   const handleGenerationComplete = useCallback(async (finalCode: string, finalChat: ChatMessage[]) => {
-    codeHistory.pushSnapshot(finalCode);
+    codeHistory.pushSnapshot(finalCode, finalChat);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     try {
       await fetch(`/api/projects/${projectId}`, {
@@ -234,15 +294,22 @@ export default function ProjectEditor() {
 
   const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
     if (!code || !code.trim()) return { durationInFrames: 250, fps: project?.settings.fps ?? 25, sceneError: undefined };
+    // HyperFrames scenes are plain JS (not Remotion) — read duration/fps from
+    // the declared consts instead of evaluating the code as a Remotion scene.
+    if (project?.engine === "hyperframes") {
+      const m = parseSceneMeta(code);
+      return { durationInFrames: m.durationInFrames, fps: m.fps, sceneError: undefined };
+    }
     const result = evalSceneCode(code);
     return {
       durationInFrames: result?.durationInFrames ?? 250,
       fps: result?.fps ?? project?.settings.fps ?? 25,
       sceneError: result?.error,
     };
-  }, [code, project?.settings.fps]);
+  }, [code, project?.settings.fps, project?.engine]);
 
   const isTerminalProject = project?.animationType === "terminal";
+  const isHyperframes = project?.engine === "hyperframes";
   const layoutKind = project?.animationType === "video" ? "video" : project?.animationType === "terminal" ? "terminal" : "still";
   const storage =
     typeof window !== "undefined"
@@ -279,6 +346,17 @@ export default function ProjectEditor() {
   const { width, height } = getResolution(project.settings.orientation, project.settings.resolution);
   const resLabel = project.settings.resolution === "4k" ? "3840\u00d72160" : "1920\u00d71080";
   const isVideoProject = project.animationType === "video";
+  // The timeline panel mounts for every Remotion-scene project type too —
+  // animation / broll / svg compositions are made of <Sequence> blocks and
+  // can be reordered, trimmed, and split via the editable timeline.
+  // The editable timeline parses Remotion <Sequence> blocks — it doesn't apply
+  // to HyperFrames scenes (plain HTML/GSAP, no Sequence model).
+  const hasTimeline =
+    !isHyperframes &&
+    (project.animationType === "video" ||
+      project.animationType === "animation" ||
+      project.animationType === "broll" ||
+      project.animationType === "svg");
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -298,7 +376,7 @@ export default function ProjectEditor() {
         }}
       >
         <IconButton icon="arrowLeft" onClick={() => router.push("/")} title="Back to projects" />
-        <Logo size={20} />
+        <Logo size={20} onClick={() => router.push("/")} />
         <div style={{ width: 1, height: 20, background: "var(--line-2)", marginLeft: 4 }} />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</div>
@@ -315,14 +393,14 @@ export default function ProjectEditor() {
             icon="arrowLeft"
             size={26}
             title="Undo (Cmd+Z)"
-            onClick={() => { const prev = codeHistory.undo(); if (prev !== null) setCode(prev); }}
+            onClick={() => { const prev = codeHistory.undo(); if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); } }}
             style={{ opacity: codeHistory.canUndo ? 1 : 0.3 }}
           />
           <IconButton
             icon="arrowRight"
             size={26}
             title="Redo (Cmd+Shift+Z)"
-            onClick={() => { const next = codeHistory.redo(); if (next !== null) setCode(next); }}
+            onClick={() => { const next = codeHistory.redo(); if (next !== null) { setCode(next.code); setChatHistory(next.chat); } }}
             style={{ opacity: codeHistory.canRedo ? 1 : 0.3 }}
           />
         </div>
@@ -361,6 +439,25 @@ export default function ProjectEditor() {
         {!isTerminalProject && (
           <Button variant="outline" size="sm" icon="layers" onClick={() => setSnippetsOpen(true)}>
             Snippets
+          </Button>
+        )}
+        {hasTimeline && (
+          <Button
+            variant="outline"
+            size="sm"
+            icon="checkerboard"
+            title="Remove background (Cmd+Z to undo)"
+            disabled={!code.trim() || bgRemovedFlash}
+            onClick={() => {
+              const next = stripBackgroundsForTransparency(code);
+              if (next === code) return;
+              codeHistory.pushSnapshot(code, chatHistory);
+              setCode(next);
+              setBgRemovedFlash(true);
+              setTimeout(() => setBgRemovedFlash(false), 1500);
+            }}
+          >
+            {bgRemovedFlash ? "Removed" : "Remove background"}
           </Button>
         )}
         {isVideoProject && (
@@ -414,25 +511,29 @@ export default function ProjectEditor() {
               onLayoutChanged={verticalLayout.onLayoutChanged}
               style={{ height: "100%" }}
             >
-              <Panel id="preview" defaultSize={isVideoProject ? "55%" : "65%"} minSize="15%">
+              <Panel id="preview" defaultSize={hasTimeline ? "55%" : "65%"} minSize="15%">
                 <div style={{ background: "#000", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
                   {isTerminalProject ? (
                     <TerminalPreview
                       projectId={projectId}
                       code={code}
                       onReplaceCode={(next) => {
-                        if (code) codeHistory.pushSnapshot(code);
+                        if (code) codeHistory.pushSnapshot(code, chatHistory);
                         setCode(next);
                       }}
                       annotations={terminalAnnotations}
                       onAnnotationsChange={setTerminalAnnotations}
+                      customTheme={customTheme}
+                      onCustomThemeChange={handleCustomThemeChange}
                     />
+                  ) : isHyperframes ? (
+                    <HyperframesPreview code={code} width={width} height={height} />
                   ) : (
-                    <PreviewPanel code={code} width={width} height={height} />
+                    <PreviewPanel code={code} width={width} height={height} svgContents={project.svgContents} />
                   )}
                 </div>
               </Panel>
-              {isVideoProject && (
+              {hasTimeline && (
                 <>
                   <Separator className="resize-handle resize-handle-horizontal" />
                   <Panel id="timeline" defaultSize="15%" minSize="8%">
@@ -442,7 +543,7 @@ export default function ProjectEditor() {
                         fps={extractedFps}
                         durationInFrames={durationInFrames}
                         onCodeChange={(next) => {
-                          if (code) codeHistory.pushSnapshot(code);
+                          if (code) codeHistory.pushSnapshot(code, chatHistory);
                           setCode(next);
                         }}
                       />
@@ -451,13 +552,13 @@ export default function ProjectEditor() {
                 </>
               )}
               <Separator className="resize-handle resize-handle-horizontal" />
-              <Panel id="code" defaultSize={isVideoProject ? "30%" : "35%"} minSize="10%">
+              <Panel id="code" defaultSize={hasTimeline ? "30%" : "35%"} minSize="10%">
                 <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                   <CodeEditor
                     code={code}
                     onChange={handleCodeChange}
                     language={isTerminalProject ? "vhs" : "typescript"}
-                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
+                    filename={isTerminalProject ? "tape.tape" : isHyperframes ? "scene.js" : "Scene.tsx"}
                   />
                 </div>
               </Panel>
@@ -467,6 +568,7 @@ export default function ProjectEditor() {
           <Panel id="chat" defaultSize="28%" minSize="18%" maxSize="50%">
             <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
               <ChatPanel
+                ref={chatRef}
                 projectId={projectId}
                 chatHistory={chatHistory}
                 initialPrompt={project.initialPrompt}
@@ -476,11 +578,16 @@ export default function ProjectEditor() {
                 setIsGenerating={setIsGenerating}
                 projectSettings={project.settings}
                 animationType={project.animationType}
+                engine={project.engine}
                 notionContent={project.notionContent}
                 scriptWithTimestamps={project.scriptWithTimestamps}
                 svgContents={project.svgContents}
                 styleMode={styleMode}
                 onStyleModeChange={setStyleMode}
+                transitionStyle={transitionStyle}
+                onTransitionStyleChange={handleTransitionStyleChange}
+                useSfx={useSfx}
+                onUseSfxChange={handleUseSfxChange}
                 currentCode={code}
                 autoSend={
                   !project.code &&
@@ -509,7 +616,7 @@ export default function ProjectEditor() {
         onClose={() => setSnippetsOpen(false)}
         hasExistingCode={code.trim().length > 0}
         onUseSnippet={(snippetCode) => {
-          if (code) codeHistory.pushSnapshot(code);
+          if (code) codeHistory.pushSnapshot(code, chatHistory);
           setCode(snippetCode);
         }}
       />
@@ -522,7 +629,7 @@ export default function ProjectEditor() {
         hasMediaFolder={!!project.mediaFolder}
         hasExistingCode={code.trim().length > 0}
         onApply={(generatedCode) => {
-          if (code) codeHistory.pushSnapshot(code);
+          if (code) codeHistory.pushSnapshot(code, chatHistory);
           setCode(generatedCode);
         }}
       />
@@ -553,6 +660,8 @@ export default function ProjectEditor() {
             width={exportWidth}
             height={exportHeight}
             projectName={project.name}
+            projectId={projectId}
+            engine={project.engine}
           />
         );
       })()}

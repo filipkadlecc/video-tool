@@ -1,9 +1,16 @@
 import { buildBasePrompt } from "./base";
 import { BROLL_DARK_PROMPT } from "./broll-dark";
 import { COLOR_SYSTEM_PROMPT } from "./colors";
+import { APIFY_LAYOUT_PROMPT } from "./apify-layout";
 import { buildVideoEditingPrompt } from "./video-editing";
 import { getStylePrompt } from "./styles";
-import type { AnimationType, ProjectSettings, StyleMode } from "../types";
+import { getTransitionPrompt } from "./transitions";
+import { buildTerminalBase } from "./terminal-base";
+import { TERMINAL_EDIT_EXAMPLES } from "./terminal-examples";
+import { buildSfxPrompt } from "./sfx";
+import { buildHyperframesPrompt } from "./hyperframes-base";
+import type { SfxEntry } from "../sfx";
+import type { AnimationType, Engine, ProjectSettings, StyleMode, TransitionStyle } from "../types";
 import { getResolution } from "../types";
 
 interface MediaFileInfo {
@@ -19,55 +26,60 @@ export function buildSystemPrompt(
   assetPaths?: string[],
   videoContext?: { projectId: string; mediaFiles: MediaFileInfo[] },
   styleMode?: StyleMode,
+  customTheme?: boolean,
+  useSfx?: boolean,
+  sfx?: SfxEntry[],
+  engine?: Engine,
+  transitionStyle?: TransitionStyle,
 ): string {
   const { width, height } = getResolution(settings.orientation, settings.resolution);
-  const base = buildBasePrompt(width, height, settings.fps);
 
   if (animationType === "terminal") {
-    return `You are a VHS tape script assistant. VHS (https://github.com/charmbracelet/vhs) records terminal sessions as code.
-
-The user's code is a .tape file. You MUST output ONLY valid VHS tape syntax — never TypeScript, never Remotion, never React.
-
-IMPORTANT: This project's canvas is ${width}×${height} px. You MUST set:
-  Set Width ${width}
-  Set Height ${height}
-Do NOT use any other dimensions — the output must exactly match the project canvas.
-
-Font size rule: Set FontSize ${Math.round(width / 120)} — this keeps text readable without filling the screen. Never go above ${Math.round(width / 80)}.
-
-Background color rule: ALWAYS use a custom theme with background #333538. Use this exact line (you may adjust foreground/cursor/other colors but NEVER change the background):
-  Set Theme { "background": "#333538", "foreground": "#FFFFFF", "cursor": "#FFFFFF", "selection": "#4A4D50", "black": "#333538", "white": "#FFFFFF" }
-
-Key VHS commands:
-  Output <file>         Set output filename (keep as "out.mp4")
-  Set FontSize <n>      Terminal font size — use ~${Math.round(width / 120)} for this canvas
-  Set Width <n>         Terminal width in pixels (MUST be ${width})
-  Set Height <n>        Terminal height in pixels (MUST be ${height})
-  Set Theme { ... }     Custom theme JSON — always set background to #333538 (see above)
-  Set TypingSpeed <ms>ms  Typing speed per character
-  Set Margin <n>        Outer margin
-  Set Padding <n>       Inner padding
-  Type "<text>"         Type text character by character
-  Enter                 Press Enter
-  Sleep <n>s / <n>ms   Wait
-  Backspace [n]         Press backspace n times
-  Ctrl+C                Send Ctrl-C
-  Ctrl+D                Send Ctrl-D
-
-Output only the complete .tape file. No markdown, no code fences, no explanation.`;
+    return [buildTerminalBase(width, height, customTheme), TERMINAL_EDIT_EXAMPLES].join("\n\n");
   }
 
-  let prompt = base + "\n\n" + COLOR_SYSTEM_PROMPT + "\n\n" + BROLL_DARK_PROMPT;
+  // HyperFrames engine: HTML/GSAP authoring contract reusing the same Apify
+  // colors/layout/style rules. (Terminal stays VHS regardless of engine.)
+  if (engine === "hyperframes") {
+    return buildHyperframesPrompt(width, height, settings.fps, styleMode);
+  }
+
+  const base = buildBasePrompt(width, height, settings.fps);
+
+  let prompt = base + "\n\n" + COLOR_SYSTEM_PROMPT + "\n\n" + APIFY_LAYOUT_PROMPT;
 
   // Append style preset (defaults to "default" if not provided).
   prompt += "\n\n" + getStylePrompt(styleMode);
+
+  // Append the per-project transition style (cut / blend / camera; defaults to
+  // "cut"). After style so it can override generic transition guidance.
+  prompt += "\n\n" + getTransitionPrompt(transitionStyle);
+
+  // Overlay-opacity rule goes LAST so it overrides any style guidance that still
+  // mentions translucent card fills.
+  prompt += "\n\n" + BROLL_DARK_PROMPT;
 
   if (animationType === "video" && videoContext) {
     prompt += "\n\n" + buildVideoEditingPrompt(videoContext.projectId, videoContext.mediaFiles);
   }
 
-  if (assetPaths && assetPaths.length > 0) {
-    prompt += `\n\n=== AVAILABLE ASSETS ===\nUse staticFile() from remotion to reference these. Use the EXACT paths below — do not guess filenames.\n\n${assetPaths.map((p) => `- ${p}`).join("\n")}`;
+  const BG_BLOCKLIST = new Set([
+    "assets/backgrounds/Backgroudn Green.png",
+    "assets/backgrounds/background_blue.png",
+    "assets/backgrounds/background.png",
+    "assets/backgrounds/Screep White Pink.png",
+  ]);
+  const filteredAssetPaths = (assetPaths ?? []).filter(
+    // SFX are surfaced in their own dedicated section below, not the generic list.
+    (p) => !BG_BLOCKLIST.has(p) && !p.startsWith("assets/sfx/")
+  );
+
+  if (filteredAssetPaths.length > 0) {
+    prompt += `\n\n=== AVAILABLE ASSETS ===\nUse staticFile() from remotion to reference these. Use the EXACT paths below — do not guess filenames.\n\n${filteredAssetPaths.map((p) => `- ${p}`).join("\n")}`;
+  }
+
+  if (useSfx && sfx && sfx.length > 0) {
+    prompt += "\n\n" + buildSfxPrompt(sfx);
   }
 
   return prompt;
@@ -79,6 +91,8 @@ export function buildUserMessage(
   notionContent?: string,
   scriptWithTimestamps?: string,
   animationType?: AnimationType,
+  currentTapeDurationMs?: number,
+  engine?: Engine,
 ): string {
   const parts: string[] = [];
 
@@ -91,9 +105,18 @@ export function buildUserMessage(
   }
 
   if (code) {
-    const lang = animationType === "terminal" ? "tape" : "tsx";
+    const lang = animationType === "terminal" ? "tape" : engine === "hyperframes" ? "js" : "tsx";
     const label = animationType === "terminal" ? "Current .tape script" : "Current scene code";
     parts.push(`${label}:\n\`\`\`${lang}\n${code}\n\`\`\``);
+  }
+
+  if (animationType === "terminal" && typeof currentTapeDurationMs === "number" && currentTapeDurationMs > 0) {
+    const seconds = (currentTapeDurationMs / 1000).toFixed(2);
+    parts.push(
+      `Current tape duration: ${seconds}s (server-computed from the script above). ` +
+        `If the user asks you to "extend" / "make longer" / "lengthen", the new duration MUST be greater than ${seconds}s. ` +
+        `If they ask for a specific length, hit it within 0.5s. Use trailing Sleep to pad — do not delete content the user didn't ask to remove.`,
+    );
   }
 
   parts.push(prompt);

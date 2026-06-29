@@ -13,14 +13,17 @@ import { springIn } from "../../motion";
 export const fps = 30;
 export const durationInFrames = 60;
 
-const ACCENT = BRAND.colors.pink;
+// Apify symbol reveal — short opener/closer.
+// Flat #161718 bg, orange expanding ring, no drop-shadow tint (we already get
+// the brand color from the symbol itself).
+
+const ACCENT = BRAND.colors.orange;
 
 export default function LogoBumper() {
   const frame = useCurrentFrame();
   const { fps: vfps, width, height } = useVideoConfig();
   const base = Math.min(width, height);
 
-  // SNAPPY for that classic logo-bumper "thump".
   const inProgress = springIn(frame, vfps, 0, "SNAPPY");
 
   const holdEnd = durationInFrames - 12;
@@ -29,20 +32,20 @@ export default function LogoBumper() {
     extrapolateRight: "clamp",
   });
 
-  const scaleIn = interpolate(inProgress, [0, 1], [0.5, 1]);
-  const scaleOut = interpolate(outProgress, [0, 1], [1, 1.15]);
+  const scaleIn = interpolate(inProgress, [0, 1], [0.55, 1]);
+  const scaleOut = interpolate(outProgress, [0, 1], [1, 1.12]);
   const scale = scaleIn * scaleOut;
   const opacity = Math.min(inProgress, 1 - outProgress);
 
-  const ringRadius = interpolate(inProgress, [0, 1], [0, base * 0.18]);
-  const ringOpacity = interpolate(inProgress, [0, 1], [0.6, 0]);
+  const ringRadius = interpolate(inProgress, [0, 1], [0, base * 0.2]);
+  const ringOpacity = interpolate(inProgress, [0, 1], [0.7, 0]);
 
   return (
     <>
       <style>{BRAND_FONT_FACE_CSS}</style>
       <AbsoluteFill
         style={{
-          background: `radial-gradient(circle at 50% 50%, ${BRAND.colors.bgSoft} 0%, ${BRAND.colors.bg} 75%)`,
+          background: BRAND.colors.bg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -54,7 +57,7 @@ export default function LogoBumper() {
             width: ringRadius * 2,
             height: ringRadius * 2,
             borderRadius: "50%",
-            border: `${Math.max(2, base * 0.002)}px solid ${ACCENT}`,
+            border: `${Math.max(2, base * 0.0025)}px solid ${ACCENT}`,
             opacity: ringOpacity,
           }}
         />
@@ -62,7 +65,6 @@ export default function LogoBumper() {
           style={{
             opacity,
             transform: `scale(${scale})`,
-            filter: `drop-shadow(0 0 ${base * 0.04}px ${ACCENT}66)`,
           }}
         >
           <Img

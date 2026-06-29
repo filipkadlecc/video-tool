@@ -8,6 +8,7 @@ import IconButton from "@/components/ui/IconButton";
 import Input from "@/components/ui/Input";
 import Segmented from "@/components/ui/Segmented";
 import { formatBytes } from "@/lib/format";
+import type { Engine } from "@/lib/types";
 
 interface RenderPreset {
   name: string;
@@ -47,6 +48,8 @@ interface ExportDialogProps {
   width: number;
   height: number;
   projectName: string;
+  projectId?: string;
+  engine?: Engine;
 }
 
 export default function ExportDialog({
@@ -58,16 +61,26 @@ export default function ExportDialog({
   width,
   height,
   projectName,
+  projectId,
+  engine,
 }: ExportDialogProps) {
+  // HyperFrames uses its own format selector (MP4 opaque / WebM · MOV transparent)
+  // instead of the Remotion codec list.
+  const isHyperframes = engine === "hyperframes";
+  const visiblePresets = isHyperframes ? BUILT_IN_PRESETS.filter((p) => p.codec === "h264") : BUILT_IN_PRESETS;
   const [status, setStatus] = useState<"idle" | "queued" | "rendering" | "done" | "error">("idle");
   const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState(projectName.replace(/\s+/g, "-").toLowerCase());
   const [codec, setCodec] = useState<string>("h264");
+  const [hfFormat, setHfFormat] = useState<"mp4" | "webm" | "mov">("mp4");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Delivered file extension — HyperFrames by format, Remotion by codec.
+  const ext = isHyperframes ? hfFormat : codec === "h264" ? "mp4" : "mov";
 
   const [presetOpen, setPresetOpen] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [userPresets, setUserPresets] = useState<RenderPreset[]>([]);
   const [savePresetName, setSavePresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
@@ -101,6 +114,10 @@ export default function ExportDialog({
   useEffect(() => {
     setUserPresets(loadUserPresets());
   }, []);
+
+  useEffect(() => {
+    if (codec === "prores-xq") setShowAdvanced(true);
+  }, [codec]);
 
   useEffect(() => {
     if (open) refreshCacheStats();
@@ -155,7 +172,7 @@ export default function ExportDialog({
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, durationInFrames, fps, width, height, codec }),
+        body: JSON.stringify({ code, durationInFrames, fps, width, height, codec: isHyperframes ? "h264" : codec, projectId, engine, format: hfFormat }),
       });
 
       if (!res.ok) throw new Error("Failed to enqueue render");
@@ -177,7 +194,7 @@ export default function ExportDialog({
             new Audio("/assets/render-complete.m4a").play().catch(() => {});
             const a = document.createElement("a");
             a.href = statusData.outputPath;
-            a.download = `${fileName || "export"}.${codec === "h264" ? "mp4" : "mov"}`;
+            a.download = `${fileName || "export"}.${ext}`;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -211,7 +228,12 @@ export default function ExportDialog({
     { label: "Resolution", value: `${width}\u00d7${height}` },
     { label: "Duration", value: `${seconds}s` },
     { label: "FPS", value: String(fps) },
-    { label: "Codec", value: codec === "h264" ? "H.264" : codec === "prores" ? "ProRes 4444" : codec === "prores-xq" ? "ProRes 4444 XQ" : "QT Animation (RLE)" },
+    {
+      label: isHyperframes ? "Format" : "Codec",
+      value: isHyperframes
+        ? (hfFormat === "mp4" ? "MP4 (opaque)" : hfFormat === "webm" ? "WebM (transparent)" : "MOV (transparent)")
+        : codec === "h264" ? "Classic" : codec === "prores" ? "Transparent Background" : codec === "prores-xq" ? "Color Grading" : "OBS",
+    },
   ];
 
   return (
@@ -242,7 +264,7 @@ export default function ExportDialog({
                 <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
                   Built-in
                 </div>
-                {BUILT_IN_PRESETS.map((p) => (
+                {visiblePresets.map((p) => (
                   <button
                     key={p.name}
                     onClick={() => applyPreset(p)}
@@ -357,22 +379,95 @@ export default function ExportDialog({
           ))}
         </div>
 
-        {/* Codec */}
+        {/* Format — HyperFrames (MP4 opaque / WebM · MOV transparent) */}
+        {isHyperframes && (
+          <div>
+            <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+              Format
+            </div>
+            <Segmented
+              value={hfFormat}
+              onChange={(v) => setHfFormat(v as "mp4" | "webm" | "mov")}
+              options={[
+                { value: "mp4", label: "MP4" },
+                { value: "webm", label: "WebM" },
+                { value: "mov", label: "MOV" },
+              ]}
+            />
+            <div
+              style={{
+                marginTop: 6, padding: 8, fontSize: 11, color: "var(--text-2)",
+                background: hfFormat === "mp4" ? "var(--bg-inset)" : "var(--accent-soft)",
+                borderRadius: 4,
+                border: hfFormat === "mp4" ? "0.5px solid var(--line-2)" : "0.5px solid var(--accent-line)",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <Icon name="info" size={12} style={{ color: hfFormat === "mp4" ? "var(--text-3)" : "var(--accent)" }} />
+              {hfFormat === "mp4"
+                ? "H.264 .mp4 — opaque. Best for YouTube, social, and most playback."
+                : hfFormat === "webm"
+                  ? "VP9 .webm — transparent background (alpha). Great for overlays, OBS, and the web."
+                  : "ProRes 4444 .mov — transparent background (alpha), 10-bit. Best for editing / compositing."}
+            </div>
+          </div>
+        )}
+
+        {/* Codec — Remotion only */}
+        {!isHyperframes && (
         <div>
-          <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
-            Codec
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div className="mono cap" style={{ color: "var(--text-1)" }}>
+              Codec
+            </div>
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="mono cap"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 10,
+                background: "transparent",
+                border: "none",
+                color: "var(--text-3)",
+                cursor: "pointer",
+                padding: "2px 4px",
+              }}
+            >
+              <Icon name={showAdvanced ? "chevronDown" : "chevronRight"} size={10} />
+              Advanced
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <Segmented
               value={codec}
               onChange={(v) => setCodec(v as string)}
               options={[
-                { value: "h264", label: "H.264" },
-                { value: "prores", label: "ProRes 4444" },
-                { value: "prores-xq", label: "ProRes XQ" },
-                { value: "qtrle", label: "QT-RLE" },
+                { value: "h264", label: "Classic" },
+                { value: "prores", label: "Transparent Background" },
+                { value: "qtrle", label: "OBS" },
+                ...(showAdvanced ? [{ value: "prores-xq", label: "Color Grading" }] : []),
               ]}
             />
+            {codec === "h264" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--bg-inset)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--line-2)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--text-3)" }} />
+                H.264 — .mp4, no transparency. Best for YouTube, social, and most playback.
+              </div>
+            )}
             {codec === "prores" && (
               <div
                 style={{
@@ -389,24 +484,6 @@ export default function ExportDialog({
               >
                 <Icon name="info" size={12} style={{ color: "var(--amber)" }} />
                 ProRes 4444 — .mov with alpha channel. Good for compositing.
-              </div>
-            )}
-            {codec === "prores-xq" && (
-              <div
-                style={{
-                  padding: 8,
-                  fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--accent-soft)",
-                  borderRadius: 4,
-                  border: "0.5px solid var(--accent-line)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
-                ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
               </div>
             )}
             {codec === "qtrle" && (
@@ -427,8 +504,27 @@ export default function ExportDialog({
                 QuickTime Animation (RLE) — .mov with ARGB alpha channel. Drop into OBS as a Media Source. Large files.
               </div>
             )}
+            {codec === "prores-xq" && (
+              <div
+                style={{
+                  padding: 8,
+                  fontSize: 11,
+                  color: "var(--text-2)",
+                  background: "var(--accent-soft)",
+                  borderRadius: 4,
+                  border: "0.5px solid var(--accent-line)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
+              </div>
+            )}
           </div>
         </div>
+        )}
 
         {/* File name */}
         <div>
@@ -439,7 +535,7 @@ export default function ExportDialog({
             value={fileName}
             onChange={setFileName}
             mono
-            suffix={`.${codec === "h264" ? "mp4" : "mov"}`}
+            suffix={`.${ext}`}
           />
         </div>
 
@@ -534,13 +630,13 @@ export default function ExportDialog({
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Render complete</div>
                 <div className="mono nums" style={{ fontSize: 11, color: "var(--text-2)" }}>
-                  {fileName}.{codec === "h264" ? "mp4" : "mov"}
+                  {fileName}.{ext}
                 </div>
               </div>
             </div>
             <a
               href={downloadUrl}
-              download={`${fileName || "export"}.${codec === "h264" ? "mp4" : "mov"}`}
+              download={`${fileName || "export"}.${ext}`}
               style={{ textDecoration: "none" }}
             >
               <Button variant="primary" size="lg" full icon="download">

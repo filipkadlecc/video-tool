@@ -4,8 +4,6 @@ import {
   useCurrentFrame,
   useVideoConfig,
   interpolate,
-  Img,
-  staticFile,
 } from "remotion";
 import { TransitionSeries, linearTiming } from "@remotion/transitions";
 import { fade } from "@remotion/transitions/fade";
@@ -14,19 +12,25 @@ import { springIn } from "../../motion";
 
 export const fps = 25;
 
+// === EDIT THESE for a name tag ===
+const NAME = "Speaker Name";
+const TITLE = "Speaker Role";
+const ALIGN: "left" | "right" = "left";
+
+// === Optional: enable dual-speaker mode ===
+// Set DUAL = true and fill in PARTNER_NAME / PARTNER_TITLE to render two cards.
+const DUAL = false;
+const PARTNER_NAME = "Partner Name";
+const PARTNER_TITLE = "Partner Role";
+
 const TRANSITION = 15;
 const SCENE_FRAMES = 750; // 30s of hold time at 25fps
 
-// 10 (intro black) + 10 (transition) + 750 + 15 (transition) + 25 (outro black) = 810
-// minus overlapping transitions (10 + 15 = 25) → 785, but the original composition
+// 10 (intro black) + 10 (transition) + 750 + 15 (transition) + 25 (outro black)
 // nets to 775 because the intro fade overlaps the BlackScreen 10 + Sequence 750+15.
 export const durationInFrames = 775;
 
-const COLORS = {
-  green: BRAND.colors.green,
-  white: BRAND.colors.text,
-  card: "#1A1A1A",
-};
+const ACCENT = BRAND.colors.orange;
 
 interface PersonCardProps {
   name: string;
@@ -43,7 +47,6 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
   // Card slides in LIQUID (smooth panel feel), inner elements pop with
   // SNAPPY/ELASTIC for personality.
   const containerProgress = springIn(frame, vfps, entranceDelay, "LIQUID");
-  const logoProgress = springIn(frame, vfps, entranceDelay + 15, "SNAPPY");
   const nameProgress = springIn(frame, vfps, entranceDelay + 28, "SNAPPY");
   const lineProgress = springIn(frame, vfps, entranceDelay + 36, "ELASTIC");
   const titleProgress = springIn(frame, vfps, entranceDelay + 43, "GENTLE");
@@ -62,12 +65,6 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
     containerProgress,
     interpolate(exitProgress, [0, 1], [1, 0])
   );
-
-  const logoOpacity = Math.min(
-    logoProgress,
-    interpolate(exitProgress, [0, 1], [1, 0])
-  );
-  const logoX = interpolate(logoProgress, [0, 1], [-base * 0.014, 0]);
 
   const nameOpacity = Math.min(
     nameProgress,
@@ -103,7 +100,8 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
     >
       <div
         style={{
-          backgroundColor: COLORS.card,
+          backgroundColor: BRAND.colors.card,
+          border: `1px solid ${BRAND.colors.border}`,
           borderRadius: base * 0.007,
           padding: `${base * 0.022}px ${base * 0.037}px ${base * 0.022}px ${base * 0.030}px`,
           display: "flex",
@@ -114,34 +112,6 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
           whiteSpace: "nowrap",
         }}
       >
-        {/* Apify wordmark */}
-        <div
-          style={{
-            opacity: logoOpacity,
-            transform: `translateX(${logoX}px)`,
-            display: "flex",
-            alignItems: "center",
-            flexShrink: 0,
-          }}
-        >
-          <Img
-            src={staticFile("assets/apify/Apify Logo white Wordmark.svg")}
-            style={{ height: base * 0.046, width: "auto" }}
-          />
-        </div>
-
-        {/* Divider */}
-        <div
-          style={{
-            width: 2,
-            alignSelf: "stretch",
-            backgroundColor: "rgba(255,255,255,0.15)",
-            borderRadius: 2,
-            opacity: logoOpacity,
-            flexShrink: 0,
-          }}
-        />
-
         {/* Name + accent line + title */}
         <div
           style={{
@@ -155,8 +125,8 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
               opacity: nameOpacity,
               transform: `translateX(${nameX}px)`,
               fontSize: base * 0.030,
-              fontWeight: 700,
-              color: COLORS.white,
+              fontWeight: 600,
+              color: BRAND.colors.text,
               letterSpacing: "0.01em",
               lineHeight: 1,
               whiteSpace: "nowrap",
@@ -170,7 +140,7 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
             style={{
               width: `${lineWidth}%`,
               height: Math.max(2, base * 0.0015),
-              backgroundColor: COLORS.green,
+              backgroundColor: ACCENT,
               borderRadius: 2,
               opacity: titleOpacity,
             }}
@@ -182,7 +152,7 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
               transform: `translateX(${titleX}px)`,
               fontSize: base * 0.022,
               fontWeight: 500,
-              color: COLORS.green,
+              color: ACCENT,
               letterSpacing: "0.01em",
               lineHeight: 1,
               whiteSpace: "nowrap",
@@ -194,6 +164,23 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
         </div>
       </div>
     </div>
+  );
+};
+
+const SingleLowerThird: React.FC = () => {
+  const { width, height } = useVideoConfig();
+  const base = Math.min(width, height);
+  // Anchor to the chosen lower corner — name tags don't sit centered.
+  const anchorStyle: React.CSSProperties =
+    ALIGN === "left"
+      ? { left: base * 0.046, bottom: base * 0.075 }
+      : { right: base * 0.046, bottom: base * 0.075 };
+  return (
+    <AbsoluteFill style={{ fontFamily: BRAND.fonts.primary }}>
+      <div style={{ position: "absolute", ...anchorStyle }}>
+        <PersonCard name={NAME} title={TITLE} entranceDelay={5} align={ALIGN} />
+      </div>
+    </AbsoluteFill>
   );
 };
 
@@ -211,15 +198,10 @@ const DualLowerThird: React.FC = () => {
           padding: `0 ${base * 0.046}px ${base * 0.075}px ${base * 0.046}px`,
         }}
       >
+        <PersonCard name={NAME} title={TITLE} entranceDelay={5} align="left" />
         <PersonCard
-          name="Luís Pinto"
-          title="Product Marketing Manager"
-          entranceDelay={5}
-          align="left"
-        />
-        <PersonCard
-          name="Sameh Jarour"
-          title="AI Product Evangelist"
+          name={PARTNER_NAME}
+          title={PARTNER_TITLE}
           entranceDelay={5}
           align="right"
         />
@@ -245,7 +227,7 @@ const Composition: React.FC = () => (
       />
 
       <TransitionSeries.Sequence durationInFrames={SCENE_FRAMES + TRANSITION}>
-        <DualLowerThird />
+        {DUAL ? <DualLowerThird /> : <SingleLowerThird />}
       </TransitionSeries.Sequence>
       <TransitionSeries.Transition
         presentation={fade()}

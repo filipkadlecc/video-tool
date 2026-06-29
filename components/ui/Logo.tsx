@@ -2,9 +2,9 @@
 
 import React from "react";
 
-export default function Logo({ size = 22 }: { size?: number }) {
-  return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+export default function Logo({ size = 22, onClick }: { size?: number; onClick?: () => void }) {
+  const inner = (
+    <>
       <div
         style={{
           width: size,
@@ -26,6 +26,33 @@ export default function Logo({ size = 22 }: { size?: number }) {
       >
         video<span style={{ color: "var(--text-2)" }}>/</span>tool
       </span>
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="focus-ring"
+        title="Home"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 9,
+          padding: 0,
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          opacity: 1,
+          transition: "opacity 120ms",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.75")}
+        onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return <div style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>{inner}</div>;
 }

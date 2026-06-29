@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import fs from "fs";
 import path from "path";
 import PQueue from "p-queue";
+import { stripBackgroundsForTransparency } from "./transparent-bg";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -56,15 +57,25 @@ export function getJob(jobId: string): RenderJob | undefined {
   return jobs.get(jobId);
 }
 
-function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number): string {
+function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number, svgContents?: { filename: string; content: string }[]): string {
   const entryPath = scenePath.replace(".tsx", ".entry.tsx");
   const relativeScene = `./${path.basename(scenePath).replace(".tsx", "")}`;
+  // SVG frames inline as JSON so the renderer doesn't need a side-channel
+  const svgFramesJson = JSON.stringify(svgContents ?? []);
 
   const entryCode = `
 import { registerRoot } from "remotion";
 import { Composition } from "remotion";
 import React from "react";
-import SceneComponent from "${relativeScene}";
+import { SvgFramesProvider } from "../motion";
+import SceneInner from "${relativeScene}";
+
+const __SVG_FRAMES__ = ${svgFramesJson};
+const SceneComponent: React.FC = () => (
+  <SvgFramesProvider value={__SVG_FRAMES__}>
+    <SceneInner />
+  </SvgFramesProvider>
+);
 
 // Block the renderer until Inter loads. Without this, Chromium falls back to
 // serif/Times for the first frame and the export looks nothing like the preview.
@@ -131,7 +142,7 @@ registerRoot(Root);
 
 export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed" | "qtrle";
 
-export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264"): RenderJob {
+export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264", svgContents?: { filename: string; content: string }[]): RenderJob {
   const jobId = generateJobId();
   const job: RenderJob = {
     id: jobId,
@@ -158,7 +169,7 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         fixedCode = stripBackgroundsForTransparency(fixedCode);
       }
       fs.writeFileSync(scenePath, fixedCode, "utf-8");
-      entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height);
+      entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents);
 
       const ext = codec === "h264" ? "mp4" : "mov";
       const outputPath = path.join(
@@ -249,7 +260,12 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
           if (exitCode === 0) {
             resolve();
           } else {
-            const tail = stderrLog.slice(-500).trim();
+            // Pull the real error line (e.g. "Module not found", "SyntaxError")
+            // out of the stderr stream — it's usually buried above the stack.
+            const lines = stderrLog.split("\n").map((l) => l.trim()).filter(Boolean);
+            const signal = lines.find((l) => /error|cannot find|module not found|syntaxerror|failed to compile|unexpected token/i.test(l) && !l.startsWith("at "));
+            const tail = signal ? `${signal}\n${stderrLog.slice(-300).trim()}` : stderrLog.slice(-1200).trim();
+            console.error("[render] full stderr for job", jobId, "\n", stderrLog);
             reject(new Error(`Render failed: ${tail}`));
           }
         });
@@ -275,6 +291,36 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         try { fs.unlinkSync(remotionOutputPath); } catch {}
       }
 
+      // Remotion's ProRes export writes pixels with `color_range=tv` but leaves
+      // color matrix/transfer/primaries unset. NLEs that don't see the matrix
+      // tag (CapCut, some Premiere setups) guess BT.601 or treat the file as
+      // full-range, which shifts saturated colors (Apify orange goes yellowy)
+      // and causes per-frame YUV→RGB rounding flicker. Re-tag in place via
+      // the prores_metadata bitstream filter — no re-encode, ~200ms.
+      if (codec === "prores" || codec === "prores-xq" || codec === "uncompressed") {
+        const tagged = outputPath.replace(/\.mov$/, ".tagged.mov");
+        await new Promise<void>((resolve, reject) => {
+          const ff = spawn(
+            "ffmpeg",
+            [
+              "-y", "-i", outputPath,
+              "-c", "copy",
+              "-bsf:v", "prores_metadata=color_primaries=bt709:color_trc=bt709:colorspace=bt709",
+              tagged,
+            ],
+            { cwd: process.cwd(), env: { ...process.env } },
+          );
+          let ffErr = "";
+          ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); });
+          ff.on("close", (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`ffmpeg prores re-tag failed: ${ffErr.slice(-500).trim()}`));
+          });
+          ff.on("error", reject);
+        });
+        fs.renameSync(tagged, outputPath);
+      }
+
       job.status = "done";
       job.progress = 100;
       job.outputPath = `/renders/${jobId}.${ext}`;
@@ -290,43 +336,17 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
   return job;
 }
 
-function stripBackgroundsForTransparency(code: string): string {
-  // 1. Remove <Background /> and <SceneBg /> — dedicated root-background components.
-  let result = code.replace(/<Background\s*\/>/g, "{/* transparent */}");
-  result = result.replace(/<SceneBg\s*\/>/g, "{/* transparent */}");
-
-  // 2. Remove the BlackScreen / Background component DEFINITIONS (keep the rest intact).
-  //    Only zero-out the backgroundColor inside these specific component declarations.
-  result = result.replace(
-    /const\s+(BlackScreen|Background|SceneBg)\s*[=:][^;{]*\{[\s\S]*?backgroundColor:\s*(?:COLORS\.bg|["']#[0-9a-fA-F]{3,8}["'])/g,
-    (match) => match.replace(/backgroundColor:\s*(?:COLORS\.bg|["']#[0-9a-fA-F]{3,8}["'])/, 'backgroundColor: "transparent"'),
-  );
-
-  // 3. Make AbsoluteFill root backgrounds transparent — but ONLY when the AbsoluteFill
-  //    is the direct scene wrapper (i.e. it's the first element a component returns,
-  //    recognised by being at the start of a return statement).
-  //    Target pattern:  return ( <AbsoluteFill style={{ ... backgroundColor: COLORS.bg ... }}>
-  result = result.replace(
-    /(return\s*\(\s*\n?\s*<AbsoluteFill[^>]*style=\{\{[^}]*?)backgroundColor:\s*COLORS\.bg/g,
-    '$1backgroundColor: "transparent"',
-  );
-  // Same but with hex literals in a root AbsoluteFill
-  result = result.replace(
-    /(return\s*\(\s*\n?\s*<AbsoluteFill[^>]*style=\{\{[^}]*?)backgroundColor:\s*["']#[0-9a-fA-F]{3,8}["']/g,
-    '$1backgroundColor: "transparent"',
-  );
-
-  return result;
-}
-
 function fixImportPaths(code: string): string {
   return code
     .replace(/from\s+["']\.\.\/remotion\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']@\/remotion\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']remotion\/theme["']/g, 'from "../theme"')
+    .replace(/from\s+["']\.\.\/\.\.\/theme["']/g, 'from "../theme"')
     .replace(/from\s+["']\.\.\/remotion\/motion["']/g, 'from "../motion"')
     .replace(/from\s+["']@\/remotion\/motion["']/g, 'from "../motion"')
-    .replace(/from\s+["']remotion\/motion["']/g, 'from "../motion"');
+    .replace(/from\s+["']remotion\/motion["']/g, 'from "../motion"')
+    .replace(/from\s+["']\.\.\/\.\.\/motion["']/g, 'from "../motion"')
+    .replace(/from\s+["']@\/lib\/brand["']/g, 'from "../../lib/brand"');
 }
 
 export async function renderThumbnail(
@@ -336,6 +356,7 @@ export async function renderThumbnail(
   width: number,
   height: number,
   frame = 60,
+  svgContents?: { filename: string; content: string }[],
 ): Promise<void> {
   const scenesDir = path.join(process.cwd(), "remotion", "scenes");
   fs.mkdirSync(scenesDir, { recursive: true });
@@ -345,7 +366,7 @@ export async function renderThumbnail(
   const fixedCode = fixImportPaths(code);
   fs.writeFileSync(scenePath, fixedCode, "utf-8");
 
-  const entryPath = createEntryFile(scenePath, frame + 30, fps, width, height);
+  const entryPath = createEntryFile(scenePath, frame + 30, fps, width, height, svgContents);
 
   const outputDir = path.join(PROJECTS_DIR, projectId);
   fs.mkdirSync(outputDir, { recursive: true });
