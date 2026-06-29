@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     return Response.json(job);
   }
 
-  const codecMap: Record<string, RenderCodec> = { h264: "h264", prores: "prores", "prores-xq": "prores-xq", uncompressed: "uncompressed", qtrle: "qtrle" };
+  const codecMap: Record<string, RenderCodec> = { h264: "h264", prores: "prores", "prores-xq": "prores-xq", uncompressed: "uncompressed", qtrle: "qtrle", "hevc-alpha": "hevc-alpha" };
   const validCodec: RenderCodec = codecMap[codec] || "h264";
   const svgContents = projectId ? getProject(projectId)?.svgContents : undefined;
   const job = enqueueRender(sceneId || "untitled", code, durationInFrames || 250, fps || 25, width || 3840, height || 2160, validCodec, svgContents);
