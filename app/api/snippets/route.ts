@@ -28,6 +28,8 @@ const META: Record<string, { name: string; subtitle: string }> = {
   EventCard: { name: "Event card", subtitle: "Event title + date + sponsor logo" },
   MCPLaunchFrame: { name: "MCP launch frame", subtitle: "Schematic-style line-draw frame" },
   PromptBox: { name: "Prompt box", subtitle: "Claude composer — typewriter prompt reveal (transparent)" },
+  AiChat: { name: "AI chat", subtitle: "Prompt bubble + typed answer or screenshots → Apify wordmark" },
+  Years: { name: "Years", subtitle: "White year counter slides 2004 → 2014, then holds (transparent)" },
 };
 
 export async function GET() {

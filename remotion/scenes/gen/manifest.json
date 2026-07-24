@@ -1,0 +1,52 @@
+[
+  {
+    "slug": "google-reviews-cafe",
+    "name": "Google reviews — cafe (chat)",
+    "bubble": "Pull this week’s Google reviews for my cafe."
+  },
+  {
+    "slug": "reddit-brand-mentions",
+    "name": "Reddit brand mentions (chat)",
+    "bubble": "Find every mention of my brand on Reddit."
+  },
+  {
+    "slug": "instagram-fitness-influencers",
+    "name": "Instagram fitness influencers (chat)",
+    "bubble": "Find fitness influencers on Instagram over 50k followers."
+  },
+  {
+    "slug": "tiktok-skincare",
+    "name": "TikTok #skincare (chat)",
+    "bubble": "Get this month’s top TikToks for #skincare."
+  },
+  {
+    "slug": "bali-hotel-prices",
+    "name": "Bali hotel prices (chat)",
+    "bubble": "Compare hotel prices in Bali on Booking."
+  },
+  {
+    "slug": "serp-vegan-protein",
+    "name": "Google SERP — vegan protein (chat)",
+    "bubble": "Show me who ranks in the top 10 for “vegan protein”."
+  },
+  {
+    "slug": "facebook-competitor-ads",
+    "name": "Facebook competitor ads (chat)",
+    "bubble": "Show me the Facebook ads my competitor is running."
+  },
+  {
+    "slug": "website-to-chatbot",
+    "name": "Website → chatbot data (chat)",
+    "bubble": "Turn this website into data for my chatbot."
+  },
+  {
+    "slug": "youtube-channel-videos",
+    "name": "YouTube channel videos (chat)",
+    "bubble": "Get all videos and view counts from this channel."
+  },
+  {
+    "slug": "macbook-pro-reviews",
+    "name": "MacBook Pro — love & hate (chat)",
+    "bubble": "I am about to buy a new MacBook Pro. What people love and hate about it?"
+  }
+]

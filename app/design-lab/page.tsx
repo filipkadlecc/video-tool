@@ -9,7 +9,7 @@
 // look. It REUSES the existing preview (PreviewPanel) and export (ExportDialog)
 // without modifying them. Visit at /design-lab.
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import PreviewPanel from "@/components/PreviewPanel";
 import ExportDialog from "@/components/ExportDialog";
 import { evalSceneCode } from "@/remotion/DynamicScene";
@@ -48,6 +48,8 @@ export default function DesignLabPage() {
   const [error, setError] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [uploadedName, setUploadedName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { width, height } = useMemo(
     () => SIZE_PRESETS.find((p) => p.value === sizePreset) ?? SIZE_PRESETS[0],
@@ -119,6 +121,22 @@ export default function DesignLabPage() {
     }
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setDesignHtml(text);
+      setUploadedName(file.name);
+      setError(null);
+    } catch {
+      setError("Couldn't read that file.");
+    } finally {
+      // reset so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   const labelStyle: React.CSSProperties = {
     color: "var(--text-2)",
     marginBottom: 6,
@@ -187,6 +205,7 @@ export default function DesignLabPage() {
               onChange={(v) => setFps(Number(v))}
               options={[
                 { value: "24", label: "24" },
+                { value: "25", label: "25" },
                 { value: "30", label: "30" },
                 { value: "60", label: "60" },
               ]}
@@ -194,11 +213,45 @@ export default function DesignLabPage() {
           </div>
 
           <div>
-            <label className="mono cap" style={labelStyle}>Design HTML (paste from Claude Design)</label>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+              <label className="mono cap" style={{ ...labelStyle, marginBottom: 0, flex: 1 }}>
+                Design HTML (paste or upload)
+              </label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".html,.htm,text/html"
+                onChange={handleFileUpload}
+                style={{ display: "none" }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="mono cap"
+                style={{
+                  background: "transparent",
+                  border: "0.5px solid var(--line-2)",
+                  borderRadius: "var(--r-sm)",
+                  color: "var(--text-2)",
+                  cursor: "pointer",
+                  padding: "3px 8px",
+                  fontSize: 10,
+                }}
+              >
+                ↑ Upload .html
+              </button>
+            </div>
+            {uploadedName && (
+              <div className="mono" style={{ color: "var(--text-3)", fontSize: 10, marginBottom: 6 }}>
+                Loaded: {uploadedName}
+              </div>
+            )}
             <textarea
               value={designHtml}
-              onChange={(e) => setDesignHtml(e.target.value)}
-              placeholder="<div style='...'> ... </div>"
+              onChange={(e) => {
+                setDesignHtml(e.target.value);
+                if (uploadedName) setUploadedName(null);
+              }}
+              placeholder="<div style='...'> ... </div>  — or upload an .html file"
               spellCheck={false}
               style={{ ...textareaStyle, minHeight: 220 }}
             />

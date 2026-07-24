@@ -9,6 +9,7 @@ export const SNIPPET_ICONS: Record<string, string> = {
   ListReveal: "list",
   CodeSnippet: "code",
   SymbolBug: "image",
+  AccountCTA: "check",
   PathReveal: "sparkle",
   RisingStarsList: "list",
   LogoGridStrip: "image",
@@ -21,4 +22,5 @@ export const SNIPPET_ICONS: Record<string, string> = {
   HiringCard: "list",
   ChartReveal: "bolt",
   PromptBox: "chat",
+  AiChat: "chat",
 };

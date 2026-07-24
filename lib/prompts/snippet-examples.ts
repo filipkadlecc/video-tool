@@ -235,6 +235,7 @@ export const SNIPPET_INVENTORY = `
 - **LowerThird** — Name-tag chyron. Top-of-file NAME / TITLE / ALIGN constants for one speaker (default). Flip DUAL = true and fill PARTNER_NAME / PARTNER_TITLE to render two cards side-by-side.
 - **LogoBumper** — Apify symbol reveal with expanding orange ring. Flat bg, SNAPPY in/out.
 - **SymbolBug** — Corner overlay: card chip with Apify symbol + url. Noise-driven breathing.
+- **AccountCTA** — CTA lower-third overlay: headline + Apify symbol/url bug + filled orange "Start free" button. Transparent bg, LIQUID slide-in, breathing pill.
 - **CodeSnippet** — Editor-style card with MONOCHROME orange syntax: keywords = orange, strings = textMuted, rest = text. No rainbow.
 - **RisingStarsList** — Numbered Actor rows with orange rank badges + orange triangular wedge in the bottom-right corner. Eyebrow + headline + rows.
 - **LogoGridStrip** — "Works with" partner-logo strip. Headline + horizontal logo cards with muted labels.

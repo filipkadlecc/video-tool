@@ -14,7 +14,7 @@
 // that happen to match inside JSX bodies are never touched because the
 // match anchors to start-of-line + the `const ` keyword.
 
-import type { ArrayParam, Param, SnippetSchema } from "./snippet-schemas";
+import type { ArrayParam, ImagesParam, Param, SnippetSchema } from "./snippet-schemas";
 
 export function renderSnippet(
   sourceCode: string,
@@ -41,7 +41,29 @@ function replaceParam(source: string, key: string, param: Param, value: unknown)
       return replaceNumber(source, key, Number(value));
     case "array":
       return replaceArray(source, key, param, value as Record<string, unknown>[]);
+    case "images":
+      return replaceStringArray(source, key, (value as string[]) ?? []);
   }
+}
+
+// Replace a `const KEY: string[] = [ ... ];` multi-line array with a flat list of
+// string literals (used for the `images` param — an array of data URIs).
+function replaceStringArray(source: string, key: string, items: string[]): string {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const rx = new RegExp(
+    `^(\\s*const ${escapedKey})(\\s*:\\s*[^=]+?)?(\\s*=\\s*\\[)[\\s\\S]*?^(\\s*)(\\]\\s*;)\\s*$`,
+    "m",
+  );
+  if (!rx.test(source)) {
+    if (typeof console !== "undefined") {
+      console.warn(`[snippet-template] no images/array match for const ${key}`);
+    }
+    return source;
+  }
+  return source.replace(rx, (_match, prefix, typeAnn, openEq, closeIndent, closeBracket) => {
+    const inner = items.map((s) => `  ${JSON.stringify(String(s ?? ""))},`).join("\n");
+    return `${prefix}${typeAnn ?? ""}${openEq}\n${inner}\n${closeIndent}${closeBracket}`;
+  });
 }
 
 // Build the regex for a single-line `const KEY[: type]? = literal;` declaration.

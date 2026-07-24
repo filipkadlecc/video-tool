@@ -57,7 +57,18 @@ export interface ArrayParam {
   max?: number;
 }
 
-export type Param = StringParam | BooleanParam | EnumParam | NumberParam | ArrayParam;
+// Image uploads. The form reads picked files as data URIs (no server round-trip)
+// and stores them as a string[]; the substituter emits a `const KEY: string[]`
+// literal of those data URIs, so the scene stays self-contained.
+export interface ImagesParam {
+  kind: "images";
+  label: string;
+  default: string[];
+  max?: number;
+  description?: string;
+}
+
+export type Param = StringParam | BooleanParam | EnumParam | NumberParam | ArrayParam | ImagesParam;
 
 export interface SnippetSchema {
   params: Record<string, Param>;
@@ -208,6 +219,15 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
   SymbolBug: {
     params: {
       URL_TEXT: { kind: "string", label: "URL label", default: "apify.com" },
+    },
+  },
+
+  AccountCTA: {
+    params: {
+      HEADLINE: { kind: "string", label: "Headline", default: "Create a free Apify account" },
+      URL_TEXT: { kind: "string", label: "URL label", default: "apify.com" },
+      CTA_LABEL: { kind: "string", label: "Button label", default: "Start free" },
+      ALIGN: { kind: "enum", label: "Anchor corner", default: "left", options: ALIGN_OPTIONS },
     },
   },
 
@@ -429,6 +449,52 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
       MODE_LABEL: { kind: "string", label: "Mode label", default: "Extra" },
       TYPING_SECONDS: { kind: "number", label: "Typing duration (s)", default: 2.4, min: 0.2, step: 0.1 },
       HOLD_SECONDS: { kind: "number", label: "Hold after typing (s)", default: 1.2, min: 0, step: 0.1 },
+    },
+  },
+
+  AiChat: {
+    params: {
+      PROMPT: {
+        kind: "string",
+        label: "Prompt (the user message)",
+        default: "Track my competitor's prices on Amazon.",
+        multiline: true,
+        placeholder: "What you asked the AI…",
+      },
+      ANSWER_MODE: {
+        kind: "enum",
+        label: "Answer as",
+        default: "text",
+        options: [
+          { value: "text", label: "Text" },
+          { value: "images", label: "Screenshots" },
+        ],
+      },
+      ANSWER_TEXT: {
+        kind: "string",
+        label: "Answer — text",
+        default:
+          "Paste the AI's answer here — plain text is fine. It types out line by line, keeping your paragraph breaks.",
+        multiline: true,
+        placeholder: "Paste the AI's answer text…",
+      },
+      ANSWER_IMAGES: {
+        kind: "images",
+        label: "Answer — screenshots",
+        default: [],
+        max: 8,
+        description: "Add screenshots of the AI's output (top to bottom). They scroll in like a chat.",
+      },
+      SHOW_LOGO: {
+        kind: "boolean",
+        label: "Apify logo outro",
+        default: true,
+        description: "End on the Apify wordmark. Turn off to end on the answer.",
+      },
+    },
+    showIf: {
+      ANSWER_TEXT: (v) => v.ANSWER_MODE !== "images",
+      ANSWER_IMAGES: (v) => v.ANSWER_MODE === "images",
     },
   },
 };

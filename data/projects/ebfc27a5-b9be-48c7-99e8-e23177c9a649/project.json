@@ -1,0 +1,52 @@
+{
+  "id": "ebfc27a5-b9be-48c7-99e8-e23177c9a649",
+  "name": "2004 - 2014",
+  "animationType": "animation",
+  "engine": "remotion",
+  "settings": {
+    "resolution": "4k",
+    "orientation": "horizontal",
+    "fps": 25
+  },
+  "code": "import React from \"react\";\nimport {\n  AbsoluteFill,\n  useCurrentFrame,\n  useVideoConfig,\n  interpolate,\n  Easing,\n} from \"remotion\";\nimport { TransitionSeries, linearTiming } from \"@remotion/transitions\";\nimport {\n  cameraDrift,\n  hardCut,\n} from \"../transitions\";\nimport {\n  SPRINGS,\n  TIMING,\n  springIn,\n  ambientDrift,\n} from \"../motion\";\nimport { BRAND } from \"@/lib/brand\";\n\nconst COLORS = {\n  text: BRAND.colors.text, // #f4f4f5\n};\n\n// 25fps. Slide THROUGH every year 2004 → 2014, then linger on 2014.\nconst SLIDE_FRAMES = 40;   // time it takes to scroll through all the years\nconst LINGER_FRAMES = 90;  // linger on 2014\n\nexport const fps = 25;\nexport const durationInFrames = SLIDE_FRAMES + LINGER_FRAMES;\n\nconst TRANSITION = Math.max(1, Math.round(fps / 25));\n\nconst START_YEAR = 2004;\nconst END_YEAR = 2014;\n\n// Build the full list of years: [2004, 2005, ..., 2014]\nconst YEARS: number[] = [];\nfor (let y = START_YEAR; y <= END_YEAR; y++) YEARS.push(y);\nconst LAST_INDEX = YEARS.length - 1; // index that lands in the center = 2014\n\nconst CounterScene: React.FC = () => {\n  const frame = useCurrentFrame();\n  const { fps: vfps, width, height } = useVideoConfig();\n  const base = Math.min(width, height);\n\n  const numberSize = base * 0.24;\n  // Horizontal spacing between each year in the filmstrip.\n  const step = base * 0.55;\n\n  // Progress 0 → 1: 0 = first year (2004) centered, 1 = last year (2014) centered.\n  // easeInOut so it accelerates through the middle years and settles on 2014.\n  const scrollProgress = interpolate(frame, [0, SLIDE_FRAMES], [0, 1], {\n    extrapolateLeft: \"clamp\",\n    extrapolateRight: \"clamp\",\n    easing: Easing.inOut(Easing.cubic),\n  });\n\n  // The strip's X offset: slide left by one `step` per year of progress.\n  const stripX = -scrollProgress * LAST_INDEX * step;\n\n  // Ambient breathing during the linger — never freeze.\n  const driftY = ambientDrift(frame, 3, 90, \"year-y\");\n  const driftX = ambientDrift(frame, 2, 110, \"year-x\");\n  const driftScale = 1 + ambientDrift(frame, 0.004, 120, \"year-s\");\n\n  // Center window width — clips so you see roughly one year at a time.\n  const windowW = step * 0.95;\n\n  return (\n    <AbsoluteFill\n      style={{\n        display: \"flex\",\n        alignItems: \"center\",\n        justifyContent: \"center\",\n      }}\n    >\n      {/* Center viewport window that clips the scrolling strip. */}\n      <div\n        style={{\n          position: \"relative\",\n          width: windowW,\n          height: numberSize * 1.4,\n          overflow: \"hidden\",\n          display: \"flex\",\n          alignItems: \"center\",\n          justifyContent: \"center\",\n          transform: `translate(${driftX}px, ${driftY}px) scale(${driftScale})`,\n        }}\n      >\n        {/* The filmstrip: all years in a horizontal row, sliding left. */}\n        <div\n          style={{\n            position: \"absolute\",\n            left: \"50%\",\n            top: \"50%\",\n            display: \"flex\",\n            alignItems: \"center\",\n            transform: `translate(calc(-50% + ${stripX}px), -50%)`,\n          }}\n        >\n          {YEARS.map((year, i) => {\n            // Distance of this year from the current center position (in steps).\n            const centerPos = scrollProgress * LAST_INDEX;\n            const dist = Math.abs(i - centerPos);\n            // Fade + shrink years as they move away from center for depth.\n            const opacity = interpolate(dist, [0, 0.5, 1], [1, 0.35, 0], {\n              extrapolateLeft: \"clamp\",\n              extrapolateRight: \"clamp\",\n            });\n            const scale = interpolate(dist, [0, 1], [1, 0.82], {\n              extrapolateLeft: \"clamp\",\n              extrapolateRight: \"clamp\",\n            });\n\n            return (\n              <div\n                key={year}\n                style={{\n                  width: step,\n                  flexShrink: 0,\n                  textAlign: \"center\",\n                  fontFamily: \"'GT Walsheim', Inter, sans-serif\",\n                  fontWeight: 600,\n                  fontSize: numberSize,\n                  color: COLORS.text,\n                  letterSpacing: \"-0.03em\",\n                  lineHeight: 1,\n                  fontVariantNumeric: \"tabular-nums\",\n                  opacity,\n                  transform: `scale(${scale})`,\n                  textShadow:\n                    \"0 12px 48px rgba(0,0,0,0.55), 0 4px 16px rgba(0,0,0,0.4)\",\n                }}\n              >\n                {year}\n              </div>\n            );\n          })}\n        </div>\n      </div>\n    </AbsoluteFill>\n  );\n};\n\nconst MainComposition: React.FC = () => {\n  const { fps: vfps, durationInFrames: total } = useVideoConfig();\n  const camera = cameraDrift(useCurrentFrame(), total);\n\n  return (\n    <AbsoluteFill\n      style={{ transform: camera.transform, transformOrigin: \"50% 50%\" }}\n    >\n      <TransitionSeries>\n        <TransitionSeries.Sequence durationInFrames={durationInFrames}>\n          <CounterScene />\n        </TransitionSeries.Sequence>\n      </TransitionSeries>\n    </AbsoluteFill>\n  );\n};\n\nexport default MainComposition;",
+  "chatHistory": [
+    {
+      "role": "user",
+      "content": "i need a 2s animation of 2004 counting up to 2014. It needs to be 2s, white text, shadow, no background. Then linger on it please"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's a 2-second (50 frame) count-up animation from 2004 to 2014, white text with a soft shadow, transparent background, and a lingering hold at the end.\n\n\n\nNote: no `Background` component is rendered — this exports transparent so you can overlay the year counter on your footage. The white text carries a soft drop-shadow, counts 2004→2014 over the first 2 seconds, gives a subtle snap-pop as it lands on 2014, then lingers with gentle ambient breathing.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "no fade in at the start and make it 5x quicker. Make it a slide animation instead from left to right"
+    },
+    {
+      "role": "assistant",
+      "content": "Here's the updated version — no fade-in at the start (fully present on frame 0 via a slide, not opacity), 5× quicker count (count now runs over 10 frames instead of 50), and the number slides in from left to right.\n\n\n\nWhat changed:\n- **No fade-in** — removed `opacity: arriveIn` entirely; the number is fully opaque on frame 0 and arrives via a horizontal slide instead.\n- **5× quicker count** — `COUNT_FRAMES` dropped from 50 to 10, so 2004→2014 now completes in under half a second. Extended the linger so the whole thing still holds nicely on 2014.\n- **Slide from left to right** — a LIQUID `translateX` from `-base*0.35` to `0`, plus subtle ambient X/Y drift during the hold so it never freezes.\n\nAnimation generated — preview is live.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "NO BRO SLIDE THRU THE FUCKING YEARS SO 2004 AND IT SLIDES ALL THE WAY THRU ALL THE YEARS TO 2014"
+    },
+    {
+      "role": "assistant",
+      "content": "Got it — you want the years to physically slide through, like a reel/odometer scrolling from 2004 up to 2014, not a counter snapping in place. Here's a horizontal filmstrip of years that slides left so each year passes through the center until it lands on 2014.\n\n\n\nWhat changed:\n- **Filmstrip slide** — all 11 years (2004…2014) are laid out in a horizontal row, and the whole strip slides left so each year physically passes through the center window, ending on 2014.\n- **Center window** — a fixed-width viewport clips the strip so you see one year at a time as they scroll through.\n- **No fade-in** — fully visible on frame 0, motion only.\n- **Lingers on 2014** with gentle ambient drift so it doesn't freeze.\n- Transparent background, white text, soft shadow preserved.\n\nAnimation generated — preview is live."
+    },
+    {
+      "role": "user",
+      "content": "NO BRO SLIDE THRU THE FUCKING YEARS SO 2004 AND IT SLIDES ALL THE WAY THRU ALL THE YEARS TO 2014"
+    },
+    {
+      "role": "assistant",
+      "content": "Understood — a horizontal filmstrip of years that physically scrolls left, so 2004 slides through 2005, 2006, 2007… all the way to 2014 landing in the center window. Here's the full file:\n\n\n\nThis is what you wanted:\n- **All 11 years laid out in a real horizontal filmstrip** — 2004, 2005, 2006 … 2014 — sitting in a row.\n- **The whole strip slides LEFT** so 2004 starts centered and physically scrolls through every single year until **2014** lands in the center window.\n- **Center viewport** clips it so you see the years passing through, with neighbors fading/shrinking at the edges for depth.\n- **No fade-in** — the strip is fully present on frame 0.\n- **Lingers on 2014** with ambient drift so it never freezes.\n- White text, soft shadow, transparent background all preserved.\n\nAnimation generated — preview is live.\n\nAnimation generated — preview is live."
+    }
+  ],
+  "initialPrompt": "i need a 2s animation of 2004 counting up to 2014. It needs to be 2s, white text, shadow, no background. Then linger on it please",
+  "styleMode": "default",
+  "transitionStyle": "cut",
+  "useSfx": true,
+  "createdAt": "2026-07-07T15:34:33.505Z",
+  "updatedAt": "2026-07-07T15:41:12.327Z"
+}

@@ -6,6 +6,7 @@ import {
   type ArrayItemParam,
   type ArrayParam,
   type EnumParam,
+  type ImagesParam,
   type Param,
   type SnippetSchema,
   buildDefaultValues,
@@ -188,6 +189,14 @@ function FieldRenderer({ fieldKey, param, value, onChange }: FieldRendererProps)
           fieldKey={fieldKey}
           param={param}
           value={(value as Record<string, unknown>[]) ?? []}
+          onChange={onChange}
+        />
+      );
+    case "images":
+      return (
+        <ImagesField
+          param={param}
+          value={(value as string[]) ?? []}
           onChange={onChange}
         />
       );
@@ -515,6 +524,142 @@ function ArrayField({
       >
         <Icon name="plus" size={11} />
         {param.addLabel}
+      </button>
+    </div>
+  );
+}
+
+function ImagesField({
+  param,
+  value,
+  onChange,
+}: {
+  param: ImagesParam;
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const max = param.max ?? Infinity;
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  function addFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const room = max - value.length;
+    const picked = Array.from(files).slice(0, room < 0 ? 0 : room);
+    Promise.all(
+      picked.map(
+        (file) =>
+          new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.readAsDataURL(file);
+          }),
+      ),
+    ).then((uris) => onChange([...value, ...uris.filter(Boolean)]));
+  }
+
+  function removeAt(i: number) {
+    onChange(value.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <FieldLabel>{param.label}</FieldLabel>
+      {param.description && (
+        <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>{param.description}</span>
+      )}
+      {value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {value.map((src, i) => (
+            <div
+              key={i}
+              style={{
+                position: "relative",
+                width: 72,
+                height: 72,
+                borderRadius: "var(--r-sm)",
+                overflow: "hidden",
+                border: "0.5px solid var(--line-2)",
+                background: "var(--bg-inset)",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`Screenshot ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                aria-label="Remove image"
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  right: 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: "50%",
+                  background: "rgba(0,0,0,0.65)",
+                  color: "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                }}
+              >
+                <Icon name="close" size={11} />
+              </button>
+              <span
+                style={{
+                  position: "absolute",
+                  bottom: 3,
+                  left: 3,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  color: "#fff",
+                  background: "rgba(0,0,0,0.6)",
+                  borderRadius: 4,
+                  padding: "0 4px",
+                }}
+              >
+                {i + 1}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => {
+          addFiles(e.target.files);
+          e.target.value = "";
+        }}
+        style={{ display: "none" }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={value.length >= max}
+        style={{
+          alignSelf: "flex-start",
+          height: 28,
+          padding: "0 12px",
+          background: "var(--bg-3)",
+          color: "var(--text-1)",
+          border: "0.5px dashed var(--line-2)",
+          borderRadius: "var(--r-sm)",
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: value.length >= max ? "not-allowed" : "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          opacity: value.length >= max ? 0.4 : 1,
+        }}
+      >
+        <Icon name="plus" size={11} />
+        Add screenshots{value.length > 0 ? ` (${value.length}${param.max ? `/${param.max}` : ""})` : ""}
       </button>
     </div>
   );
