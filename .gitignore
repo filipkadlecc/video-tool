@@ -54,3 +54,7 @@ next-env.d.ts
 
 # unrelated data export (X mentions scrape)
 /apify_x_mentions_*.json
+
+# per-user data — every user keeps their own local project library
+/data/projects/
+/data/collections.json
