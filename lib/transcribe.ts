@@ -9,13 +9,27 @@ export interface TranscriptWord {
   probability?: number;
 }
 
+export interface TranscriptSegment {
+  start: number; // seconds
+  end: number;   // seconds
+  text: string;
+}
+
 export interface Transcript {
   text: string;
   language: string;
   words: TranscriptWord[];
+  // Segment-level view (one entry per Whisper segment). Optional so transcripts
+  // cached before this field existed still parse. ~10-15x more compact than
+  // `words` — this is what gets fed to the AI for locating moments.
+  segments?: TranscriptSegment[];
   durationSeconds: number;
   model: string;
   generatedAt: string;
+  // Source fingerprint at transcription time, for cache invalidation. Optional
+  // for backward compat: absent on old caches → treated as "trust it".
+  sourceMtimeMs?: number;
+  sourceSize?: number;
 }
 
 export interface TranscribeOptions {
@@ -53,7 +67,21 @@ function transcriptCachePath(mediaPath: string, outputDir?: string): string {
 
 function flatten(raw: RawWhisperOutput, model: string): Transcript {
   const words: TranscriptWord[] = [];
+  const segments: TranscriptSegment[] = [];
   for (const seg of raw.segments ?? []) {
+    // Retain the segment-level view alongside words. Skip segments with
+    // non-finite bounds or empty text so downstream rendering stays clean.
+    const segText = seg.text?.trim();
+    if (
+      segText &&
+      typeof seg.start === "number" &&
+      Number.isFinite(seg.start) &&
+      typeof seg.end === "number" &&
+      Number.isFinite(seg.end) &&
+      seg.end >= seg.start
+    ) {
+      segments.push({ start: seg.start, end: seg.end, text: segText });
+    }
     for (const w of seg.words ?? []) {
       const text = w.word?.trim();
       if (!text) continue;
@@ -82,6 +110,7 @@ function flatten(raw: RawWhisperOutput, model: string): Transcript {
     text: (raw.text ?? "").trim(),
     language: raw.language ?? "en",
     words,
+    segments,
     durationSeconds,
     model,
     generatedAt: new Date().toISOString(),
@@ -147,6 +176,15 @@ export async function transcribe(
 
   const raw = JSON.parse(await fs.readFile(whisperJsonPath, "utf-8")) as RawWhisperOutput;
   const transcript = flatten(raw, model);
+
+  // Stamp the source fingerprint so cache-consumers can detect a changed file.
+  try {
+    const stat = await fs.stat(mediaPath);
+    transcript.sourceMtimeMs = stat.mtimeMs;
+    transcript.sourceSize = stat.size;
+  } catch {
+    // Non-fatal — leave the fields undefined (treated as "trust it").
+  }
 
   // Cache + clean up the raw whisper json, keeping only the flattened transcript.
   const cachePath = transcriptCachePath(mediaPath, outputDir);

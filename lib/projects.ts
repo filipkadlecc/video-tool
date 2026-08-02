@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
-import type { Project, ProjectMeta, AnimationType, Engine, ProjectSettings, SvgFile, StyleMode, TransitionStyle } from "./types";
+import type { Project, ProjectMeta, AnimationType, Engine, ProjectSettings, SvgFile, StyleMode, TopicCardStyle, TransitionStyle } from "./types";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -65,6 +65,7 @@ export interface CreateProjectData {
   scriptWithTimestamps?: string;
   svgContents?: SvgFile[];
   styleMode?: StyleMode;
+  topicCardStyle?: TopicCardStyle;
   transitionStyle?: TransitionStyle;
   useSfx?: boolean;
   collectionId?: string;
@@ -133,6 +134,7 @@ export function createProject(data: CreateProjectData): Project {
     svgContents: data.svgContents,
     mediaFolder,
     styleMode: data.styleMode,
+    topicCardStyle: data.topicCardStyle,
     transitionStyle: data.transitionStyle,
     // SFX defaults on for everything except terminal recordings.
     useSfx: data.useSfx ?? data.animationType !== "terminal",

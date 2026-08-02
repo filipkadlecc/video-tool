@@ -8,13 +8,14 @@ import ChatPanel, { type ChatPanelHandle } from "@/components/ChatPanel";
 import AssetBrowser from "@/components/AssetBrowser";
 import SnippetBrowser from "@/components/SnippetBrowser";
 import SmartTrimDialog from "@/components/SmartTrimDialog";
+import AnalyzeDialog from "@/components/AnalyzeDialog";
 import ExportDialog from "@/components/ExportDialog";
 import TerminalPreview from "@/components/TerminalPreview";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
 import Timeline from "@/components/Timeline";
 import { evalSceneCode } from "@/remotion/DynamicScene";
 import { parseSceneMeta } from "@/lib/hyperframes/template";
-import type { Project, ChatMessage, TerminalAnnotations, StyleMode, TransitionStyle } from "@/lib/types";
+import type { Project, ChatMessage, TerminalAnnotations, StyleMode, TopicCardStyle, TransitionStyle } from "@/lib/types";
 import { getResolution } from "@/lib/types";
 import { buildTerminalExportPlan } from "@/lib/terminal-export";
 import { stripBackgroundsForTransparency } from "@/lib/transparent-bg";
@@ -64,12 +65,14 @@ export default function ProjectEditor() {
   const [terminalAnnotations, setTerminalAnnotations] = useState<TerminalAnnotations | undefined>(undefined);
   const [customTheme, setCustomTheme] = useState<boolean>(false);
   const [styleMode, setStyleMode] = useState<StyleMode>("default");
+  const [topicCardStyle, setTopicCardStyle] = useState<TopicCardStyle>("cards");
   const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>("cut");
   const [useSfx, setUseSfx] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [assetsOpen, setAssetsOpen] = useState(false);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [smartTrimOpen, setSmartTrimOpen] = useState(false);
+  const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [bgRemovedFlash, setBgRemovedFlash] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -103,6 +106,7 @@ export default function ProjectEditor() {
         setTerminalAnnotations(data.terminalAnnotations);
         setCustomTheme(Boolean(data.customTheme));
         setStyleMode(data.styleMode ?? "default");
+        setTopicCardStyle(data.topicCardStyle ?? "cards");
         setTransitionStyle(data.transitionStyle ?? "cut");
         setUseSfx(data.useSfx ?? data.animationType !== "terminal");
         lastSavedRef.current = {
@@ -461,6 +465,11 @@ export default function ProjectEditor() {
           </Button>
         )}
         {isVideoProject && (
+          <Button variant="outline" size="sm" icon="search" onClick={() => setAnalyzeOpen(true)} title="Analyze footage so the AI can see it (transcript + scene cuts)">
+            Analyze
+          </Button>
+        )}
+        {isVideoProject && (
           <Button variant="outline" size="sm" icon="sparkle" onClick={() => setSmartTrimOpen(true)}>
             Smart trim
           </Button>
@@ -584,6 +593,7 @@ export default function ProjectEditor() {
                 svgContents={project.svgContents}
                 styleMode={styleMode}
                 onStyleModeChange={setStyleMode}
+                topicCardStyle={topicCardStyle}
                 transitionStyle={transitionStyle}
                 onTransitionStyleChange={handleTransitionStyleChange}
                 useSfx={useSfx}
@@ -595,7 +605,10 @@ export default function ProjectEditor() {
                   // For Smart Trim projects the dialog generates the composition,
                   // not the AI chat — captured from the URL once on mount before
                   // the ?action=smartTrim param gets cleaned.
-                  initialAutoAction !== "smartTrim"
+                  initialAutoAction !== "smartTrim" &&
+                  // Video projects must be Analyzed first, then edited via chat —
+                  // never auto-generate blind on load.
+                  !isVideoProject
                 }
                 onGenerationComplete={handleGenerationComplete}
                 sceneError={sceneError}
@@ -632,6 +645,13 @@ export default function ProjectEditor() {
           if (code) codeHistory.pushSnapshot(code, chatHistory);
           setCode(generatedCode);
         }}
+      />
+
+      <AnalyzeDialog
+        open={analyzeOpen}
+        onClose={() => setAnalyzeOpen(false)}
+        projectId={projectId}
+        hasMediaFolder={!!project.mediaFolder}
       />
 
       {(() => {

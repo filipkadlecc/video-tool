@@ -10,21 +10,15 @@ import { TERMINAL_EDIT_EXAMPLES } from "./terminal-examples";
 import { buildSfxPrompt } from "./sfx";
 import { buildHyperframesPrompt } from "./hyperframes-base";
 import type { SfxEntry } from "../sfx";
-import type { AnimationType, Engine, ProjectSettings, StyleMode, TransitionStyle } from "../types";
+import type { EnrichedMediaFile } from "../media-analysis";
+import type { AnimationType, Engine, ProjectSettings, StyleMode, TopicCardStyle, TransitionStyle } from "../types";
 import { getResolution } from "../types";
-
-interface MediaFileInfo {
-  name: string;
-  path: string;
-  type: string;
-  sizeFormatted: string;
-}
 
 export function buildSystemPrompt(
   animationType: AnimationType,
   settings: ProjectSettings,
   assetPaths?: string[],
-  videoContext?: { projectId: string; mediaFiles: MediaFileInfo[] },
+  videoContext?: { projectId: string; mediaFiles: EnrichedMediaFile[]; compFps: number; topicCardStyle?: TopicCardStyle },
   styleMode?: StyleMode,
   customTheme?: boolean,
   useSfx?: boolean,
@@ -60,7 +54,7 @@ export function buildSystemPrompt(
   prompt += "\n\n" + BROLL_DARK_PROMPT;
 
   if (animationType === "video" && videoContext) {
-    prompt += "\n\n" + buildVideoEditingPrompt(videoContext.projectId, videoContext.mediaFiles);
+    prompt += "\n\n" + buildVideoEditingPrompt(videoContext.projectId, videoContext.mediaFiles, videoContext.compFps, videoContext.topicCardStyle ?? "cards");
   }
 
   const BG_BLOCKLIST = new Set([

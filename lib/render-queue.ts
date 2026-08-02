@@ -142,7 +142,15 @@ registerRoot(Root);
 
 export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed" | "qtrle" | "hevc-alpha";
 
-export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264", svgContents?: { filename: string; content: string }[]): RenderJob {
+// Escape an absolute path for use inside an ffmpeg filtergraph value (e.g. lut3d).
+// Single-quote so spaces/colons are literal; escape embedded backslashes and quotes.
+function escapeForFiltergraph(p: string): string {
+  return `'${p.replace(/\\/g, "\\\\").replace(/'/g, "'\\''")}'`;
+}
+
+// `lut` is an absolute path to a .cube file (already resolved + traversal-guarded by
+// the caller), or undefined for no grade. Applied only to the opaque h264 export.
+export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264", svgContents?: { filename: string; content: string }[], lut?: string): RenderJob {
   const jobId = generateJobId();
   const job: RenderJob = {
     id: jobId,
@@ -179,11 +187,17 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         `${jobId}.${ext}`
       );
 
+      // Apply a color-grade LUT (ffmpeg lut3d) only on the opaque h264 path in v1.
+      const applyLut = codec === "h264" && !!lut;
+
       // qtrle and hevc-alpha aren't supported natively by Remotion: render
       // ProRes 4444 (with alpha) to a temp file, then transcode via ffmpeg.
+      // When grading h264, likewise render to a temp .mp4, then run the LUT pass.
       const remotionOutputPath = (codec === "qtrle" || codec === "hevc-alpha")
         ? path.join(process.cwd(), "public", "renders", `${jobId}.prores.mov`)
-        : outputPath;
+        : applyLut
+          ? path.join(process.cwd(), "public", "renders", `${jobId}.src.mp4`)
+          : outputPath;
 
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
@@ -275,6 +289,34 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 
         proc.on("error", reject);
       });
+
+      // Color-grade pass: bake the selected .cube LUT into the h264 export via
+      // lut3d, re-encoding the temp master to the final .mp4 (CRF 18 to match
+      // Remotion's h264), preserving any audio track.
+      if (applyLut && lut) {
+        await new Promise<void>((resolve, reject) => {
+          const ff = spawn(
+            "ffmpeg",
+            [
+              "-y", "-i", remotionOutputPath,
+              "-vf", `lut3d=${escapeForFiltergraph(lut)}`,
+              "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+              "-c:a", "copy",
+              "-movflags", "+faststart",
+              outputPath,
+            ],
+            { cwd: process.cwd(), env: { ...process.env } }
+          );
+          let ffErr = "";
+          ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); });
+          ff.on("close", (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`ffmpeg LUT pass failed: ${ffErr.slice(-500).trim()}`));
+          });
+          ff.on("error", reject);
+        });
+        try { fs.unlinkSync(remotionOutputPath); } catch {}
+      }
 
       if (codec === "qtrle") {
         await new Promise<void>((resolve, reject) => {

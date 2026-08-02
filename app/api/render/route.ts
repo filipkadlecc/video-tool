@@ -3,14 +3,25 @@ import type { RenderCodec } from "@/lib/render-queue";
 import { enqueueHyperframesRender } from "@/lib/hyperframes-queue";
 import type { HfFormat } from "@/lib/hyperframes-queue";
 import { getProject } from "@/lib/projects";
+import { resolveLutPath } from "@/lib/luts";
 import type { Engine } from "@/lib/types";
 
 export async function POST(request: Request) {
-  const { sceneId, code, durationInFrames, fps, width, height, codec, projectId, engine, format } = await request.json();
+  const body = await request.json();
+  const { sceneId, durationInFrames, fps, width, height, codec, projectId, engine, format, lut } = body;
+  let code: string = body.code;
 
   if (!code) {
     return Response.json({ error: "code is required" }, { status: 400 });
   }
+
+  // Headless rendering serves the Remotion bundle on its OWN port (e.g. :3001 when
+  // Next holds :3000), so any root-relative "/api/media/..." src would resolve
+  // against that bundle server and 404. Rewrite media URLs to absolute against this
+  // app's real origin so the renderer can fetch the uploaded footage. (No-op for
+  // scenes without media, e.g. hyperframes / pure animations.)
+  const origin = new URL(request.url).origin;
+  code = code.replace(/(["'`])\/api\/media\//g, `$1${origin}/api/media/`);
 
   // HyperFrames engine: HTML/GSAP scene rendered by its own CLI. Output format
   // is mp4 (opaque) by default, or webm/mov (transparent / alpha) on request.
@@ -23,6 +34,9 @@ export async function POST(request: Request) {
   const codecMap: Record<string, RenderCodec> = { h264: "h264", prores: "prores", "prores-xq": "prores-xq", uncompressed: "uncompressed", qtrle: "qtrle", "hevc-alpha": "hevc-alpha" };
   const validCodec: RenderCodec = codecMap[codec] || "h264";
   const svgContents = projectId ? getProject(projectId)?.svgContents : undefined;
-  const job = enqueueRender(sceneId || "untitled", code, durationInFrames || 250, fps || 25, width || 3840, height || 2160, validCodec, svgContents);
+  // Resolve the picker id to a safe absolute .cube path (null if none/invalid).
+  // The LUT grade is applied only to the opaque h264 export (see render-queue).
+  const lutPath = validCodec === "h264" ? (resolveLutPath(lut) ?? undefined) : undefined;
+  const job = enqueueRender(sceneId || "untitled", code, durationInFrames || 250, fps || 25, width || 3840, height || 2160, validCodec, svgContents, lutPath);
   return Response.json(job);
 }

@@ -6,9 +6,10 @@ import { listSfx } from "@/lib/sfx";
 import { getApifyReferenceImages, APIFY_REFERENCE_INTRO } from "@/lib/prompts/reference-images";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
+import { buildEnrichedMediaFiles, type EnrichedMediaFile } from "@/lib/media-analysis";
 import { analyzeSvgs, manifestForPrompt, diffForPrompt } from "@/lib/svg-analyzer";
 import { parseTape } from "@/lib/tape-parser";
-import type { AnimationType, Engine, ProjectSettings, ChatMessage, SvgFile, StyleMode, TransitionStyle } from "@/lib/types";
+import type { AnimationType, Engine, ProjectSettings, ChatMessage, SvgFile, StyleMode, TopicCardStyle, TransitionStyle } from "@/lib/types";
 
 const anthropic = new Anthropic();
 
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
     svgContents,
     projectId,
     styleMode,
+    topicCardStyle,
     transitionStyle,
     useSfx,
     engine,
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
     svgContents?: SvgFile[];
     projectId?: string;
     styleMode?: StyleMode;
+    topicCardStyle?: TopicCardStyle;
     transitionStyle?: TransitionStyle;
     useSfx?: boolean;
     engine?: Engine;
@@ -93,13 +96,23 @@ export async function POST(request: Request) {
 
   const assetPaths = listAssetPaths();
 
-  // For video projects, gather media file info
-  let videoContext: { projectId: string; mediaFiles: { name: string; path: string; type: string; sizeFormatted: string }[] } | undefined;
+  // For video projects, gather media file info enriched with analysis (probe +
+  // transcript segments + scene cuts) so the AI can edit with real understanding
+  // instead of just a filename list. Reads caches; only ffprobe may run inline.
+  let videoContext:
+    | { projectId: string; mediaFiles: EnrichedMediaFile[]; compFps: number; topicCardStyle: TopicCardStyle }
+    | undefined;
   if (animationType === "video" && projectId) {
     const project = getProject(projectId);
     if (project?.mediaFolder && fs.existsSync(project.mediaFolder)) {
       const mediaFiles = listMediaFiles(project.mediaFolder, project.mediaFolder);
-      videoContext = { projectId, mediaFiles };
+      const enriched = await buildEnrichedMediaFiles(project, mediaFiles);
+      videoContext = {
+        projectId,
+        mediaFiles: enriched,
+        compFps: projectSettings.fps,
+        topicCardStyle: topicCardStyle ?? project.topicCardStyle ?? "cards",
+      };
     }
   }
 

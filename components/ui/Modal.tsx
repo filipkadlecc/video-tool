@@ -10,11 +10,17 @@ interface ModalProps {
   width?: number;
   title?: string;
   stepLabel?: string;
+  /**
+   * When false, clicking the backdrop and pressing Escape do NOT close the modal
+   * (the X button still calls onClose). Used to prevent accidentally dismissing a
+   * modal mid-operation (e.g. an export in progress).
+   */
+  dismissible?: boolean;
 }
 
-export default function Modal({ open, onClose, children, width = 520, title, stepLabel }: ModalProps) {
+export default function Modal({ open, onClose, children, width = 520, title, stepLabel, dismissible = true }: ModalProps) {
   useEffect(() => {
-    if (!open) return;
+    if (!open || !dismissible) return;
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -23,13 +29,13 @@ export default function Modal({ open, onClose, children, width = 520, title, ste
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [open, onClose]);
+  }, [open, onClose, dismissible]);
 
   if (!open) return null;
 
   return (
     <div
-      onClick={onClose}
+      onClick={dismissible ? onClose : undefined}
       style={{
         position: "fixed",
         inset: 0,

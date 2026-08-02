@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { STYLE_MODES } from "@/lib/prompts/styles";
 import { TRANSITION_MODES } from "@/lib/prompts/transitions";
-import type { AnimationType, Engine, Resolution, Orientation, FPS, SvgFile, StyleMode, TransitionStyle, Collection } from "@/lib/types";
+import type { AnimationType, Engine, Resolution, Orientation, FPS, SvgFile, StyleMode, TopicCardStyle, TransitionStyle, Collection } from "@/lib/types";
 import { getAnimationTypeMeta } from "@/lib/animation-types";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
@@ -177,6 +177,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [notionUrl, setNotionUrl] = useState("");
   const [notionContent, setNotionContent] = useState<string | undefined>();
   const [notionLoading, setNotionLoading] = useState(false);
+  // Video projects: editable editorial-notes box. Fetch fills it; the user can
+  // also type/paste directly. Its content becomes the project's notionContent.
+  const [notesText, setNotesText] = useState("");
   const [scriptWithTimestamps, setScriptWithTimestamps] = useState("");
 
   const [svgFiles, setSvgFiles] = useState<SvgFile[]>([]);
@@ -193,6 +196,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [snippetValues, setSnippetValues] = useState<Record<string, unknown>>({});
   const [videoMode, setVideoMode] = useState<VideoMode>("smarttrim");
   const [styleMode, setStyleMode] = useState<StyleMode>("default");
+  const [topicCardStyle, setTopicCardStyle] = useState<TopicCardStyle>("cards");
   const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>("cut");
   const [stylePreviewOpen, setStylePreviewOpen] = useState(false);
   const [useSfx, setUseSfx] = useState(true);
@@ -256,6 +260,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     setPrompt("");
     setNotionUrl("");
     setNotionContent(undefined);
+    setNotesText("");
     setScriptWithTimestamps("");
     setSvgFiles([]);
     setMediaFiles([]);
@@ -280,6 +285,11 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
       if (res.ok) {
         const data = await res.json();
         setNotionContent(data.content);
+        // Drop the fetched content into the editable notes box (append so any
+        // notes the user already typed aren't lost).
+        if (data.content) {
+          setNotesText((prev) => [prev.trim(), data.content].filter(Boolean).join("\n\n"));
+        }
       }
     } catch {
       // ignore
@@ -322,7 +332,11 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         ? prompt.trim() || "Smart trim recording"
         : selectedSnippet
           ? prompt.trim() || `Started from ${selectedSnippet.name}`
-          : prompt.trim(),
+          : isVideo
+            ? // Video projects build via Analyze → chat, so a prompt is optional.
+              // Fall back to a label so the API's (initialPrompt||initialCode) check passes.
+              prompt.trim() || "Edit uploaded footage"
+            : prompt.trim(),
       initialCode: selectedSnippet
         ? (() => {
             const schema = SNIPPET_SCHEMAS[selectedSnippet.id];
@@ -330,10 +344,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             return renderSnippet(selectedSnippet.code, schema, snippetValues);
           })()
         : undefined,
-      notionContent,
+      // Video uses the editable notes box (which Fetch fills from Notion); other
+      // types keep the fetched-Notion content as-is.
+      notionContent: isVideo ? notesText.trim() || undefined : notionContent,
       scriptWithTimestamps: scriptWithTimestamps.trim() || undefined,
       svgContents: svgFiles.length > 0 ? svgFiles : undefined,
       styleMode: animationType === "terminal" || isVideo ? undefined : styleMode,
+      topicCardStyle: isVideo ? topicCardStyle : undefined,
       transitionStyle: animationType === "terminal" || isVideo ? undefined : transitionStyle,
       useSfx: animationType === "terminal" ? false : useSfx,
       collectionId: collectionId || undefined,
@@ -391,6 +408,24 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           );
           currentXhrRef.current = null;
           cumulative += file.size;
+        }
+      }
+
+      // Warm the analysis cache in the background so the AI can "see" the
+      // footage by the time the user starts chatting. `keepalive` lets these
+      // requests survive the navigation that follows. Fire-and-forget — the
+      // Analyze dialog on the project page is the guaranteed / re-run path.
+      if (isVideo && mediaFiles.length > 0) {
+        const analyzable = mediaFiles.filter((f) =>
+          /\.(mp4|mov|webm|mkv|avi|m4v|mp3|wav|m4a|aac)$/i.test(f.name)
+        );
+        for (const f of analyzable) {
+          fetch(`/api/media/${project.id}/analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mediaFile: f.name, model: "small.en" }),
+            keepalive: true,
+          }).catch(() => {});
         }
       }
 
@@ -1179,6 +1214,66 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   {pickEvents === 0
                     ? "Files upload into the project on create. Large videos take a moment."
                     : `Picker fired ${pickEvents}× · ${mediaFiles.length} file${mediaFiles.length === 1 ? "" : "s"} queued${lastPickStatus ? ` · ${lastPickStatus}` : ""}`}
+                </div>
+              </div>
+            )}
+
+            {animationType === "video" && (
+              <div>
+                <FieldLabel hint="Optional — the AI uses these to pick / cut moments">
+                  Editorial notes
+                </FieldLabel>
+                <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                  <Input
+                    value={notionUrl}
+                    onChange={setNotionUrl}
+                    placeholder="Paste a Notion link to import…"
+                    mono
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={fetchNotion}
+                    disabled={!notionUrl.trim() || notionLoading}
+                  >
+                    {notionLoading ? "Fetching…" : "Fetch"}
+                  </Button>
+                </div>
+                <Textarea
+                  rows={5}
+                  value={notesText}
+                  onChange={setNotesText}
+                  placeholder={"Type or paste notes/comments here — or Fetch from a Notion link above.\nFetched highlights + comments land here, and you can edit them before creating."}
+                  style={{ fontFamily: "var(--mono)", fontSize: 12 }}
+                />
+                <div className="mono" style={{ fontSize: 10, color: notesText.trim() ? "var(--accent)" : "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
+                  {notesText.trim()
+                    ? `${notesText.length.toLocaleString()} characters — after you Analyze the video, the AI matches these to the transcript + scene cuts.`
+                    : "After you Analyze the video, the AI matches these notes to the transcript + scene cuts."}
+                </div>
+              </div>
+            )}
+
+            {isVideo && (
+              <div>
+                <FieldLabel hint="How each interview topic is introduced in the edit">
+                  Topic labels
+                </FieldLabel>
+                <Segmented
+                  value={topicCardStyle}
+                  onChange={(v) => setTopicCardStyle(v as TopicCardStyle)}
+                  options={[
+                    { value: "cards", label: "Full-screen cards" },
+                    { value: "chips", label: "Corner chips" },
+                    { value: "none", label: "None" },
+                  ]}
+                />
+                <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
+                  {topicCardStyle === "cards"
+                    ? "A branded full-screen card wipes in between answers, then cuts to the clip."
+                    : topicCardStyle === "chips"
+                      ? "A small pill label sits in the corner over the footage."
+                      : "No topic labels — just the cuts."}
                 </div>
               </div>
             )}

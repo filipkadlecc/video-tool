@@ -75,6 +75,7 @@ interface ChatPanelProps {
   sceneError?: string;
   styleMode?: import("@/lib/types").StyleMode;
   onStyleModeChange?: (mode: import("@/lib/types").StyleMode) => void;
+  topicCardStyle?: import("@/lib/types").TopicCardStyle;
   transitionStyle?: import("@/lib/types").TransitionStyle;
   onTransitionStyleChange?: (mode: import("@/lib/types").TransitionStyle) => void;
   useSfx?: boolean;
@@ -102,6 +103,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     sceneError,
     styleMode,
     onStyleModeChange,
+    topicCardStyle,
     transitionStyle,
     onTransitionStyleChange,
     useSfx,
@@ -196,7 +198,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     // but its closure captures props — re-bind the handle whenever any prop
     // sendMessage reads changes, otherwise runWithPrompt would use stale state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, transitionStyle, useSfx, attachedSvgs, sceneError],
+    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError],
   );
 
   async function sendMessage(text: string, overrideCode?: string, opts: { force?: boolean } = {}) {
@@ -256,6 +258,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           currentCode: overrideCode ?? currentCode,
           projectId,
           styleMode,
+          topicCardStyle,
           transitionStyle,
           useSfx,
           engine,

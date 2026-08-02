@@ -7,7 +7,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { name, animationType, engine, settings, initialPrompt, initialCode, notionContent, scriptWithTimestamps, svgContents, styleMode, transitionStyle, useSfx, collectionId } = body;
+  const { name, animationType, engine, settings, initialPrompt, initialCode, notionContent, scriptWithTimestamps, svgContents, styleMode, topicCardStyle, transitionStyle, useSfx, collectionId } = body;
 
   if (!name || !animationType || !settings || (!initialPrompt && !initialCode)) {
     return Response.json({ error: "name, animationType, settings, and (initialPrompt or initialCode) are required" }, { status: 400 });
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
     scriptWithTimestamps,
     svgContents,
     styleMode,
+    topicCardStyle,
     transitionStyle,
     useSfx,
     collectionId,

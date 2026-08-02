@@ -1,5 +1,9 @@
 import { extractPageId, fetchPageContent } from "@/lib/notion";
 
+// Fetching inline comments means one API call per block, so a large page can
+// take a while. Give it headroom beyond the default.
+export const maxDuration = 180;
+
 export async function POST(request: Request) {
   const { url } = await request.json();
 

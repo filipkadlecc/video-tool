@@ -4,6 +4,10 @@ export type AnimationType = "broll" | "animation" | "svg" | "video" | "terminal"
 // CLI) is opt-in for testing. Absent on legacy projects → treated as remotion.
 export type Engine = "remotion" | "hyperframes";
 export type StyleMode = "default" | "kinetic" | "editorial" | "cinematic";
+// Video projects only: how per-topic labels are shown when cutting an interview.
+// "cards" = full-screen branded card between answers (default); "chips" = small
+// corner pill over the footage; "none" = no labels. Absent on legacy → "cards".
+export type TopicCardStyle = "cards" | "chips" | "none";
 // How scenes hand off to each other. Absent on legacy projects → treated as "cut".
 export type TransitionStyle = "cut" | "blend" | "camera";
 export type Resolution = "1080p" | "4k";
@@ -98,6 +102,8 @@ export interface Project {
   // `Set Theme {...}` line instead of forcing the Apify default.
   customTheme?: boolean;
   styleMode?: StyleMode;
+  // Video projects only — per-topic label style. Undefined → "cards".
+  topicCardStyle?: TopicCardStyle;
   // How scenes transition (cut / blend / camera). Undefined → "cut".
   transitionStyle?: TransitionStyle;
   // When true (default for non-terminal types), the AI may add tasteful SFX.

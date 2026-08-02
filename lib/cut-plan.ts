@@ -206,7 +206,7 @@ export function generateRemotionCode(plan: CutPlan, opts: GenerateCodeOptions): 
     const duration = Math.max(1, endFrame - startFrame);
     seqs.push(
       `        <Series.Sequence durationInFrames={${duration}}>\n` +
-        `          <Video src={${JSON.stringify(opts.mediaSrc)}} startFrom={${startFrame}} endAt={${endFrame}} />\n` +
+        `          <OffthreadVideo src={${JSON.stringify(opts.mediaSrc)}} startFrom={${startFrame}} endAt={${endFrame}} />\n` +
         `        </Series.Sequence>`
     );
   }
@@ -216,7 +216,7 @@ export function generateRemotionCode(plan: CutPlan, opts: GenerateCodeOptions): 
   );
 
   return `import React from "react";
-import { AbsoluteFill, Series, Video } from "remotion";
+import { AbsoluteFill, Series, OffthreadVideo } from "remotion";
 
 export const fps = ${fps};
 export const durationInFrames = ${totalFrames};

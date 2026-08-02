@@ -70,12 +70,20 @@ export default function ExportDialog({
   const isHyperframes = engine === "hyperframes";
   const visiblePresets = isHyperframes ? BUILT_IN_PRESETS.filter((p) => p.codec === "h264") : BUILT_IN_PRESETS;
   const [status, setStatus] = useState<"idle" | "queued" | "rendering" | "done" | "error">("idle");
+  // While rendering, closing is guarded (the render runs server-side and never
+  // stops) — this drives the "close anyway?" confirmation.
+  const [confirmingClose, setConfirmingClose] = useState(false);
   const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState(projectName.replace(/\s+/g, "-").toLowerCase());
   const [codec, setCodec] = useState<string>("h264");
   const [hfFormat, setHfFormat] = useState<"mp4" | "webm" | "mov">("mp4");
+  // Color-grade LUT — applied at export on the h264 path only (see render-queue).
+  const [luts, setLuts] = useState<{ id: string; name: string; builtIn: boolean }[]>([]);
+  const [lutId, setLutId] = useState<string>("none");
+  const [uploadingLut, setUploadingLut] = useState(false);
+  const lutInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Delivered file extension — HyperFrames by format, Remotion by codec.
   const ext = isHyperframes ? hfFormat : codec === "h264" ? "mp4" : "mov";
@@ -114,7 +122,52 @@ export default function ExportDialog({
 
   useEffect(() => {
     setUserPresets(loadUserPresets());
+    try {
+      const v = localStorage.getItem("vt-export-lut");
+      if (v) setLutId(v);
+    } catch {}
   }, []);
+
+  const refreshLuts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/luts");
+      if (res.ok) {
+        const d = await res.json();
+        setLuts(d.luts || []);
+      }
+    } catch {}
+  }, []);
+
+  // Load the available LUTs when the dialog opens.
+  useEffect(() => {
+    if (open) refreshLuts();
+  }, [open, refreshLuts]);
+
+  const selectLut = useCallback((id: string) => {
+    setLutId(id);
+    try {
+      localStorage.setItem("vt-export-lut", id);
+    } catch {}
+  }, []);
+
+  async function handleLutUpload(file: File) {
+    setUploadingLut(true);
+    try {
+      const res = await fetch(`/api/luts/upload?name=${encodeURIComponent(file.name)}`, {
+        method: "POST",
+        body: file,
+      });
+      if (res.ok) {
+        const d = await res.json();
+        await refreshLuts();
+        if (d.id) selectLut(d.id);
+      }
+    } catch {
+      // Non-fatal — the picker just won't gain the new entry.
+    } finally {
+      setUploadingLut(false);
+    }
+  }
 
   useEffect(() => {
     if (codec === "prores-xq") setShowAdvanced(true);
@@ -123,6 +176,26 @@ export default function ExportDialog({
   useEffect(() => {
     if (open) refreshCacheStats();
   }, [open, refreshCacheStats, status]);
+
+  // Reset the close-confirmation whenever the dialog (re)opens.
+  useEffect(() => {
+    if (open) setConfirmingClose(false);
+  }, [open]);
+
+  const isRendering = status === "queued" || status === "rendering";
+
+  // Warn before a tab close / refresh while a render is in progress. (The render
+  // itself keeps running server-side regardless — this just prevents losing the
+  // live view + auto-download by accident.)
+  useEffect(() => {
+    if (!isRendering) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isRendering]);
 
   useEffect(() => {
     if (!presetOpen) return;
@@ -173,7 +246,7 @@ export default function ExportDialog({
       const res = await fetch("/api/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, durationInFrames, fps, width, height, codec: isHyperframes ? "h264" : codec, projectId, engine, format: hfFormat }),
+        body: JSON.stringify({ code, durationInFrames, fps, width, height, codec: isHyperframes ? "h264" : codec, projectId, engine, format: hfFormat, lut: !isHyperframes && codec === "h264" ? lutId : undefined }),
       });
 
       if (!res.ok) throw new Error("Failed to enqueue render");
@@ -216,11 +289,23 @@ export default function ExportDialog({
   }
 
   function handleClose() {
+    // Don't tear down a render on close — ask first (X button while rendering).
+    if (isRendering) {
+      setConfirmingClose(true);
+      return;
+    }
     stopPolling();
     setStatus("idle");
     setProgress(0);
     setDownloadUrl(null);
     setError(null);
+    onClose();
+  }
+
+  // Close the dialog but leave the render running: keep polling so it still
+  // auto-downloads when done, and reopening shows live progress.
+  function closeKeepingRender() {
+    setConfirmingClose(false);
     onClose();
   }
 
@@ -238,7 +323,7 @@ export default function ExportDialog({
   ];
 
   return (
-    <Modal open={open} onClose={handleClose} width={480} title="Export" stepLabel="Render to file">
+    <Modal open={open} onClose={handleClose} width={480} title="Export" stepLabel="Render to file" dismissible={!isRendering}>
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
         {/* Presets */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -546,6 +631,88 @@ export default function ExportDialog({
         </div>
         )}
 
+        {/* Look (LUT) — color grade, h264 export only */}
+        {!isHyperframes && codec === "h264" && (
+          <div>
+            <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+              Look (LUT)
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <select
+                value={lutId}
+                onChange={(e) => selectLut(e.target.value)}
+                className="mono"
+                style={{
+                  flex: 1,
+                  height: 32,
+                  padding: "0 8px",
+                  fontSize: 12,
+                  background: "var(--bg-3)",
+                  color: "var(--text-0)",
+                  border: "0.5px solid var(--line-2)",
+                  borderRadius: "var(--r-sm)",
+                  cursor: "pointer",
+                }}
+              >
+                <option value="none">None</option>
+                {luts.some((l) => l.builtIn) && (
+                  <optgroup label="Built-in">
+                    {luts.filter((l) => l.builtIn).map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {luts.some((l) => !l.builtIn) && (
+                  <optgroup label="Custom">
+                    {luts.filter((l) => !l.builtIn).map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                icon="upload"
+                onClick={() => lutInputRef.current?.click()}
+                disabled={uploadingLut}
+              >
+                {uploadingLut ? "Uploading…" : ".cube"}
+              </Button>
+              <input
+                ref={lutInputRef}
+                type="file"
+                accept=".cube"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleLutUpload(f);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                padding: 8,
+                fontSize: 11,
+                color: "var(--text-2)",
+                background: "var(--bg-inset)",
+                borderRadius: 4,
+                border: "0.5px solid var(--line-2)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <Icon name="info" size={12} style={{ color: "var(--text-3)" }} />
+              {lutId === "none"
+                ? "No color grade. Pick a look (or upload a .cube) to bake a LUT into the exported .mp4."
+                : "Baked into the exported file on render — the editor preview stays ungraded."}
+            </div>
+          </div>
+        )}
+
         {/* File name */}
         <div>
           <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
@@ -594,6 +761,34 @@ export default function ExportDialog({
             </div>
             <div className="mono nums" style={{ fontSize: 11, color: "var(--text-3)" }}>
               frame {Math.round((progress / 100) * durationInFrames)} / {durationInFrames}
+            </div>
+          </div>
+        )}
+
+        {confirmingClose && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              padding: 12,
+              background: "var(--bg-inset)",
+              border: "0.5px solid var(--accent-line)",
+              borderRadius: "var(--r-sm)",
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Export is still rendering</div>
+            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+              It keeps running in the background and downloads automatically when it&apos;s done.
+              You can reopen Export any time to check progress — the render never stops.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button variant="outline" size="sm" onClick={() => setConfirmingClose(false)}>
+                Keep watching
+              </Button>
+              <Button variant="primary" size="sm" onClick={closeKeepingRender}>
+                Close (keep rendering)
+              </Button>
             </div>
           </div>
         )}

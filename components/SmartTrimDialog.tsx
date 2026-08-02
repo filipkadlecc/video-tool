@@ -79,7 +79,7 @@ export default function SmartTrimDialog({
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
-  const [model, setModel] = useState("tiny.en");
+  const [model, setModel] = useState("small.en");
 
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [plan, setPlan] = useState<CutPlan | null>(null);
