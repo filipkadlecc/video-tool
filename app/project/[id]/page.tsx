@@ -9,6 +9,7 @@ import AssetBrowser from "@/components/AssetBrowser";
 import SnippetBrowser from "@/components/SnippetBrowser";
 import SmartTrimDialog from "@/components/SmartTrimDialog";
 import AnalyzeDialog from "@/components/AnalyzeDialog";
+import FirstPassProgress, { type FirstPassState } from "@/components/FirstPassProgress";
 import ExportDialog from "@/components/ExportDialog";
 import TerminalPreview from "@/components/TerminalPreview";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
@@ -21,6 +22,7 @@ import { buildTerminalExportPlan } from "@/lib/terminal-export";
 import { stripBackgroundsForTransparency } from "@/lib/transparent-bg";
 import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
+import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import TypeBadge from "@/components/ui/TypeBadge";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
@@ -73,6 +75,11 @@ export default function ProjectEditor() {
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [smartTrimOpen, setSmartTrimOpen] = useState(false);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
+  // Automatic first-pass (analyze → smart-trim/compose) progress, for fresh video projects.
+  const [firstPass, setFirstPass] = useState<FirstPassState | null>(null);
+  // Video editor "Tools ▾" dropdown (Analyze / Smart trim / Snippets / Assets).
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [bgRemovedFlash, setBgRemovedFlash] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -128,17 +135,131 @@ export default function ProjectEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, router]);
 
-  // Honor ?action=smartTrim once: open the dialog and clean the URL.
+  // Honor ?action=smarttrim|compose once: run the automatic first pass
+  // (analyze every clip → build the first cut) with a visible progress panel,
+  // then clean the URL. Replaces the old "open the Smart Trim dialog" behavior.
   const consumedActionRef = useRef(false);
   useEffect(() => {
     if (consumedActionRef.current) return;
     if (loading || !project) return;
-    if (searchParams.get("action") !== "smartTrim") return;
+    const action = searchParams.get("action");
+    if (action !== "smarttrim" && action !== "compose") return;
     if (project.animationType !== "video") return;
+    if (project.code) return; // already built
     consumedActionRef.current = true;
-    setSmartTrimOpen(true);
     router.replace(`/project/${projectId}`);
+    void runFirstPass(action);
+    // runFirstPass is a stable inner fn; deps intentionally minimal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, project, projectId, router, searchParams]);
+
+  // Drive one analyze SSE request, mapping stages to a friendly label.
+  async function analyzeOne(mediaFile: string, onStage: (label: string) => void) {
+    const res = await fetch(`/api/media/${projectId}/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mediaFile }),
+    });
+    if (!res.ok || !res.body) throw new Error(`Analyze failed (HTTP ${res.status})`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const events = buf.split("\n\n");
+      buf = events.pop() ?? "";
+      for (const evt of events) {
+        const line = evt.split("\n").find((l) => l.startsWith("data: "));
+        if (!line) continue;
+        const payload = line.slice(6);
+        if (payload === "[DONE]") continue;
+        let d: Record<string, unknown>;
+        try { d = JSON.parse(payload); } catch { continue; }
+        const stage = d.stage as string | undefined;
+        const status = d.status as string | undefined;
+        // Auto-reframe is best-effort — if it fails, note it and keep going
+        // (the cut still builds from the original clips). Only genuinely fatal
+        // errors (probe/transcript, or a top-level error) abort the first pass.
+        if (stage === "reframe" && status === "error") { onStage("Auto-reframe unavailable — using original clips"); continue; }
+        if (d.error) throw new Error(String(d.error));
+        if (stage === "probe") onStage("Reading the video…");
+        else if (stage === "scenes") onStage(status === "progress" ? `Finding scene cuts… ${Math.round(Number(d.progress || 0) * 100)}%` : "Finding scene cuts…");
+        else if (stage === "transcript") onStage("Transcribing…");
+        else if (stage === "reframe") onStage("Auto-reframing to the timeline aspect…");
+      }
+    }
+  }
+
+  // Smart-trim first pass: transcribe-driven silence/filler cut on the primary clip.
+  async function buildSmartTrim(files: { path: string }[]) {
+    const primary = files[0];
+    const tRes = await fetch(`/api/transcribe/${projectId}?mediaFile=${encodeURIComponent(primary.path)}`).then((r) => r.json());
+    const transcript = tRes.transcript;
+    if (!transcript) throw new Error("No transcript available to trim");
+    // Prefer the auto-reframed clip if one exists (same timeline as the source).
+    const st = await fetch(`/api/media/${projectId}/analyze?mediaFile=${encodeURIComponent(primary.path)}`).then((r) => r.json());
+    const srcName = st.reframed || primary.path;
+    const mediaSrc = `/api/media/${projectId}/${srcName}`;
+    const cp = await fetch(`/api/cut-plan/${projectId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript, generate: { mediaSrc, fps: extractedFps } }),
+    }).then((r) => r.json());
+    if (!cp.ok || !cp.code) throw new Error(cp.error || "Cut plan failed");
+    codeHistory.pushSnapshot(code, chatHistory);
+    setCode(cp.code);
+  }
+
+  async function runFirstPass(mode: "smarttrim" | "compose") {
+    // Editorial notes can live in the notes box (notionContent) or the prompt box
+    // (initialPrompt). The generate route falls back across both; here we just
+    // detect whether ANY were attached, to drive the visible signal + prompt.
+    const initP = project?.initialPrompt?.trim();
+    const hasNotes = !!project?.notionContent?.trim() || !!(initP && initP !== "Edit uploaded footage");
+    try {
+      const list = await fetch(`/api/media/${projectId}/list`).then((r) => r.json());
+      const files: { name: string; path: string; type: string }[] = (list.files ?? []).filter(
+        (f: { type: string }) => f.type === "video" || f.type === "audio"
+      );
+      if (files.length === 0) {
+        setFirstPass({ mode, status: "error", fileCount: 0, fileIndex: 0, fileName: "", stageLabel: "", notesAttached: hasNotes, error: "No footage found to analyze. Add media, then re-run from Tools → Analyze." });
+        return;
+      }
+      setFirstPass({ mode, status: "analyzing", fileCount: files.length, fileIndex: 1, fileName: files[0].name, stageLabel: "Starting…", notesAttached: hasNotes });
+
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        setFirstPass((s) => (s ? { ...s, fileIndex: i + 1, fileName: f.name, stageLabel: "Analyzing…" } : s));
+        await analyzeOne(f.path, (label) => setFirstPass((s) => (s ? { ...s, stageLabel: label } : s)));
+      }
+
+      setFirstPass((s) => (s ? { ...s, status: "building", stageLabel: mode === "smarttrim" ? "Cutting silences + fillers…" : "Writing the first cut…" } : s));
+      if (mode === "smarttrim") {
+        await buildSmartTrim(files);
+        setFirstPass(null);
+      } else {
+        setFirstPass(null); // hand off to the AI chat's own generating UI
+        const prompt = hasNotes
+          ? "Build a first cut from my editorial notes: keep the highlighted passages, follow the inline comments, and structure it into topic segments. Ground every cut in the transcript timestamps and scene cuts. If an auto-reframed version of a clip is available, use it."
+          : "Build a strong first cut from the transcript and scene cuts: pick the most compelling, self-contained moments and assemble them cleanly. (No editorial notes were attached — use your judgment.) If an auto-reframed version of a clip is available, use it.";
+        chatRef.current?.runWithPrompt(prompt);
+      }
+    } catch (err) {
+      setFirstPass((s) => ({ mode, status: "error", fileCount: s?.fileCount ?? 0, fileIndex: s?.fileIndex ?? 0, fileName: s?.fileName ?? "", stageLabel: "", error: err instanceof Error ? err.message : "First pass failed" }));
+    }
+  }
+
+  // Close the Tools dropdown on an outside click.
+  useEffect(() => {
+    if (!toolsOpen) return;
+    function onClick(e: MouseEvent) {
+      if (toolsRef.current && !toolsRef.current.contains(e.target as Node)) setToolsOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [toolsOpen]);
 
   // Auto-save with 2s debounce
   useEffect(() => {
@@ -433,19 +554,22 @@ export default function ProjectEditor() {
             }}
           />
         </div>
-        {!isTerminalProject && (
+        {/* Convert ratio / Remove background are meaningful for animation scenes,
+            but footguns for uploaded footage — hidden for video (reframe handles
+            aspect; Remove background does nothing to a video). */}
+        {!isTerminalProject && !isVideoProject && (
           <ConvertAspectRatioButton
             projectId={projectId}
             currentOrientation={project.settings.orientation}
             disabled={!code.trim() || isGenerating}
           />
         )}
-        {!isTerminalProject && (
+        {!isTerminalProject && !isVideoProject && (
           <Button variant="outline" size="sm" icon="layers" onClick={() => setSnippetsOpen(true)}>
             Snippets
           </Button>
         )}
-        {hasTimeline && (
+        {hasTimeline && !isVideoProject && (
           <Button
             variant="outline"
             size="sm"
@@ -464,19 +588,58 @@ export default function ProjectEditor() {
             {bgRemovedFlash ? "Removed" : "Remove background"}
           </Button>
         )}
-        {isVideoProject && (
-          <Button variant="outline" size="sm" icon="search" onClick={() => setAnalyzeOpen(true)} title="Analyze footage so the AI can see it (transcript + scene cuts)">
-            Analyze
+        {/* Video: fewer top buttons — analyze / smart trim / snippets / assets
+            live under one Tools menu; the chat is the main editing surface. */}
+        {isVideoProject ? (
+          <div style={{ position: "relative" }} ref={toolsRef}>
+            <Button variant="outline" size="sm" icon="settings" onClick={() => setToolsOpen((v) => !v)}>
+              Tools <Icon name="chevronDown" size={12} />
+            </Button>
+            {toolsOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "100%",
+                  marginTop: 6,
+                  minWidth: 200,
+                  padding: 5,
+                  background: "var(--bg-3)",
+                  border: "0.5px solid var(--line-2)",
+                  borderRadius: "var(--r-sm)",
+                  boxShadow: "var(--sh-float)",
+                  zIndex: 20,
+                }}
+              >
+                {[
+                  { icon: "search", label: "Analyze footage", onClick: () => setAnalyzeOpen(true) },
+                  { icon: "sparkle", label: "Smart trim (re-run)", onClick: () => setSmartTrimOpen(true) },
+                  { icon: "layers", label: "Snippets", onClick: () => setSnippetsOpen(true) },
+                  { icon: "folder", label: "Assets", onClick: () => setAssetsOpen(true) },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => { setToolsOpen(false); item.onClick(); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8, width: "100%",
+                      padding: "8px 8px", fontSize: 12, background: "transparent", border: "none",
+                      color: "var(--text-0)", borderRadius: 4, cursor: "pointer", textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <Icon name={item.icon} size={13} style={{ color: "var(--text-2)" }} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <Button variant="outline" size="sm" icon="folder" onClick={() => setAssetsOpen(true)}>
+            Assets
           </Button>
         )}
-        {isVideoProject && (
-          <Button variant="outline" size="sm" icon="sparkle" onClick={() => setSmartTrimOpen(true)}>
-            Smart trim
-          </Button>
-        )}
-        <Button variant="outline" size="sm" icon="folder" onClick={() => setAssetsOpen(true)}>
-          Assets
-        </Button>
         {isTerminalProject ? (
           <Button
             variant="primary"
@@ -537,6 +700,8 @@ export default function ProjectEditor() {
                     />
                   ) : isHyperframes ? (
                     <HyperframesPreview code={code} width={width} height={height} />
+                  ) : firstPass ? (
+                    <FirstPassProgress state={firstPass} onDismiss={() => setFirstPass(null)} />
                   ) : (
                     <PreviewPanel code={code} width={width} height={height} svgContents={project.svgContents} />
                   )}

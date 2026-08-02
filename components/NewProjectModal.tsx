@@ -33,7 +33,7 @@ interface NewProjectModalProps {
   initialType?: AnimationType;
   // Called when the project is created and all media (if any) has finished
   // uploading. The parent is responsible for navigating to the new project.
-  onCreated: (result: { projectId: string; autoAction?: "smartTrim" }) => void;
+  onCreated: (result: { projectId: string; autoAction?: "smarttrim" | "compose" }) => void;
 }
 
 type Phase =
@@ -195,6 +195,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [selectedSnippetId, setSelectedSnippetId] = useState<string | null>(null);
   const [snippetValues, setSnippetValues] = useState<Record<string, unknown>>({});
   const [videoMode, setVideoMode] = useState<VideoMode>("smarttrim");
+  const [dragActive, setDragActive] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>("default");
   const [topicCardStyle, setTopicCardStyle] = useState<TopicCardStyle>("cards");
   const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>("cut");
@@ -411,28 +412,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         }
       }
 
-      // Warm the analysis cache in the background so the AI can "see" the
-      // footage by the time the user starts chatting. `keepalive` lets these
-      // requests survive the navigation that follows. Fire-and-forget — the
-      // Analyze dialog on the project page is the guaranteed / re-run path.
-      if (isVideo && mediaFiles.length > 0) {
-        const analyzable = mediaFiles.filter((f) =>
-          /\.(mp4|mov|webm|mkv|avi|m4v|mp3|wav|m4a|aac)$/i.test(f.name)
-        );
-        for (const f of analyzable) {
-          fetch(`/api/media/${project.id}/analyze`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mediaFile: f.name, model: "small.en" }),
-            keepalive: true,
-          }).catch(() => {});
-        }
-      }
-
       console.log("[create] done");
+      // For video projects, hand the chosen first-pass mode to the project page,
+      // which runs the whole first pass (analyze → smart-trim/compose) with a
+      // visible progress panel.
       onCreated({
         projectId: project.id,
-        autoAction: isSmartTrim ? "smartTrim" : undefined,
+        autoAction: isVideo ? videoMode : undefined,
       });
     } catch (err) {
       console.error("[create] failed", err);
@@ -678,8 +664,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
             {isVideo && (
               <div>
-                <FieldLabel hint="Pick how you want to edit this video">
-                  Editing mode
+                <FieldLabel hint="How should we build your starting cut?">
+                  First pass
                 </FieldLabel>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <ModeCard
@@ -687,7 +673,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     accent="#FF64B8"
                     icon="sparkle"
                     title="Smart trim"
-                    subtitle="Auto-build a Remotion edit — Whisper picks the takes, silences + fillers drop out"
+                    subtitle="Auto-cut the dead air — silences + filler words drop out"
                     onClick={() => setVideoMode("smarttrim")}
                   />
                   <ModeCard
@@ -695,7 +681,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     accent="#246DFF"
                     icon="code"
                     title="Compose"
-                    subtitle="AI writes the Remotion composition from your prompt"
+                    subtitle="The AI edits from your footage + notes"
                     onClick={() => setVideoMode("compose")}
                   />
                 </div>
@@ -703,7 +689,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   className="mono"
                   style={{ fontSize: 10, color: "var(--text-3)", marginTop: 8 }}
                 >
-                  Both modes produce a Remotion composition you can refine afterwards.
+                  After you create, we analyze the footage and build this first cut automatically —
+                  then you refine it by chatting.
                 </div>
               </div>
             )}
@@ -887,7 +874,11 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </div>
             )}
 
-            {!isSmartTrim && (
+            {/* Video projects have a single input — the Editorial notes box below —
+                so notes/instructions can't be split across two fields (the trap
+                where notes silently land in the wrong one). Non-video keeps its
+                generate prompt. */}
+            {!isSmartTrim && !isVideo && (
               <div>
                 <FieldLabel
                   hint={
@@ -923,7 +914,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </div>
             )}
 
-            {isSmartTrim && (
+            {isVideo && (
               <div
                 style={{
                   padding: 12,
@@ -941,13 +932,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Icon name="sparkle" size={12} style={{ color: "var(--accent)" }} />
                   <span style={{ fontWeight: 600, color: "var(--text-0)" }}>
-                    Smart trim flow
+                    What happens next
                   </span>
                 </div>
                 <div style={{ color: "var(--text-2)" }}>
-                  Add your media below — after upload, the Smart Trim dialog opens
-                  automatically. Whisper transcribes locally, silences &gt; 600ms and filler
-                  words drop out, kept ranges become a Remotion composition you can refine.
+                  {isSmartTrim
+                    ? "On create we analyze your footage (transcript + scene cuts, and auto-reframe if the timeline aspect differs), then auto-cut the silences + filler words into a first cut. You'll see the progress, then land on the edit to refine."
+                    : "On create we analyze your footage (transcript + scene cuts, and auto-reframe if the timeline aspect differs), then the AI builds a first cut from your notes. You'll see the progress, then land on the edit to refine."}
                 </div>
               </div>
             )}
@@ -1146,24 +1137,43 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     </div>
                   )}
                   <label
-                    onClick={() => {
-                      console.log("[picker] label clicked");
+                    onDragEnter={(e) => { e.preventDefault(); setDragActive(true); }}
+                    onDragOver={(e) => { e.preventDefault(); if (!dragActive) setDragActive(true); }}
+                    onDragLeave={(e) => {
+                      // Only clear when the pointer actually leaves the dropzone.
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragActive(false);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragActive(false);
+                      const dropped = Array.from(e.dataTransfer.files).filter((f) =>
+                        /\.(mp4|mov|webm|mkv|avi|m4v|mp3|wav|m4a|aac|png|jpe?g|webp|gif)$/i.test(f.name)
+                      );
+                      if (dropped.length) setMediaFiles((prev) => [...prev, ...dropped]);
                     }}
                     style={{
-                      height: 32,
-                      border: "0.5px dashed var(--line-3)",
-                      background: "transparent",
-                      color: "var(--text-1)",
-                      borderRadius: 4,
+                      minHeight: 72,
+                      padding: "14px 12px",
+                      border: dragActive ? "1.5px dashed var(--accent)" : "1px dashed var(--line-3)",
+                      background: dragActive ? "var(--accent-soft)" : "var(--bg-inset)",
+                      color: dragActive ? "var(--accent)" : "var(--text-1)",
+                      borderRadius: 6,
                       cursor: "pointer",
                       fontSize: 12,
                       fontWeight: 600,
                       display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
                       alignItems: "center",
                       justifyContent: "center",
+                      textAlign: "center",
+                      transition: "background 120ms, border-color 120ms, color 120ms",
                     }}
                   >
-                    + Add media
+                    {dragActive ? "Drop to add" : "＋ Add media"}
+                    <span style={{ fontWeight: 400, fontSize: 11, color: dragActive ? "var(--accent)" : "var(--text-3)" }}>
+                      {dragActive ? "release the files here" : "drag & drop video files here, or click to browse (select several)"}
+                    </span>
                     <input
                       type="file"
                       accept="video/*,audio/*,image/*,.mp4,.mov,.webm,.mkv,.avi,.m4v,.mp3,.wav,.m4a,.aac"
@@ -1220,8 +1230,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
 
             {animationType === "video" && (
               <div>
-                <FieldLabel hint="Optional — the AI uses these to pick / cut moments">
-                  Editorial notes
+                <FieldLabel hint="Your instructions + notes — the one place the AI reads for the edit">
+                  Notes & instructions
                 </FieldLabel>
                 <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                   <Input
@@ -1243,7 +1253,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   rows={5}
                   value={notesText}
                   onChange={setNotesText}
-                  placeholder={"Type or paste notes/comments here — or Fetch from a Notion link above.\nFetched highlights + comments land here, and you can edit them before creating."}
+                  placeholder={"Everything the AI should follow goes here: what to make (\"a 60s highlight reel\"), plus your KEEP highlights / comments. Or Fetch from a Notion link above."}
                   style={{ fontFamily: "var(--mono)", fontSize: 12 }}
                 />
                 <div className="mono" style={{ fontSize: 10, color: notesText.trim() ? "var(--accent)" : "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
@@ -1335,8 +1345,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               >
                 {creating
                   ? "Creating..."
-                  : isSmartTrim
-                    ? "Set up smart trim"
+                  : isVideo
+                    ? "Create & build first cut"
                     : selectedSnippet
                       ? `Create from ${selectedSnippet.name}`
                       : animationType === "terminal" ? "Create recording" : "Create animation"}

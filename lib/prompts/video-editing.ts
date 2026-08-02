@@ -16,7 +16,7 @@ Do NOT add topic labels or chips. Just cut between the answers (keep the speaker
   return `### Structure: full-screen topic cards between answers (default)
 
 Between interview answers, put a short **full-screen branded title card** (NOT a small corner chip):
-- A ~0.8–1.2s \`<Sequence>\` filling the frame on the brand background (\`COLORS.bg\` / the brand background image), with the topic as a large centered headline (e.g. "The impact"), animated in with \`springIn\`. Optionally a small Apify mark.
+- A \`<Sequence>\` filling the frame on the brand background (\`COLORS.bg\` / the brand background image), with the topic as a large centered headline (e.g. "The impact"), animated in with \`springIn\`. Optionally a small Apify mark. **Hold it ~4–5s (≈100–125 frames at 25fps)** — a real beat that reads as an intentional title card, not a flash. Never under ~3s.
 - Then cut to the answer clip.
 - Transition the card into the footage (a quick crossfade or wipe) so it feels produced, not a hard slam.
 - Keep the speaker **lower-third** on the FIRST answer only.
@@ -71,6 +71,16 @@ function renderFile(projectId: string, f: EnrichedMediaFile): string {
   }
 
   const lines: string[] = [head];
+  if (f.reframedPath) {
+    lines.push(
+      `↳ AUTO-REFRAMED version (subject-tracked, already cropped to fill THIS project's ` +
+        `frame): use this src instead of the original for this clip → ` +
+        `${JSON.stringify(`/api/media/${projectId}/${f.reframedPath}`)}. It has the SAME ` +
+        `duration, audio and timeline as the original, so keep the same startFrom/endAt and ` +
+        `transcript/scene timestamps — only swap the src. Drop it in full-frame ` +
+        `(style width/height 100%, objectFit "cover"); do NOT add your own crop/scale.`
+    );
+  }
   const p = f.probe;
   if (p) {
     if (f.type === "video") {
@@ -158,6 +168,14 @@ A hard black frame appears at a cut when an \`<OffthreadVideo>\` is asked for a 
 2. **Trim past the file.** Never set \`startFrom\`/\`endAt\` beyond the source file's real duration (you are given each file's duration + max source frame). Reading past the end freezes or blacks out.
 
 Prefer PLAIN back-to-back \`<Sequence from={running} durationInFrames={dur}>\` for hard cuts — they don't overlap, so they can't read past a trim and never black. Keep a solid opaque background \`<AbsoluteFill backgroundColor=…>\` at the root regardless. (The Player preview may still briefly flash while it re-seeks; the render is what matters, and the above keeps it clean.)
+
+### Audio: fade across every cut
+
+Stitching clips (especially from different source files) with \`volume={1}\` hard-cuts the audio, which clicks/pops at each join. Ramp the volume a few frames at each clip's edges instead — e.g. on the \`<OffthreadVideo>\`/\`<Audio>\`:
+\`\`\`tsx
+volume={(f) => interpolate(f, [0, 3, dur - 3, dur], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}
+\`\`\`
+(3–4 frame in/out per clip.) This smooths the soundtrack across cuts without any visible change.
 
 ### Camera drift / zoom must not move the overlays
 

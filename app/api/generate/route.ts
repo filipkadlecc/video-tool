@@ -7,6 +7,8 @@ import { getApifyReferenceImages, APIFY_REFERENCE_INTRO } from "@/lib/prompts/re
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
 import { buildEnrichedMediaFiles, type EnrichedMediaFile } from "@/lib/media-analysis";
+import { isReframedFilename } from "@/lib/reframe";
+import { getResolution } from "@/lib/types";
 import { analyzeSvgs, manifestForPrompt, diffForPrompt } from "@/lib/svg-analyzer";
 import { parseTape } from "@/lib/tape-parser";
 import type { AnimationType, Engine, ProjectSettings, ChatMessage, SvgFile, StyleMode, TopicCardStyle, TransitionStyle } from "@/lib/types";
@@ -43,6 +45,8 @@ function listMediaFiles(dir: string, baseDir: string): { name: string; path: str
     if (entry.isDirectory()) {
       files.push(...listMediaFiles(fullPath, baseDir));
     } else if (entry.isFile()) {
+      // Skip derived auto-reframe outputs — they're not user uploads.
+      if (isReframedFilename(entry.name)) continue;
       const ext = path.extname(entry.name).toLowerCase();
       const type = getMediaFileType(ext);
       if (type === "other") continue;
@@ -99,14 +103,26 @@ export async function POST(request: Request) {
   // For video projects, gather media file info enriched with analysis (probe +
   // transcript segments + scene cuts) so the AI can edit with real understanding
   // instead of just a filename list. Reads caches; only ffprobe may run inline.
+  // The model only ever sees `notionContent` (injected as "REFERENCE CONTENT
+  // (from Notion)"). Editing notes can land in the notes box (notionContent) OR
+  // the prompt box (initialPrompt) — so for video, fall back to initialPrompt
+  // when notionContent is empty, so the notes reach the model either way.
+  let effectiveNotionContent = notionContent;
   let videoContext:
     | { projectId: string; mediaFiles: EnrichedMediaFile[]; compFps: number; topicCardStyle: TopicCardStyle }
     | undefined;
   if (animationType === "video" && projectId) {
     const project = getProject(projectId);
+    if (!effectiveNotionContent?.trim() && project) {
+      const init = project.initialPrompt?.trim();
+      effectiveNotionContent =
+        project.notionContent?.trim() ||
+        (init && init !== "Edit uploaded footage" ? init : undefined);
+    }
     if (project?.mediaFolder && fs.existsSync(project.mediaFolder)) {
       const mediaFiles = listMediaFiles(project.mediaFolder, project.mediaFolder);
-      const enriched = await buildEnrichedMediaFiles(project, mediaFiles);
+      const target = getResolution(projectSettings.orientation, projectSettings.resolution);
+      const enriched = await buildEnrichedMediaFiles(project, mediaFiles, target);
       videoContext = {
         projectId,
         mediaFiles: enriched,
@@ -147,7 +163,7 @@ export async function POST(request: Request) {
     const attachReferences = isFirstUser && referenceImages.length > 0;
 
     if (isLastUser) {
-      let userContent = buildUserMessage(msg.content, currentCode, notionContent, scriptWithTimestamps, animationType, currentTapeDurationMs, engine);
+      let userContent = buildUserMessage(msg.content, currentCode, effectiveNotionContent, scriptWithTimestamps, animationType, currentTapeDurationMs, engine);
       if (svgContents && svgContents.length > 0) {
         const { manifests, sequenceDiff } = analyzeSvgs(svgContents);
         const parts: string[] = [];

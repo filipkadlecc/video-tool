@@ -19,12 +19,13 @@ interface Summary {
   height?: number;
   cuts?: number;
   segments?: number;
+  reframed?: boolean;
 }
 
 interface FileState {
   file: MediaFile;
   status: "checking" | "pending" | "analyzed" | "running" | "error";
-  stage?: "probe" | "scenes" | "transcript";
+  stage?: "probe" | "scenes" | "transcript" | "reframe";
   progress?: number; // 0..1 during scene detection
   transcriptLine?: string;
   summary?: Summary;
@@ -92,6 +93,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                   height: data.probe?.height,
                   cuts: data.scenes?.cutsSeconds?.length,
                   segments: data.transcript?.segments,
+                  reframed: !!data.reframed,
                 },
               });
             } catch {
@@ -157,7 +159,9 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
             else if (data.status === "done") patch(path, { stage: "transcript", progress: undefined, summary: { ...fs.summary, cuts: Number(data.cuts) } });
           } else if (data.stage === "transcript") {
             if (data.status === "progress" && data.line) patch(path, { stage: "transcript", transcriptLine: String(data.line).trim().slice(-80) });
-            else if (data.status === "done") patch(path, { summary: { ...fs.summary, segments: Number(data.segments) } });
+            else if (data.status === "done") patch(path, { stage: "reframe", summary: { ...fs.summary, segments: Number(data.segments) } });
+          } else if (data.stage === "reframe") {
+            if (data.status === "done") patch(path, { summary: { ...fs.summary, reframed: true } });
           }
         }
       }
@@ -177,6 +181,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
           height: status.probe?.height,
           cuts: status.scenes?.cutsSeconds?.length,
           segments: status.transcript?.segments,
+          reframed: !!status.reframed,
         },
       });
     } catch (err) {
@@ -268,6 +273,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                       : "not probed"}
                     {f.summary?.cuts != null && ` · ${f.summary.cuts} cuts`}
                     {f.summary?.segments != null && ` · ${f.summary.segments} segments`}
+                    {f.summary?.reframed && ` · reframed ✓`}
                   </div>
 
                   {/* Progress line while running */}
@@ -276,6 +282,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                       {f.stage === "probe" && "Probing…"}
                       {f.stage === "scenes" && `Detecting scene cuts…${f.progress != null ? ` ${Math.round(f.progress * 100)}%` : ""}`}
                       {f.stage === "transcript" && `Transcribing…${f.transcriptLine ? ` ${f.transcriptLine}` : ""}`}
+                      {f.stage === "reframe" && "Auto-reframing to the timeline aspect…"}
                     </div>
                   )}
                   {f.status === "error" && (

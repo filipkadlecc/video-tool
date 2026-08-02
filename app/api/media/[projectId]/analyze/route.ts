@@ -6,6 +6,8 @@ import { getProject } from "@/lib/projects";
 import { probeWithCache, readCachedProbe } from "@/lib/probe";
 import { detectScenesWithCache, readCachedScenes } from "@/lib/scene-detect";
 import { transcribeWithCache, readCachedTranscript } from "@/lib/transcribe";
+import { reframeWithCache, isReframeAvailable, readCachedReframe } from "@/lib/reframe";
+import { getResolution } from "@/lib/types";
 
 // Analysis includes transcription, which is slow for long media. This value is a
 // hint (self-hosted Next does not hard-enforce it). For very long interviews the
@@ -20,6 +22,9 @@ interface PostBody {
   language?: string;
   sceneThreshold?: number;
   force?: boolean;
+  // Auto-reframe: true = always, false = never, undefined = auto (only when the
+  // source aspect differs from the project's timeline aspect).
+  reframe?: boolean;
 }
 
 // Guard against two concurrent analyses of the same file — whisper writes an
@@ -40,6 +45,7 @@ function sidecarPaths(mediaPath: string): string[] {
     path.join(dir, `${base}.probe.json`),
     path.join(dir, `${base}.scenes.json`),
     path.join(dir, `${base}.transcript.json`),
+    path.join(dir, `${base}.reframe.json`),
   ];
 }
 
@@ -136,6 +142,32 @@ export async function POST(
           words: transcript.words.length,
         });
 
+        // 4. Auto-reframe (video only). Auto when the source aspect differs from
+        // the project's timeline aspect (e.g. 16:9 clip in a 9:16 project); can be
+        // forced on/off via body.reframe. Best-effort — never fails the analysis.
+        if (kind === "video") {
+          const target = getResolution(project.settings.orientation, project.settings.resolution);
+          const srcAspect = probe.width && probe.height ? probe.width / probe.height : 0;
+          const targetAspect = target.width / target.height;
+          const mismatch = srcAspect > 0 && Math.abs(srcAspect - targetAspect) > 0.02;
+          const shouldReframe = body.reframe === true || (body.reframe !== false && mismatch);
+          if (shouldReframe && isReframeAvailable()) {
+            send({ stage: "reframe", status: "start", target: [target.width, target.height] });
+            try {
+              const out = await reframeWithCache(mediaPath, {
+                targetW: target.width,
+                targetH: target.height,
+                onProgress: (line) => send({ stage: "reframe", status: "progress", line: line.slice(-80) }),
+              });
+              send({ stage: "reframe", status: "done", output: out });
+            } catch (e) {
+              send({ stage: "reframe", status: "error", error: e instanceof Error ? e.message : "reframe failed" });
+            }
+          } else if (shouldReframe && !isReframeAvailable()) {
+            send({ stage: "reframe", status: "unavailable" });
+          }
+        }
+
         send({ done: true });
         if (!closed) {
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -178,10 +210,12 @@ export async function GET(
   if (!mediaPath) return NextResponse.json({ error: "Media file not found" }, { status: 404 });
 
   const kind = isVideoOrAudio(mediaPath);
-  const [probe, scenes, transcript] = await Promise.all([
+  const target = getResolution(project.settings.orientation, project.settings.resolution);
+  const [probe, scenes, transcript, reframed] = await Promise.all([
     readCachedProbe(mediaPath),
     readCachedScenes(mediaPath),
     readCachedTranscript(mediaPath),
+    kind === "video" ? readCachedReframe(mediaPath, target.width, target.height) : Promise.resolve(null),
   ]);
 
   const needsScenes = kind === "video" && !scenes;
@@ -192,6 +226,7 @@ export async function GET(
     analysisPending,
     probe,
     scenes,
+    reframed,
     transcript: transcript
       ? {
           language: transcript.language,

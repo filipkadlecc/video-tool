@@ -153,7 +153,7 @@ export default function Home() {
     autoAction,
   }: {
     projectId: string;
-    autoAction?: "smartTrim";
+    autoAction?: "smarttrim" | "compose";
   }) {
     setModalOpen(false);
     const suffix = autoAction ? `?action=${autoAction}` : "";

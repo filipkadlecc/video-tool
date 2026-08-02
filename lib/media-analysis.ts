@@ -2,6 +2,7 @@ import path from "path";
 import { probeWithCache, type MediaProbe } from "./probe";
 import { readCachedTranscript, type TranscriptSegment } from "./transcribe";
 import { readCachedScenes } from "./scene-detect";
+import { readCachedReframe } from "./reframe";
 import type { Project } from "./types";
 
 /**
@@ -25,6 +26,12 @@ export interface EnrichedMediaFile {
   transcriptSegments?: TranscriptSegment[];
   transcriptTruncated?: TranscriptTruncation;
   sceneCutsSeconds?: number[];
+  /**
+   * Relative path (within the media folder) of a subject-tracked reframed version
+   * of this clip, cropped to the project's target aspect. Present only when
+   * auto-reframe has been run for the current target resolution.
+   */
+  reframedPath?: string;
   /** True when a video/audio file still needs the slow analysis (transcript/scenes). */
   analysisPending?: boolean;
 }
@@ -70,7 +77,8 @@ function capSegments(segments: TranscriptSegment[]): {
 
 async function enrichOne(
   mediaFolder: string,
-  file: { name: string; path: string; type: string; sizeFormatted: string }
+  file: { name: string; path: string; type: string; sizeFormatted: string },
+  target?: { width: number; height: number }
 ): Promise<EnrichedMediaFile> {
   const type = narrowType(file.type);
   const base: EnrichedMediaFile = {
@@ -84,13 +92,19 @@ async function enrichOne(
   const mediaPath = path.join(mediaFolder, file.path);
 
   // Fast: probe (spawns ffprobe only on a cache miss). Slow steps are cache-only.
-  const [probe, transcript, scenes] = await Promise.all([
+  const [probe, transcript, scenes, reframed] = await Promise.all([
     probeWithCache(mediaPath).catch(() => undefined),
     readCachedTranscript(mediaPath),
     readCachedScenes(mediaPath),
+    target ? readCachedReframe(mediaPath, target.width, target.height) : Promise.resolve(null),
   ]);
 
   const enriched: EnrichedMediaFile = { ...base, probe };
+  if (reframed) {
+    // reframed lives beside the source; build a path relative to the media root.
+    const dir = path.posix.dirname(file.path.split(path.sep).join("/"));
+    enriched.reframedPath = dir === "." ? reframed : `${dir}/${reframed}`;
+  }
 
   if (transcript?.segments && transcript.segments.length > 0) {
     const { kept, truncated } = capSegments(transcript.segments);
@@ -113,7 +127,8 @@ async function enrichOne(
  */
 export async function buildEnrichedMediaFiles(
   project: Project,
-  mediaFiles: { name: string; path: string; type: string; sizeFormatted: string }[]
+  mediaFiles: { name: string; path: string; type: string; sizeFormatted: string }[],
+  target?: { width: number; height: number }
 ): Promise<EnrichedMediaFile[]> {
   if (!project.mediaFolder) {
     return mediaFiles.map((f) => ({
@@ -123,5 +138,5 @@ export async function buildEnrichedMediaFiles(
       sizeFormatted: f.sizeFormatted,
     }));
   }
-  return Promise.all(mediaFiles.map((f) => enrichOne(project.mediaFolder!, f)));
+  return Promise.all(mediaFiles.map((f) => enrichOne(project.mediaFolder!, f, target)));
 }
