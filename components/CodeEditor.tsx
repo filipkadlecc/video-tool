@@ -57,7 +57,7 @@ const VHS_SET_OPTIONS = [
 ];
 
 const registerVHSLanguage: BeforeMount = (monaco) => {
-  if (monaco.languages.getLanguages().some((l) => l.id === "vhs")) return;
+  if (monaco.languages.getLanguages().some((l: { id: string }) => l.id === "vhs")) return;
 
   monaco.languages.register({ id: "vhs" });
 

@@ -425,7 +425,7 @@ export default function Home() {
   }
 
   // ───── Per-type screen: filtered projects + new-project tile ─────
-  const meta = getAnimationTypeMeta(selectedType);
+  const meta = getAnimationTypeMeta(selectedType!);
   const filtered = projects.filter((p) => p.animationType === selectedType);
 
   return (
@@ -557,7 +557,7 @@ export default function Home() {
       <NewProjectModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        initialType={selectedType}
+        initialType={selectedType ?? undefined}
         onCreated={handleCreated}
       />
 
