@@ -146,12 +146,13 @@ export function ambientDrift(
 }
 
 /**
- * A compound entrance reveal — opacity + translateY + scale + blur, all driven
- * off a single spring. Returns a `{ opacity, transform, filter }` style object
- * ready to spread into `style={{ ... }}`.
+ * A compound entrance reveal — opacity + translateY + scale, all driven off a
+ * single spring. Returns a `{ opacity, transform, filter }` style object ready
+ * to spread into `style={{ ... }}`.
  *
- * This is the "always combine 3+ axes" rule from the prompt, packaged as a
- * helper so the LLM can't forget half of them.
+ * NOTE: reveal blur is BANNED — elements must arrive SHARP. `blurFrom` defaults
+ * to 0 and `filter` is "none" unless a caller explicitly opts in. Do not
+ * reintroduce an animated blur-in on entrances.
  */
 export function compoundReveal(
   frame: number,
@@ -161,7 +162,7 @@ export function compoundReveal(
     preset?: keyof typeof SPRINGS;
     translateY?: number;  // px to slide from (positive = slide up into place)
     scaleFrom?: number;   // starting scale
-    blurFrom?: number;    // starting blur in px
+    blurFrom?: number;    // deprecated — reveal blur is banned; leave 0
   } = {}
 ): { opacity: number; transform: string; filter: string } {
   const {
@@ -169,7 +170,7 @@ export function compoundReveal(
     preset = "SNAPPY",
     translateY = 30,
     scaleFrom = 0.94,
-    blurFrom = 6,
+    blurFrom = 0,
   } = opts;
 
   const progress = springIn(frame, fps, delay, preset);
@@ -180,7 +181,7 @@ export function compoundReveal(
   return {
     opacity: progress,
     transform: `translateY(${ty}px) scale(${sc})`,
-    filter: `blur(${bl}px)`,
+    filter: bl > 0 ? `blur(${bl}px)` : "none",
   };
 }
 

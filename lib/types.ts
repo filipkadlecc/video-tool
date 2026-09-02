@@ -10,7 +10,9 @@ export type StyleMode = "default" | "kinetic" | "editorial" | "cinematic";
 export type TopicCardStyle = "cards" | "chips" | "none";
 // How scenes hand off to each other. Absent on legacy projects → treated as "cut".
 export type TransitionStyle = "cut" | "blend" | "camera";
-export type Resolution = "1080p" | "4k";
+// "9x8" is a bespoke near-square landscape canvas (2160x1920) used for a
+// specific social/explainer deliverable; it only composes with "horizontal".
+export type Resolution = "1080p" | "4k" | "9x8";
 export type Orientation = "horizontal" | "vertical" | "square";
 export type FPS = 24 | 25 | 30 | 50;
 
@@ -130,6 +132,11 @@ const RESOLUTION_MAP: Record<`${Orientation}-${Resolution}`, { width: number; he
   "vertical-1080p": { width: 1080, height: 1920 },
   "square-4k": { width: 2160, height: 2160 },
   "square-1080p": { width: 1080, height: 1080 },
+  // Bespoke 2160x1920 (9:8) — only valid under "horizontal"; other orientations
+  // fall back to their standard presets below.
+  "horizontal-9x8": { width: 2160, height: 1920 },
+  "vertical-9x8": { width: 1920, height: 2160 },
+  "square-9x8": { width: 2160, height: 1920 },
 };
 
 export function getResolution(orientation: Orientation, resolution: Resolution): { width: number; height: number } {

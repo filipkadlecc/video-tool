@@ -35,7 +35,7 @@ WHAT THE HARNESS GIVES YOU (already in scope — never redeclare these):
   - \`staggeredSpring(frame, FPS, index, baseDelay, stagger, preset)\` → 0→1.
   - \`interpolate(input, [in...], [out...], { extrapolateLeft:'clamp', extrapolateRight:'clamp' })\`.
   - \`ambientDrift(frame, amplitude, period, seed)\` → deterministic noise in [-amp, amp] for hold motion.
-  - \`compoundReveal(frame, FPS, { delay, preset, translateY, scaleFrom, blurFrom })\` → { opacity, transform, filter }.
+  - \`compoundReveal(frame, FPS, { delay, preset, translateY, scaleFrom })\` → { opacity, transform, filter }. (Reveal blur is banned — do NOT pass \`blurFrom\`; elements arrive sharp.)
   - \`staggerChild(index, frame, FPS, { baseDelay, perItem, preset, fromY, fromScale })\` → { opacity, transform }.
   - \`sceneExit(frame, dur, exitTail)\`, \`inOutEnvelope(frame, FPS, durationInFrames, opts)\`.
   - \`gsap\` is available, but PREFER the per-frame model below.

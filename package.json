@@ -1,6 +1,6 @@
 {
   "name": "video-tool",
-  "version": "0.1.9",
+  "version": "0.1.21",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,10 +10,11 @@
     "studio": "npx remotion studio remotion/Root.tsx"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.122.0",
     "@monaco-editor/react": "^4.7.0",
     "@notionhq/client": "^5.11.0",
     "@remotion/animation-utils": "4.0.431",
+    "@remotion/bundler": "4.0.431",
     "@remotion/cli": "^4.0.431",
     "@remotion/google-fonts": "^4.0.431",
     "@remotion/layout-utils": "4.0.431",
@@ -21,6 +22,7 @@
     "@remotion/noise": "4.0.431",
     "@remotion/paths": "4.0.431",
     "@remotion/player": "^4.0.431",
+    "@remotion/renderer": "4.0.431",
     "@remotion/shapes": "4.0.431",
     "@remotion/transitions": "^4.0.431",
     "html2canvas": "^1.4.1",

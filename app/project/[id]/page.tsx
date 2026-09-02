@@ -27,6 +27,8 @@ import IconButton from "@/components/ui/IconButton";
 import TypeBadge from "@/components/ui/TypeBadge";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
+import type { PlayerRef } from "@remotion/player";
+import type { ResolvedClip } from "@/lib/timeline-extract";
 
 const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
   ssr: false,
@@ -45,6 +47,8 @@ const HyperframesPreview = dynamic(() => import("@/components/HyperframesPreview
     </div>
   ),
 });
+
+const TimelineExtractor = dynamic(() => import("@/components/TimelineExtractor"), { ssr: false });
 
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
   ssr: false,
@@ -93,6 +97,24 @@ export default function ProjectEditor() {
   const lastSavedRef = useRef<{ code: string; chatLength: number; annotations: string; styleMode: StyleMode }>({ code: "", chatLength: 0, annotations: "", styleMode: "default" });
   const codeHistory = useCodeHistory();
   const chatRef = useRef<ChatPanelHandle>(null);
+  // Bounds automatic error-retry so a persistently-broken generation can't loop
+  // the model forever. Reset to 0 whenever a generation lands with no error.
+  const autoRetryRef = useRef(0);
+
+  // Synced playhead: the timeline drives / follows the preview <Player>.
+  const playerRef = useRef<PlayerRef | null>(null);
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  // Native fps + source frame count per media src, so timeline trims convert
+  // composition↔source frames and clamp to the footage's real length.
+  const [nativeFpsBySrc, setNativeFpsBySrc] = useState<Record<string, number>>({});
+  const [maxSrcFrameBySrc, setMaxSrcFrameBySrc] = useState<Record<string, number>>({});
+  // Runtime-extracted clip layout (display-only) for compositions the static
+  // parsers can't fully see (TransitionSeries, crossfade/data-driven).
+  const [resolvedClips, setResolvedClips] = useState<ResolvedClip[] | null>(null);
+  const handleResolved = useCallback((rt: { clips: ResolvedClip[] } | null) => {
+    setResolvedClips(rt?.clips ?? null);
+  }, []);
 
   // Load project
   useEffect(() => {
@@ -208,8 +230,7 @@ export default function ProjectEditor() {
       body: JSON.stringify({ transcript, generate: { mediaSrc, fps: extractedFps } }),
     }).then((r) => r.json());
     if (!cp.ok || !cp.code) throw new Error(cp.error || "Cut plan failed");
-    codeHistory.pushSnapshot(code, chatHistory);
-    setCode(cp.code);
+    commitComposition(cp.code);
   }
 
   async function runFirstPass(mode: "smarttrim" | "compose") {
@@ -387,9 +408,99 @@ export default function ProjectEditor() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [forceSave, code, codeHistory]);
 
+  const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
+    if (!code || !code.trim()) return { durationInFrames: 250, fps: project?.settings.fps ?? 25, sceneError: undefined };
+    // HyperFrames scenes are plain JS (not Remotion) — read duration/fps from
+    // the declared consts instead of evaluating the code as a Remotion scene.
+    if (project?.engine === "hyperframes") {
+      const m = parseSceneMeta(code);
+      return { durationInFrames: m.durationInFrames, fps: m.fps, sceneError: undefined };
+    }
+    const result = evalSceneCode(code);
+    return {
+      durationInFrames: result?.durationInFrames ?? 250,
+      fps: result?.fps ?? project?.settings.fps ?? 25,
+      sceneError: result?.error,
+    };
+  }, [code, project?.settings.fps, project?.engine]);
+
+  // Poll the preview Player for the current frame so the timeline playhead
+  // tracks playback. No-ops when the Player isn't mounted (Terminal / HyperFrames
+  // / first-pass), so those paths are untouched.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const p = playerRef.current;
+      if (p) {
+        const f = p.getCurrentFrame();
+        if (typeof f === "number") setCurrentFrame(f);
+        setIsPlaying(p.isPlaying());
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const seekTo = useCallback((frame: number) => {
+    const p = playerRef.current;
+    if (!p) return;
+    const max = Math.max(0, durationInFrames - 1);
+    p.seekTo(Math.min(max, Math.max(0, Math.round(frame))));
+  }, [durationInFrames]);
+
+  const handleScrubStart = useCallback(() => {
+    playerRef.current?.pause();
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    if (p.isPlaying()) p.pause();
+    else p.play();
+  }, []);
+
+  // Fetch native fps per media file (cache-only) for correct trim math on video projects.
+  useEffect(() => {
+    if (project?.animationType !== "video") return;
+    let cancelled = false;
+    fetch(`/api/media/${projectId}/probe-map`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.fps) return;
+        const fpsMap: Record<string, number> = {};
+        for (const [rel, f] of Object.entries(data.fps as Record<string, number>)) {
+          fpsMap[`/api/media/${projectId}/${rel}`] = f;
+        }
+        setNativeFpsBySrc(fpsMap);
+        const nbMap: Record<string, number> = {};
+        for (const [rel, n] of Object.entries((data.nbFrames ?? {}) as Record<string, number>)) {
+          nbMap[`/api/media/${projectId}/${rel}`] = n;
+        }
+        setMaxSrcFrameBySrc(nbMap);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, project?.animationType]);
+
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode);
   }, []);
+
+  // Apply a composition change AND record it for undo. The history model keeps the
+  // CURRENT code at the top of the stack, so we snapshot the pre-edit state (a
+  // no-op if it's already the top) AND the new state — that way one Cmd+Z steps
+  // back exactly one edit. (Previously callers pushed only the OLD code and never
+  // the new one, so the first edit had nothing to undo to and later undos jumped
+  // a step too far.)
+  const commitComposition = useCallback((next: string) => {
+    if (next === code) return;
+    codeHistory.pushSnapshot(code, chatHistory);
+    codeHistory.pushSnapshot(next, chatHistory);
+    setCode(next);
+  }, [code, chatHistory, codeHistory]);
 
   const handleChatUpdate = useCallback((messages: ChatMessage[]) => {
     setChatHistory(messages);
@@ -415,23 +526,28 @@ export default function ProjectEditor() {
       // silent fail
     }
     fetch(`/api/projects/${projectId}/thumbnail`, { method: "POST" }).catch(() => {});
-  }, [projectId, codeHistory, terminalAnnotations, styleMode]);
 
-  const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
-    if (!code || !code.trim()) return { durationInFrames: 250, fps: project?.settings.fps ?? 25, sceneError: undefined };
-    // HyperFrames scenes are plain JS (not Remotion) — read duration/fps from
-    // the declared consts instead of evaluating the code as a Remotion scene.
-    if (project?.engine === "hyperframes") {
-      const m = parseSceneMeta(code);
-      return { durationInFrames: m.durationInFrames, fps: m.fps, sceneError: undefined };
+    // Auto-fix on error: if the freshly generated Remotion scene doesn't compile,
+    // relaunch the model to repair it — no manual resend needed. The [SCENE ERROR]
+    // is injected into the AI message by ChatPanel's sceneError prop (which keeps
+    // the visible chat message clean); we defer to setTimeout(0) so that prop has
+    // settled after the setCode → sceneError re-render. Bounded by autoRetryRef.
+    if (project?.engine !== "hyperframes" && project?.animationType !== "terminal") {
+      const err = evalSceneCode(finalCode)?.error;
+      if (err) {
+        if (autoRetryRef.current < 2) {
+          autoRetryRef.current += 1;
+          setTimeout(() => {
+            chatRef.current?.runWithPrompt(
+              "The preview is showing an error — fix the scene and return the complete corrected file."
+            );
+          }, 0);
+        }
+      } else {
+        autoRetryRef.current = 0;
+      }
     }
-    const result = evalSceneCode(code);
-    return {
-      durationInFrames: result?.durationInFrames ?? 250,
-      fps: result?.fps ?? project?.settings.fps ?? 25,
-      sceneError: result?.error,
-    };
-  }, [code, project?.settings.fps, project?.engine]);
+  }, [projectId, codeHistory, terminalAnnotations, styleMode, project?.engine, project?.animationType]);
 
   const isTerminalProject = project?.animationType === "terminal";
   const isHyperframes = project?.engine === "hyperframes";
@@ -453,7 +569,9 @@ export default function ProjectEditor() {
     storage,
   });
   const verticalLayout = useDefaultLayout({
-    id: `studio-v-${layoutKind}`,
+    // v2: taller editable timeline — bumping the id resets saved layouts once so
+    // the new default heights apply.
+    id: `studio-v2-${layoutKind}`,
     panelIds: layoutKind === "video" ? ["preview", "timeline", "code"] : ["preview", "code"],
     storage,
   });
@@ -469,7 +587,7 @@ export default function ProjectEditor() {
   if (!project) return null;
 
   const { width, height } = getResolution(project.settings.orientation, project.settings.resolution);
-  const resLabel = project.settings.resolution === "4k" ? "3840\u00d72160" : "1920\u00d71080";
+  const resLabel = `${width}\u00d7${height}`;
   const isVideoProject = project.animationType === "video";
   // The timeline panel mounts for every Remotion-scene project type too —
   // animation / broll / svg compositions are made of <Sequence> blocks and
@@ -482,6 +600,9 @@ export default function ProjectEditor() {
       project.animationType === "animation" ||
       project.animationType === "broll" ||
       project.animationType === "svg");
+  // Only run the (browser-side) runtime extractor when the static parsers likely
+  // can't see the clips: runtime-computed layouts (TransitionSeries, .map, Series).
+  const needsExtraction = hasTimeline && /(<TransitionSeries\b|\.map\s*\(|<Series\.Sequence\b)/.test(code);
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -579,8 +700,7 @@ export default function ProjectEditor() {
             onClick={() => {
               const next = stripBackgroundsForTransparency(code);
               if (next === code) return;
-              codeHistory.pushSnapshot(code, chatHistory);
-              setCode(next);
+              commitComposition(next);
               setBgRemovedFlash(true);
               setTimeout(() => setBgRemovedFlash(false), 1500);
             }}
@@ -683,16 +803,13 @@ export default function ProjectEditor() {
               onLayoutChanged={verticalLayout.onLayoutChanged}
               style={{ height: "100%" }}
             >
-              <Panel id="preview" defaultSize={hasTimeline ? "55%" : "65%"} minSize="15%">
+              <Panel id="preview" defaultSize={hasTimeline ? "50%" : "65%"} minSize="15%">
                 <div style={{ background: "#000", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden" }}>
                   {isTerminalProject ? (
                     <TerminalPreview
                       projectId={projectId}
                       code={code}
-                      onReplaceCode={(next) => {
-                        if (code) codeHistory.pushSnapshot(code, chatHistory);
-                        setCode(next);
-                      }}
+                      onReplaceCode={commitComposition}
                       annotations={terminalAnnotations}
                       onAnnotationsChange={setTerminalAnnotations}
                       customTheme={customTheme}
@@ -703,30 +820,36 @@ export default function ProjectEditor() {
                   ) : firstPass ? (
                     <FirstPassProgress state={firstPass} onDismiss={() => setFirstPass(null)} />
                   ) : (
-                    <PreviewPanel code={code} width={width} height={height} svgContents={project.svgContents} />
+                    <PreviewPanel code={code} width={width} height={height} svgContents={project.svgContents} playerRef={playerRef} />
                   )}
                 </div>
               </Panel>
               {hasTimeline && (
                 <>
                   <Separator className="resize-handle resize-handle-horizontal" />
-                  <Panel id="timeline" defaultSize="15%" minSize="8%">
+                  <Panel id="timeline" defaultSize="30%" minSize="12%">
                     <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                       <Timeline
                         code={code}
                         fps={extractedFps}
                         durationInFrames={durationInFrames}
-                        onCodeChange={(next) => {
-                          if (code) codeHistory.pushSnapshot(code, chatHistory);
-                          setCode(next);
-                        }}
+                        onCodeChange={commitComposition}
+                        nativeFpsBySrc={nativeFpsBySrc}
+                        maxSrcFrameBySrc={maxSrcFrameBySrc}
+                        resolvedClips={needsExtraction ? resolvedClips : null}
+                        extracting={needsExtraction}
+                        currentFrame={currentFrame}
+                        onSeek={seekTo}
+                        onScrubStart={handleScrubStart}
+                        onTogglePlay={togglePlay}
+                        isPlaying={isPlaying}
                       />
                     </div>
                   </Panel>
                 </>
               )}
               <Separator className="resize-handle resize-handle-horizontal" />
-              <Panel id="code" defaultSize={hasTimeline ? "30%" : "35%"} minSize="10%">
+              <Panel id="code" defaultSize={hasTimeline ? "20%" : "35%"} minSize="10%">
                 <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                   <CodeEditor
                     code={code}
@@ -783,6 +906,17 @@ export default function ProjectEditor() {
         </Group>
       </div>
 
+      {needsExtraction && !isTerminalProject && (
+        <TimelineExtractor
+          code={code}
+          width={width}
+          height={height}
+          fps={extractedFps}
+          durationInFrames={durationInFrames}
+          onResolved={handleResolved}
+        />
+      )}
+
       <AssetBrowser
         open={assetsOpen}
         onClose={() => setAssetsOpen(false)}
@@ -793,10 +927,7 @@ export default function ProjectEditor() {
         open={snippetsOpen}
         onClose={() => setSnippetsOpen(false)}
         hasExistingCode={code.trim().length > 0}
-        onUseSnippet={(snippetCode) => {
-          if (code) codeHistory.pushSnapshot(code, chatHistory);
-          setCode(snippetCode);
-        }}
+        onUseSnippet={commitComposition}
       />
 
       <SmartTrimDialog
@@ -806,10 +937,7 @@ export default function ProjectEditor() {
         fps={extractedFps}
         hasMediaFolder={!!project.mediaFolder}
         hasExistingCode={code.trim().length > 0}
-        onApply={(generatedCode) => {
-          if (code) codeHistory.pushSnapshot(code, chatHistory);
-          setCode(generatedCode);
-        }}
+        onApply={commitComposition}
       />
 
       <AnalyzeDialog

@@ -70,12 +70,20 @@ export interface ImagesParam {
 
 export type Param = StringParam | BooleanParam | EnumParam | NumberParam | ArrayParam | ImagesParam;
 
+// Optional data-prefill affordance rendered above the fields. "apifyActor" shows
+// an Apify Store lookup (search / paste URL) that fills the fields — including the
+// icon + author avatar as embedded data URIs — before the user hits Insert.
+export interface PrefillConfig {
+  kind: "apifyActor";
+}
+
 export interface SnippetSchema {
   params: Record<string, Param>;
   // Predicate-based visibility. If a key is present here, the field renders
   // only when the predicate returns true against the current values map.
   // Hidden fields keep their values so toggling back restores them.
   showIf?: Record<string, (values: Record<string, unknown>) => boolean>;
+  prefill?: PrefillConfig;
 }
 
 // =============================================================================
@@ -380,6 +388,40 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
       AUTHOR_NAME: { kind: "string", label: "Author name", default: "Sam Kleespies" },
       AUTHOR_INITIAL: { kind: "string", label: "Author avatar initial", default: "S", maxLength: 2 },
       ICON_GLYPH: { kind: "string", label: "Icon tile glyph", default: "🦷", placeholder: "emoji or 1–2 chars" },
+    },
+  },
+
+  ActorCard: {
+    prefill: { kind: "apifyActor" },
+    params: {
+      ACTOR_TITLE: { kind: "string", label: "Actor title", default: "Instagram Hashtag Analytics Scraper" },
+      ACTOR_HANDLE: {
+        kind: "string",
+        label: "Handle (author/actor)",
+        default: "apify/instagram-hashtag-analytics-scraper",
+      },
+      ACTOR_DESC: {
+        kind: "string",
+        label: "Description",
+        default:
+          "Extract detailed Instagram hashtag metrics fast. Get total post count, posts per day, top and latest posts, related hashtags (literal and semantic), and their usage frequency.",
+        multiline: true,
+      },
+      AUTHOR_NAME: { kind: "string", label: "Author name", default: "Apify" },
+      ACTOR_ICON: {
+        kind: "images",
+        label: "Actor icon",
+        default: [],
+        max: 1,
+        description: "Square Actor icon — auto-filled from the Store, or upload your own.",
+      },
+      AUTHOR_AVATAR: {
+        kind: "images",
+        label: "Author avatar",
+        default: [],
+        max: 1,
+        description: "Round author photo — auto-filled from the Store, or upload your own.",
+      },
     },
   },
 

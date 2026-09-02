@@ -30,6 +30,7 @@ const META: Record<string, { name: string; subtitle: string }> = {
   PromptBox: { name: "Prompt box", subtitle: "Claude composer — typewriter prompt reveal (transparent)" },
   AiChat: { name: "AI chat", subtitle: "Prompt bubble + typed answer or screenshots → Apify wordmark" },
   Years: { name: "Years", subtitle: "White year counter slides 2004 → 2014, then holds (transparent)" },
+  ActorCard: { name: "Actor card", subtitle: "Apify Store Actor card — search the Store, auto-fills icon + details" },
 };
 
 export async function GET() {

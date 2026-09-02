@@ -1,7 +1,10 @@
 import { spawn } from "child_process";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import PQueue from "p-queue";
+import { bundle } from "@remotion/bundler";
+import { selectComposition, renderStill } from "@remotion/renderer";
 import { stripBackgroundsForTransparency } from "./transparent-bg";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
@@ -482,4 +485,76 @@ export async function renderThumbnail(
     try { fs.unlinkSync(scenePath); } catch {}
     try { fs.unlinkSync(entryPath); } catch {}
   }
+}
+
+export interface SampleFrame {
+  frame: number;
+  pngBase64: string;
+}
+
+/**
+ * Render a handful of still frames of a generated scene, FAST — so the AI can
+ * SEE its own output and fix it. Uses the programmatic Remotion API to bundle
+ * ONCE and render many stills (cold bundle ≈ 15s, then each still ≈ 1–2s),
+ * instead of a cold `remotion still` CLI spawn per frame (~10–30s each).
+ *
+ * Frames are downscaled so the long edge is ~1280px — enough for the model to
+ * judge layout, legibility, contrast, and colour without spending image tokens
+ * on 4K detail. Runs OUTSIDE the export queue (its own lightweight lane) so a
+ * refine pass isn't starved behind a long video export. Returns base64 PNGs.
+ */
+export async function renderSampleFrames(
+  projectId: string,
+  code: string,
+  durationInFrames: number,
+  fps: number,
+  width: number,
+  height: number,
+  frames: number[],
+  svgContents?: { filename: string; content: string }[],
+): Promise<SampleFrame[]> {
+  const scenesDir = path.join(process.cwd(), "remotion", "scenes");
+  fs.mkdirSync(scenesDir, { recursive: true });
+
+  const tag = `_frames_${projectId.slice(0, 8)}_${Date.now().toString(36)}`;
+  const scenePath = path.join(scenesDir, `${tag}.tsx`);
+  fs.writeFileSync(scenePath, fixImportPaths(code), "utf-8");
+  const entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents);
+
+  // Downscale the long edge to ~1280px to cap image-token cost.
+  const longEdge = Math.max(width, height);
+  const scale = longEdge > 1280 ? 1280 / longEdge : 1;
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vt-frames-"));
+  try {
+    // Bundle once — the cold bundle dominates; each still after it is cheap.
+    const serveUrl = await bundle({
+      entryPoint: entryPath,
+      publicDir: path.join(process.cwd(), "public"),
+    });
+    const composition = await selectComposition({ serveUrl, id: "Scene" });
+
+    const out: SampleFrame[] = [];
+    for (const raw of frames) {
+      const frame = Math.max(0, Math.min(durationInFrames - 1, Math.round(raw)));
+      const outPath = path.join(tmpDir, `frame_${frame}.png`);
+      await renderStill({ composition, serveUrl, output: outPath, frame, scale, imageFormat: "png" });
+      out.push({ frame, pngBase64: fs.readFileSync(outPath).toString("base64") });
+      try { fs.unlinkSync(outPath); } catch {}
+    }
+    return out;
+  } finally {
+    try { fs.unlinkSync(scenePath); } catch {}
+    try { fs.unlinkSync(entryPath); } catch {}
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+/**
+ * Evenly-spaced sample frames across a scene's duration, skipping the dead
+ * opening/closing beats: [0.08, 0.28, 0.5, 0.72, 0.92] × durationInFrames.
+ */
+export function sampleFrameNumbers(durationInFrames: number): number[] {
+  const fracs = [0.08, 0.28, 0.5, 0.72, 0.92];
+  return fracs.map((f) => Math.max(0, Math.min(durationInFrames - 1, Math.round(f * durationInFrames))));
 }

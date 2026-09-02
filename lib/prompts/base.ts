@@ -78,7 +78,7 @@ import {
   springIn,       // springIn(frame, fps, delay, "SNAPPY")
   staggeredSpring,// staggeredSpring(frame, fps, index, baseDelay, stagger, preset)
   ambientDrift,   // ambientDrift(frame, amplitude, period, seed) — noise-based
-  compoundReveal, // returns { opacity, transform, filter } for fade+slide+scale+blur
+  compoundReveal, // returns { opacity, transform, filter } for fade+slide+scale (no reveal blur)
   inOutEnvelope,  // returns 0→1→0 envelope across the sequence
 } from "../motion";
 \`\`\`
@@ -199,8 +199,9 @@ Single-axis motion reads as cheap. Every entrance should combine **two or three*
 - translateY or translateX (small distance, 20–60px — too far reads as throwaway)
 - scale (0.92 → 1, or 1.08 → 1 for "settling in")
 - rotate (subtle: -3deg → 0, or -90deg → 0 for kinetic flair)
-- filter: blur (8px → 0) — adds focus-pull feel
 - filter: drop-shadow with chromatic color (fades in alongside scale)
+
+NEVER add an animated \`filter: blur()\` to a reveal — elements arrive SHARP (see the ABSOLUTE RULE in the DO-NOT list).
 
 Example of a compound reveal — use this pattern, not single-axis fades:
 
@@ -208,15 +209,13 @@ Example of a compound reveal — use this pattern, not single-axis fades:
 const heroIn = springIn(frame, fps, 5, "SNAPPY");
 const tx = interpolate(heroIn, [0, 1], [40, 0]);
 const sc = interpolate(heroIn, [0, 1], [0.92, 1]);
-const bl = interpolate(heroIn, [0, 1], [8, 0]);
 const heroStyle = {
   opacity: heroIn,
   transform: \`translateY(\${tx}px) scale(\${sc})\`,
-  filter: \`blur(\${bl}px)\`,
 };
 \`\`\`
 
-Or use the \`compoundReveal\` helper for the common 3-axis case (it returns the same shape):
+Or use the \`compoundReveal\` helper for the common case (it returns the same shape):
 
 \`\`\`tsx
 const heroStyle = compoundReveal(frame, fps, {
@@ -224,7 +223,6 @@ const heroStyle = compoundReveal(frame, fps, {
   preset: "SNAPPY",
   translateY: 40,
   scaleFrom: 0.92,
-  blurFrom: 8,
 });
 \`\`\`
 
@@ -343,7 +341,7 @@ DO NOT do any of the following. If you catch yourself starting any of these, swi
 1. **Do NOT redefine SPRINGS in your file.** Always \`import { springIn, SPRINGS } from "../motion"\`. Inlining \`{ damping: 200 }\` configs is a code smell — use a preset.
 2. **Do NOT center every scene.** Off-center is the default; centered is the exception (logo bumpers, end cards).
 3. **Do NOT use the same preset for every element.** A scene that uses SNAPPY everywhere looks templated. Mix at least two presets per scene — typically a SNAPPY/LIQUID lead with GENTLE/ELASTIC for secondary motion.
-4. **Do NOT animate opacity alone.** Always combine with translate/scale/blur — use \`compoundReveal\` if unsure.
+4. **Do NOT animate opacity alone.** Always combine with translate/scale (never an animated blur) — use \`compoundReveal\` if unsure.
 5. **Do NOT slide-only either.** Combine 2–3 transforms per reveal.
 6. **Do NOT let the scene freeze during holds.** Every visible element needs \`ambientDrift\` (or a slow GENTLE spring). Use \`Math.sin\` only as a last resort — perlin noise from \`ambientDrift\` is the default.
 7. **Do NOT use translucent fills for cards/panels/pills/badges/chips that sit on the backdrop.** Use an OPAQUE \`COLORS.card\` surface (never \`COLORS.bg\`, never a low-alpha \`rgba\`) so elements stay solid when overlaid on video. Low-alpha rgba is fine only for children nested inside an opaque card.
@@ -353,7 +351,8 @@ DO NOT do any of the following. If you catch yourself starting any of these, swi
 11. **Do NOT use \`<Trail>\` from \`@remotion/motion-blur\` casually.** It's render-expensive — reserve for short high-velocity moments (a number snapping into place, a card flying across the frame). Never on holds.
 12. **Do NOT reinvent IntroCard / LowerThird / EndCard / StatCallout etc. from scratch** when the brief calls for one. Adapt the snippet — see "Reusable Snippets" below.
 13. **Do NOT omit \`fontFamily\` on any text element.** The renderer's default is serif/Times. If a single text node forgets \`fontFamily\`, the exported MP4 will show it in serif while the preview looks correct — invisible-until-export bug. Every \`<div>\`, \`<span>\`, or styled element with text content needs \`fontFamily: "'GT Walsheim', Inter, sans-serif"\` (the default for ~90% of text) or \`fontFamily: "Inter, sans-serif"\` (only for subtitles and long body copy).
-14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale/blur reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, use slow camera motion (a continuous slow zoom or pan) on already-visible content — NOT a black hold. If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
+14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, use slow camera motion (a continuous slow zoom or pan) on already-visible content — NOT a black hold. If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
+15. **ABSOLUTE RULE — NEVER animate a Gaussian / focus-pull blur on a reveal.** Elements must arrive SHARP. Do NOT ramp \`filter: blur()\` (or \`backdrop-filter: blur()\`) from a positive value down to 0 as anything enters, and NEVER put an animated blur on text or on a hero as it appears — that split-second fuzziness is explicitly banned and keeps regressing. Reveals combine opacity + translate + scale (+ rotate) ONLY. This OVERRIDES every style file (default, kinetic, editorial, cinematic) and every few-shot example: if any guidance or snippet shows \`blur(Npx → 0)\` on an entrance, drop the blur term. The ONLY permitted blur is a STATIC (non-animated) \`filter: blur\` on a purely decorative BACKGROUND layer for depth-of-field — it must never touch foreground text and must never animate in.
 
 ---
 
@@ -401,7 +400,6 @@ const KineticIntro: React.FC = () => {
               display: "inline-block",
               opacity: charIn,
               transform: \`translateY(\${interpolate(charIn, [0,1], [50, 0])}px) scale(\${interpolate(charIn, [0,1], [0.92, 1 + breathe * 0.002])})\`,
-              filter: \`blur(\${interpolate(charIn, [0,1], [10, 0])}px)\`,
               whiteSpace: "pre",
             }}>
               {ch}
@@ -932,7 +930,7 @@ Rules:
 - **Use the presentation + \`TRANSITION\` value from this project's transition style** (see Transitions). The \`timing={linearTiming({ durationInFrames: TRANSITION })}\` attribute is REQUIRED and must stay literal on every \`<TransitionSeries.Transition>\` (the timeline editor reads the overlap from it).
 - **Do NOT use \`slide\`/\`wipe\`/\`clock-wipe\`/\`flip\`/\`iris\`** — canned slideshow effects. \`fade()\` only for a rare deliberate mood reset.
 - **NEVER add a \`BlackScreen\` / black / empty opening or closing sequence**, and do NOT add any transition before the first scene or after the last. The first scene's content is visible/arriving on frame 0; the last scene holds fully present on its last frame.
-- **A scene's hero must not appear via a full-screen opacity ramp from 0** — use motion (scale, translate, blur), color, or content-in-content. (The persistent background means frame 0 is never black, but the hero still must arrive with motion, not a flat fade-up.)
+- **A scene's hero must not appear via a full-screen opacity ramp from 0** — use motion (scale, translate), color, or content-in-content. (The persistent background means frame 0 is never black, but the hero still must arrive with motion, not a flat fade-up.)
 - Add \`+ TRANSITION\` to each scene's \`durationInFrames\` (except the last) to account for the overlap with the next scene's transition.
 
 ### Calculating Total Duration
@@ -998,7 +996,7 @@ When the user's message includes \`[SCENE ERROR: ...]\`, the current code has a 
 3. \`COLORS\` object defined; \`SPRINGS\` / \`TIMING\` / \`springIn\` / \`ambientDrift\` IMPORTED from \`"../motion"\` (NOT redefined)
 4. ONE \`Background\` rendered at the composition root (inside the camera wrapper); scenes are TRANSPARENT with no \`backgroundColor\` and no per-scene \`<Background />\`
 5. At least TWO different spring presets used in the file — never single-preset across all elements
-6. Every reveal combines 2–3 transforms (opacity + translate + scale/blur/rotate) — or uses \`compoundReveal\`
+6. Every reveal combines 2–3 transforms (opacity + translate + scale/rotate — never an animated blur) — or uses \`compoundReveal\`
 7. At least one scene uses off-center / asymmetric layout (NOT alignItems+justifyContent:center)
 8. Every visible element has \`ambientDrift\` (perlin noise, unique seed) during hold phases
 9. Cards/panels/pills on the backdrop use OPAQUE \`COLORS.card\`, NEVER \`COLORS.bg\` and NEVER a low-alpha rgba (low-alpha only for children inside an opaque card)

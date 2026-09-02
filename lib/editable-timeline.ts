@@ -26,6 +26,14 @@ export interface EditableClip {
   durationInFrames: number;
   startFrom?: number; // trim start in source media (frames)
   endAt?: number; // trim end in source media (frames)
+  // Video mode only — the source file's native fps (from ffprobe). Trim/split
+  // convert composition-frame deltas to source-frame deltas using this, because
+  // startFrom/endAt are counted in SOURCE frames while from/durationInFrames are
+  // COMPOSITION frames. Undefined ⇒ assume native fps == composition fps.
+  nativeFps?: number;
+  // Video mode only — the source file's last frame (ffprobe nbFrames). A trim can
+  // never extend endAt past this, so a clip can't read into frozen/black frames.
+  maxSourceFrame?: number;
   // Scene mode only — byte offsets into `EditableDoc.originalCode` for the
   // whole `<Sequence>...</Sequence>` block and the attribute value slices.
   sourceRange?: { start: number; end: number };
@@ -54,7 +62,12 @@ function makeId(srcOrTag: string, index: number): string {
  * have implicit `from` derived from running totals — patching one attribute
  * can't reposition the rest).
  */
-export function docFromCode(code: string, fps: number): EditableDoc | null {
+export function docFromCode(
+  code: string,
+  fps: number,
+  nativeFpsBySrc?: Record<string, number>,
+  maxSrcFrameBySrc?: Record<string, number>,
+): EditableDoc | null {
   if (!code || !code.trim()) return null;
   const parsed = parseTimeline(code, fps);
   if (parsed.length === 0) return null;
@@ -65,7 +78,14 @@ export function docFromCode(code: string, fps: number): EditableDoc | null {
 
   // Video-only composition → video mode (legacy behaviour).
   if (videoClips.length > 0 && sceneClips.length === 0 && !hasAudio) {
-    const clips = videoClips.map((c, i) => toEditableVideo(c, i));
+    // Safety guard: `codeFromVideoDoc` regenerates the file as plain back-to-back
+    // `<Sequence>` blocks. If the source actually uses <TransitionSeries>, that
+    // regeneration would DELETE the transitions (and their frame overlaps) on the
+    // first edit. Bail to read-only so blended edits are preserved — they can
+    // still be edited via chat / the code panel. (Series.Sequence from Smart Trim
+    // has no transitions, so flattening it is lossless and stays editable.)
+    if (/<TransitionSeries\b/.test(code)) return null;
+    const clips = videoClips.map((c, i) => toEditableVideo(c, i, nativeFpsBySrc, maxSrcFrameBySrc));
     const totalDurationInFrames = Math.max(
       0,
       ...clips.map((c) => c.from + c.durationInFrames),
@@ -107,7 +127,12 @@ export function docFromCode(code: string, fps: number): EditableDoc | null {
   return null;
 }
 
-function toEditableVideo(c: TimelineClip, i: number): EditableClip {
+function toEditableVideo(
+  c: TimelineClip,
+  i: number,
+  nativeFpsBySrc?: Record<string, number>,
+  maxSrcFrameBySrc?: Record<string, number>,
+): EditableClip {
   return {
     id: makeId(c.src, i),
     kind: "video",
@@ -116,7 +141,56 @@ function toEditableVideo(c: TimelineClip, i: number): EditableClip {
     durationInFrames: c.durationInFrames,
     startFrom: c.startFrom,
     endAt: c.endAt,
+    nativeFps: nativeFpsBySrc?.[c.src],
+    maxSourceFrame: maxSrcFrameBySrc?.[c.src],
   };
+}
+
+/**
+ * Convert a composition-frame delta into a source-media-frame delta for a clip.
+ * `startFrom`/`endAt` are counted in the source file's native fps, while drag
+ * deltas arrive in composition frames — so they must be scaled when the two fps
+ * differ. Falls back to 1:1 when the native fps is unknown or equal.
+ */
+function compDeltaToSource(clip: EditableClip, deltaComp: number, compFps: number): number {
+  const native = clip.nativeFps;
+  if (!native || native === compFps || compFps <= 0) return deltaComp;
+  return Math.round((deltaComp * native) / compFps);
+}
+
+/** Inverse of compDeltaToSource: source frames → composition frames. */
+function sourceDeltaToComp(clip: EditableClip, deltaSource: number, compFps: number): number {
+  const native = clip.nativeFps;
+  if (!native || native === compFps || native <= 0) return deltaSource;
+  return Math.round((deltaSource * compFps) / native);
+}
+
+/**
+ * Editability with a human-readable reason. When `docFromCode` returns null we
+ * classify WHY so the timeline can tell the user (e.g. "blended transitions")
+ * instead of silently disabling editing. Navigation (scrub/zoom/playhead) still
+ * works regardless of the reason.
+ */
+export function analyzeEditability(
+  code: string,
+  fps: number,
+  nativeFpsBySrc?: Record<string, number>,
+  maxSrcFrameBySrc?: Record<string, number>,
+): { doc: EditableDoc | null; reason: string | null } {
+  const doc = docFromCode(code, fps, nativeFpsBySrc, maxSrcFrameBySrc);
+  if (doc) return { doc, reason: null };
+  if (!code || !code.trim()) return { doc: null, reason: null };
+  const parsed = parseTimeline(code, fps);
+  if (parsed.length === 0) return { doc: null, reason: null };
+  if (/<TransitionSeries\b/.test(code)) {
+    return { doc: null, reason: "Blended transitions — edit via chat or the code panel" };
+  }
+  const hasAudio = parsed.some((c) => c.type === "audio");
+  const hasVideo = parsed.some((c) => c.type === "video");
+  const hasScene = parsed.some((c) => c.type === "scene");
+  if (hasAudio) return { doc: null, reason: "Has an audio track — view-only for now" };
+  if (hasVideo && hasScene) return { doc: null, reason: "Mixes clips and overlays — edit via chat or code" };
+  return { doc: null, reason: "Uses calculated timings — edit via chat or the code panel" };
 }
 
 /**
@@ -223,12 +297,22 @@ export function moveClip(doc: EditableDoc, clipId: string, deltaFrames: number):
 export function trimClipRight(doc: EditableDoc, clipId: string, deltaFrames: number): EditableDoc {
   const clips = doc.clips.map((c) => {
     if (c.id !== clipId) return c;
-    const newDuration = Math.max(1, c.durationInFrames + deltaFrames);
+    let newDuration = Math.max(1, c.durationInFrames + deltaFrames);
+    // Clamp growth so the clip can't read past the source's last frame (which
+    // would render a frozen/black tail). Works whether or not endAt is present:
+    // the current source-out point is endAt, else startFrom + (duration in source frames).
+    if (c.maxSourceFrame != null) {
+      const currentSourceEnd =
+        c.endAt != null ? c.endAt : (c.startFrom ?? 0) + compDeltaToSource(c, c.durationInFrames, doc.fps);
+      const maxGrowthSource = Math.max(0, c.maxSourceFrame - currentSourceEnd);
+      const maxDuration = c.durationInFrames + sourceDeltaToComp(c, maxGrowthSource, doc.fps);
+      if (newDuration > maxDuration) newDuration = Math.max(1, maxDuration);
+    }
     const actualDelta = newDuration - c.durationInFrames;
     return {
       ...c,
       durationInFrames: newDuration,
-      endAt: c.endAt != null ? c.endAt + actualDelta : c.endAt,
+      endAt: c.endAt != null ? c.endAt + compDeltaToSource(c, actualDelta, doc.fps) : c.endAt,
     };
   });
   const totalDurationInFrames = Math.max(
@@ -250,8 +334,12 @@ export function trimClipLeft(doc: EditableDoc, clipId: string, deltaFrames: numb
     if (c.id !== clipId) return c;
     const startFromBase = c.startFrom ?? 0;
     // For scenes we can grow leftward as long as `from` doesn't go negative;
-    // there's no source-media constraint.
-    const maxLeftGrowth = c.kind === "scene" ? c.from : Math.min(c.from, startFromBase);
+    // there's no source-media constraint. For video the leftward growth is also
+    // bounded by how much un-trimmed source HEAD exists (startFromBase, in source
+    // frames — convert to composition frames so the two limits share a unit).
+    const native = c.nativeFps && c.nativeFps > 0 ? c.nativeFps : doc.fps;
+    const startFromBaseComp = Math.floor((startFromBase * doc.fps) / native);
+    const maxLeftGrowth = c.kind === "scene" ? c.from : Math.min(c.from, startFromBaseComp);
     const minDelta = -maxLeftGrowth;
     const maxDelta = c.durationInFrames - 1;
     const clamped = Math.max(minDelta, Math.min(maxDelta, deltaFrames));
@@ -259,7 +347,7 @@ export function trimClipLeft(doc: EditableDoc, clipId: string, deltaFrames: numb
       ...c,
       from: c.from + clamped,
       durationInFrames: c.durationInFrames - clamped,
-      startFrom: c.startFrom != null ? startFromBase + clamped : c.startFrom,
+      startFrom: c.startFrom != null ? startFromBase + compDeltaToSource(c, clamped, doc.fps) : c.startFrom,
     };
   });
   const totalDurationInFrames = Math.max(
@@ -374,7 +462,7 @@ export function splitClip(
   const tailFrom = clip.from + localFrame;
   const tailDuration = clip.durationInFrames - localFrame;
   const tailStartFrom =
-    clip.startFrom != null ? clip.startFrom + localFrame : undefined;
+    clip.startFrom != null ? clip.startFrom + compDeltaToSource(clip, localFrame, doc.fps) : undefined;
   const newClips: EditableClip[] = [];
   for (const c of doc.clips) {
     if (c.id !== clipId) {
@@ -396,4 +484,184 @@ export function splitClip(
     ...newClips.map((c) => c.from + c.durationInFrames),
   );
   return { ...doc, clips: newClips, totalDurationInFrames };
+}
+
+/**
+ * Ripple delete: remove a clip and slide everything after it left to close the
+ * gap (Final Cut / Premiere ripple-delete). No black gap is left behind.
+ */
+export function rippleDeleteClip(doc: EditableDoc, clipId: string): EditableDoc {
+  const deleted = doc.clips.find((c) => c.id === clipId);
+  if (!deleted) return doc;
+  const shift = deleted.durationInFrames;
+
+  if (doc.mode === "video") {
+    const clips = doc.clips
+      .filter((c) => c.id !== clipId)
+      .map((c) => (c.from >= deleted.from ? { ...c, from: Math.max(0, c.from - shift) } : c));
+    const totalDurationInFrames = Math.max(0, ...clips.map((c) => c.from + c.durationInFrames), 0);
+    return { ...doc, clips, totalDurationInFrames };
+  }
+
+  // Scene mode — splice the deleted block out of the source, then re-patch the
+  // shifted `from` (and durations) of every surviving clip, and re-derive so
+  // byte offsets stay valid.
+  if (!doc.originalCode || !deleted.sourceRange) return doc;
+  const remaining = doc.clips
+    .filter((c) => c.id !== clipId)
+    .map((c) => (c.from >= deleted.from ? { ...c, from: Math.max(0, c.from - shift) } : c));
+
+  type Edit = { start: number; end: number; replacement: string };
+  const edits: Edit[] = [];
+  // Delete the whole block, expanding to swallow its own line so no blank line
+  // is left behind.
+  const src = doc.originalCode;
+  let delStart = deleted.sourceRange.start;
+  let delEnd = deleted.sourceRange.end;
+  const lineStart = src.lastIndexOf("\n", delStart - 1) + 1;
+  if (/^\s*$/.test(src.slice(lineStart, delStart))) delStart = lineStart;
+  while (delEnd < src.length && (src[delEnd] === " " || src[delEnd] === "\t")) delEnd++;
+  if (src[delEnd] === "\r") delEnd++;
+  if (src[delEnd] === "\n") delEnd++;
+  edits.push({ start: delStart, end: delEnd, replacement: "" });
+  // Re-patch survivors' attribute values.
+  for (const c of remaining) {
+    if (!c.fromAttrRange || !c.durationAttrRange) continue;
+    edits.push({ start: c.fromAttrRange.start, end: c.fromAttrRange.end, replacement: String(c.from) });
+    edits.push({ start: c.durationAttrRange.start, end: c.durationAttrRange.end, replacement: String(c.durationInFrames) });
+  }
+  edits.sort((a, b) => b.start - a.start);
+  let out = src;
+  for (const e of edits) out = out.slice(0, e.start) + e.replacement + out.slice(e.end);
+  const total = Math.max(1, ...remaining.map((c) => c.from + c.durationInFrames), 1);
+  out = out.replace(/(export\s+(?:const|let|var)\s+durationInFrames\s*=\s*)\d+/, `$1${total}`);
+  return docFromCode(out, doc.fps) ?? doc;
+}
+
+/**
+ * Ripple-delete several clips at once (multi-select). Each surviving clip slides
+ * left by the total duration of removed clips that were before it — the same
+ * gap-closing semantics as single ripple, applied atomically.
+ */
+export function rippleDeleteClips(doc: EditableDoc, ids: string[]): EditableDoc {
+  const idSet = new Set(ids);
+  const removed = doc.clips.filter((c) => idSet.has(c.id));
+  if (removed.length === 0) return doc;
+  const shiftFor = (from: number) => removed.filter((r) => r.from < from).reduce((s, r) => s + r.durationInFrames, 0);
+
+  if (doc.mode === "video") {
+    const clips = doc.clips
+      .filter((c) => !idSet.has(c.id))
+      .map((c) => ({ ...c, from: Math.max(0, c.from - shiftFor(c.from)) }));
+    const totalDurationInFrames = Math.max(0, ...clips.map((c) => c.from + c.durationInFrames), 0);
+    return { ...doc, clips, totalDurationInFrames };
+  }
+
+  if (!doc.originalCode) return doc;
+  const src = doc.originalCode;
+  const kept = doc.clips
+    .filter((c) => !idSet.has(c.id))
+    .map((c) => ({ ...c, from: Math.max(0, c.from - shiftFor(c.from)) }));
+
+  type Edit = { start: number; end: number; replacement: string };
+  const edits: Edit[] = [];
+  for (const r of removed) {
+    if (!r.sourceRange) continue;
+    let delStart = r.sourceRange.start;
+    let delEnd = r.sourceRange.end;
+    const lineStart = src.lastIndexOf("\n", delStart - 1) + 1;
+    if (/^\s*$/.test(src.slice(lineStart, delStart))) delStart = lineStart;
+    while (delEnd < src.length && (src[delEnd] === " " || src[delEnd] === "\t")) delEnd++;
+    if (src[delEnd] === "\r") delEnd++;
+    if (src[delEnd] === "\n") delEnd++;
+    edits.push({ start: delStart, end: delEnd, replacement: "" });
+  }
+  for (const c of kept) {
+    if (!c.fromAttrRange || !c.durationAttrRange) continue;
+    edits.push({ start: c.fromAttrRange.start, end: c.fromAttrRange.end, replacement: String(c.from) });
+    edits.push({ start: c.durationAttrRange.start, end: c.durationAttrRange.end, replacement: String(c.durationInFrames) });
+  }
+  edits.sort((a, b) => b.start - a.start);
+  let out = src;
+  for (const e of edits) out = out.slice(0, e.start) + e.replacement + out.slice(e.end);
+  const total = Math.max(1, ...kept.map((c) => c.from + c.durationInFrames), 1);
+  out = out.replace(/(export\s+(?:const|let|var)\s+durationInFrames\s*=\s*)\d+/, `$1${total}`);
+  return docFromCode(out, doc.fps) ?? doc;
+}
+
+/**
+ * Reorder a clip into a new position, laid out gaplessly in visual (by-`from`)
+ * order. Matches how NLE reordering works — dropping a clip re-packs the row.
+ */
+export function reorderClip(doc: EditableDoc, clipId: string, targetIndex: number): EditableDoc {
+  const sorted = [...doc.clips].sort((a, b) => a.from - b.from);
+  const fromIdx = sorted.findIndex((c) => c.id === clipId);
+  if (fromIdx === -1) return doc;
+  const [moved] = sorted.splice(fromIdx, 1);
+  const clamped = Math.max(0, Math.min(sorted.length, targetIndex));
+  sorted.splice(clamped, 0, moved);
+  // Re-pack `from` as a running total in the new order.
+  let run = 0;
+  const relaid = sorted.map((c) => {
+    const nc = { ...c, from: run };
+    run += c.durationInFrames;
+    return nc;
+  });
+  const totalDurationInFrames = Math.max(0, ...relaid.map((c) => c.from + c.durationInFrames), 0);
+  // Pure: only `from` values change (source blocks stay put), so codeFromDoc can
+  // emit correctly for both video and scene mode without re-deriving.
+  return { ...doc, clips: relaid, totalDurationInFrames };
+}
+
+/**
+ * Re-pack all clips gaplessly in visual (by-`from`) order, preserving order.
+ * Keeps the timeline magnetic after an in-place trim so no black gap opens up
+ * (a trimmed clip's neighbours slide to close the space — ripple trim).
+ */
+export function repack(doc: EditableDoc): EditableDoc {
+  const sorted = [...doc.clips].sort((a, b) => a.from - b.from);
+  let run = 0;
+  const relaid = sorted.map((c) => {
+    const nc = { ...c, from: run };
+    run += c.durationInFrames;
+    return nc;
+  });
+  const totalDurationInFrames = Math.max(0, ...relaid.map((c) => c.from + c.durationInFrames), 0);
+  return { ...doc, clips: relaid, totalDurationInFrames };
+}
+
+/**
+ * Snap candidates for dragging/trimming: every OTHER clip's edges, the ends of
+ * the timeline, and (optionally) the playhead. Callers snap the manipulated edge
+ * to the nearest of these within a pixel-derived threshold.
+ */
+export function getSnapTargets(
+  doc: EditableDoc,
+  opts: { excludeClipId?: string; playhead?: number } = {},
+): number[] {
+  const t = new Set<number>([0, doc.totalDurationInFrames]);
+  for (const c of doc.clips) {
+    if (c.id === opts.excludeClipId) continue;
+    t.add(c.from);
+    t.add(c.from + c.durationInFrames);
+  }
+  if (opts.playhead != null) t.add(Math.round(opts.playhead));
+  return [...t].sort((a, b) => a - b);
+}
+
+export function snapFrame(
+  frame: number,
+  targets: number[],
+  threshold: number,
+): { frame: number; snapped: number | null } {
+  let best: number | null = null;
+  let bestDist = threshold + 1;
+  for (const tg of targets) {
+    const d = Math.abs(tg - frame);
+    if (d <= threshold && d < bestDist) {
+      best = tg;
+      bestDist = d;
+    }
+  }
+  return best != null ? { frame: best, snapped: best } : { frame, snapped: null };
 }

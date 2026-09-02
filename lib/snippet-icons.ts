@@ -18,6 +18,7 @@ export const SNIPPET_ICONS: Record<string, string> = {
   EventCard: "info",
   MCPLaunchFrame: "layers",
   ActorStoreCard: "image",
+  ActorCard: "layers",
   EventContour: "sparkle",
   HiringCard: "list",
   ChartReveal: "bolt",

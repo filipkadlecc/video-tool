@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, Component, type ReactNode } from "react";
-import { Player } from "@remotion/player";
+import { Player, type PlayerRef } from "@remotion/player";
 import { evalSceneCode } from "@/remotion/DynamicScene";
 import { SvgFramesProvider, type SvgFrameSlot } from "@/remotion/motion";
 import { AbsoluteFill } from "remotion";
@@ -70,9 +70,16 @@ interface PreviewPanelProps {
   width?: number;
   height?: number;
   svgContents?: SvgFrameSlot[];
+  /**
+   * Handle onto the Remotion Player so the timeline can drive a synced playhead
+   * (read the current frame, seek, play/pause). Passed as a ref-object prop
+   * rather than via forwardRef because PreviewPanel is loaded through
+   * next/dynamic({ ssr: false }), which does not forward React refs.
+   */
+  playerRef?: React.RefObject<PlayerRef | null>;
 }
 
-export default function PreviewPanel({ code, width = 3840, height = 2160, svgContents }: PreviewPanelProps) {
+export default function PreviewPanel({ code, width = 3840, height = 2160, svgContents, playerRef }: PreviewPanelProps) {
   const aspectRatio = `${width}/${height}`;
   const { SceneComponent, durationInFrames, fps } = useMemo(() => {
     if (!code || !code.trim()) {
@@ -123,6 +130,7 @@ export default function PreviewPanel({ code, width = 3840, height = 2160, svgCon
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 2, minHeight: 0 }}>
         <PlayerErrorBoundary code={code}>
           <Player
+            ref={playerRef}
             component={SceneComponent}
             compositionWidth={width}
             compositionHeight={height}

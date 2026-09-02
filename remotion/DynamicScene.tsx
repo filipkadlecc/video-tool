@@ -21,8 +21,41 @@ import * as Motion from "./motion";
 import * as Decor from "./decor";
 import * as Transitions from "./transitions";
 import { SvgFramesProvider, type SvgFrameSlot } from "./motion";
+import type { MediaCapture } from "@/lib/timeline-extract";
 
 const { AbsoluteFill } = RemotionLib;
+
+/**
+ * Build a remotion module whose media leaves (OffthreadVideo/Video/Audio/Img)
+ * report the sequence they render inside + their src/trim, without changing what
+ * they render. Used only by the hidden timeline extractor (not the live preview),
+ * so recording during render is acceptable — callers dedupe.
+ */
+function makeInstrumentedRemotion(onMedia: (m: MediaCapture) => void): typeof RemotionLib {
+  const Internals = RemotionLib.Internals;
+  const wrap = (Comp: React.ComponentType<Record<string, unknown>>, kind: MediaCapture["kind"]) => {
+    const Wrapped: React.FC<Record<string, unknown>> = (props) => {
+      const seq = React.useContext(Internals.SequenceContext) as { id?: string } | null;
+      onMedia({
+        enclosingId: seq?.id ?? null,
+        kind,
+        src: props.src as string | undefined,
+        startFrom: (props.startFrom ?? props.trimBefore) as number | undefined,
+        endAt: (props.endAt ?? props.trimAfter) as number | undefined,
+      });
+      return React.createElement(Comp, props);
+    };
+    return Wrapped;
+  };
+  const C = (x: unknown) => x as React.ComponentType<Record<string, unknown>>;
+  return {
+    ...RemotionLib,
+    OffthreadVideo: wrap(C(RemotionLib.OffthreadVideo), "video"),
+    Video: wrap(C(RemotionLib.Video), "video"),
+    Audio: wrap(C(RemotionLib.Audio), "audio"),
+    Img: wrap(C(RemotionLib.Img), "image"),
+  } as unknown as typeof RemotionLib;
+}
 
 const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS };
 
@@ -150,7 +183,10 @@ function makeErrorComponent(msg: string): React.ComponentType<Record<string, unk
   return ErrorComponent;
 }
 
-export function evalSceneCode(code: string): EvalResult | null {
+export function evalSceneCode(
+  code: string,
+  opts?: { onMedia?: (m: MediaCapture) => void },
+): EvalResult | null {
   if (!code || !code.trim() || !looksLikeCode(code)) return null;
 
   try {
@@ -161,7 +197,12 @@ export function evalSceneCode(code: string): EvalResult | null {
     }).code;
 
     const exports: Record<string, unknown> = {};
-    const module = { exports };
+    const mod = { exports };
+
+    // The extractor passes onMedia to instrument media leaves; the live preview
+    // does not, so it uses the real remotion module untouched.
+    const instrumented = opts?.onMedia ? makeInstrumentedRemotion(opts.onMedia) : null;
+    const req = instrumented ? (name: string) => (name === "remotion" ? instrumented : fakeRequire(name)) : fakeRequire;
 
     const fn = new Function(
       "require",
@@ -170,9 +211,9 @@ export function evalSceneCode(code: string): EvalResult | null {
       "React",
       transformed
     );
-    fn(fakeRequire, module, exports, React);
+    fn(req, mod, exports, React);
 
-    const result = module.exports as Record<string, unknown>;
+    const result = mod.exports as Record<string, unknown>;
 
     // Find component
     let component: React.ComponentType<Record<string, unknown>> | null = null;

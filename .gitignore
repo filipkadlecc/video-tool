@@ -58,3 +58,6 @@ next-env.d.ts
 # per-user data — every user keeps their own local project library
 /data/projects/
 /data/collections.json
+
+# separate cloned repo (trovevault/video-studio), not part of this project
+/video-studio/

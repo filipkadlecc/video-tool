@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Icon from "@/components/ui/Icon";
+import ActorLookup from "@/components/ActorLookup";
 import {
   type ArrayItemParam,
   type ArrayParam,
@@ -48,6 +49,13 @@ export default function SnippetParamsForm({
     else setInternalValues(next);
   }
 
+  // Merge several fields at once (used by the Apify Store prefill lookup).
+  function applyPatch(patch: Record<string, unknown>) {
+    const next = { ...values, ...patch };
+    if (isControlled) onValuesChange!(next);
+    else setInternalValues(next);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
@@ -61,6 +69,7 @@ export default function SnippetParamsForm({
           gap: 14,
         }}
       >
+        {schema.prefill?.kind === "apifyActor" && <ActorLookup onPick={applyPatch} />}
         {Object.entries(schema.params).map(([key, param]) => {
           if (!isFieldVisible(schema, key, values)) return null;
           return (

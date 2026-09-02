@@ -20,7 +20,7 @@ Composition:
 Motion:
 - ALWAYS use SNAPPY springs for text reveals (mass: 0.5, damping: 14, stiffness: 220). They MUST overshoot slightly — that snap is the entire vibe.
 - Stagger letters by 1-2 frames each, NOT 15 frames. Fast cadence.
-- Compound transforms are mandatory: \`translateY(40 → 0)\` + \`scale(0.92 → 1)\` + \`blur(8px → 0)\` together.
+- Compound transforms are mandatory: \`translateY(40 → 0)\` + \`scale(0.92 → 1)\` together. NEVER add an animated \`blur(Npx → 0)\` — reveal blur is banned; elements arrive sharp.
 - After reveal: residual motion — a 0.5-1px breath, a 0.2° rotational drift, a faint vertical parallax on background elements at 0.3x speed of foreground.
 - Hard cuts between phases (sub-scenes) — use \`<Sequence>\` boundaries with no fade, just a snap.
 

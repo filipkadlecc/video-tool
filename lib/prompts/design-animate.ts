@@ -48,7 +48,7 @@ The host resolves "../motion" to the shared motion module. Do not redefine these
 
 ## Motion — the ONLY thing you add (never change the look)
 Drive everything off \`useCurrentFrame()\`. Apply motion to WRAPPERS via opacity / transform / filter so element colors and text are never altered.
-- Identify the logical elements (heading, subheading, each card / row / button / image / stat) and reveal them. \`compoundReveal(frame, fps, { delay, preset })\` (fade + slide + scale + blur) is the safe default.
+- Identify the logical elements (heading, subheading, each card / row / button / image / stat) and reveal them. \`compoundReveal(frame, fps, { delay, preset })\` (fade + slide + scale, no reveal blur) is the safe default.
 - STAGGER siblings: each enters a few frames after the previous via \`staggerChild(i, frame, fps, { ... })\` or \`staggeredSpring\`. Lists and grids should cascade, not pop in all at once.
 - Mix presets by intent: SNAPPY for the hero/title, LIQUID for large cards/images, GENTLE for secondary text.
 - During the HOLD (after everything is in), add subtle \`ambientDrift(frame, amplitude, period, seed)\` to a few elements — a UNIQUE seed per element — so nothing freezes.

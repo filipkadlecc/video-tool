@@ -2,11 +2,25 @@ import fs from "fs";
 import path from "path";
 
 // Few-shot snippet sources injected into the system prompt. Read once at module
-// init (server-only). The list is deliberately small — full source for IntroCard,
-// StatCallout, ListReveal, PathReveal — to anchor the LLM on the style without
-// blowing the token budget.
-
-const FEW_SHOT_IDS = ["IntroCard", "StatCallout", "ListReveal", "PathReveal", "EventContour"];
+// init (server-only). Full source for a diverse set of shipping scenes — a hero
+// intro, a stat callout, list/path/timeline reveals, a closing card, a footage
+// lower-third, a data chart, a quote, a ranked list, and a before/after split —
+// so the LLM has a real, style-consistent example for most composition shapes it
+// needs. The token cost is absorbed by prompt caching on every turn after the
+// first, so a broader set is nearly free.
+const FEW_SHOT_IDS = [
+  "IntroCard",
+  "StatCallout",
+  "ListReveal",
+  "PathReveal",
+  "EventContour",
+  "EndCard",
+  "LowerThird",
+  "ChartReveal",
+  "QuoteCard",
+  "RankedReveal",
+  "BeforeAfter",
+];
 
 let cached: string | null = null;
 

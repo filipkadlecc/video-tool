@@ -23,7 +23,7 @@ Composition:
 Motion:
 - Camera-like motion is THE signature: every scene has a slow continuous transform on the root content — e.g. \`transform: scale(\${1 + frame * 0.0003}) translateY(\${frame * 0.15}px)\`. Imperceptibly slow zoom-in or pan. Always present.
 - GENTLE springs for entrances (mass: 1.0, damping: 30, stiffness: 80). Reveals are unhurried.
-- Entrance reveals use motion + blur — translate + scale + \`filter: blur(6px → 0)\` over 40-80 frames. Content must be visible from frame 0; do NOT hold a black or near-black canvas before the reveal. Cinematic pacing comes from slow camera motion and patient holds AFTER the reveal, never from black anticipation.
+- Entrance reveals use motion — translate + scale over 40-80 frames. NEVER animate a \`filter: blur(Npx → 0)\` on the entrance (reveal blur is banned; the blurred layer below is a STATIC background only). Content must be visible from frame 0; do NOT hold a black or near-black canvas before the reveal. Cinematic pacing comes from slow camera motion and patient holds AFTER the reveal, never from black anticipation.
 - Crossfades between phases at 25-40 frame overlap, never hard cuts.
 
 Typography:
