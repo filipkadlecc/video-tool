@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { EditorDoc } from "@/lib/editor-doc";
 
 const MAX_HISTORY = 100;
@@ -14,53 +14,78 @@ export interface DocHistoryControls {
 }
 
 /**
- * Undo/redo for the editor document. Same shape as useCodeHistory, and the same
- * invariant it exists to protect: the CURRENT state stays at the top of the
- * stack, so one Cmd+Z steps back exactly one edit. (The earlier bug was callers
- * pushing only the pre-edit state, which left the first edit with nothing to
- * undo to and made later undos jump a step too far.)
+ * Undo/redo for the editor document.
+ *
+ * The invariant this exists to protect: the CURRENT state stays at the top of
+ * the stack, so one Cmd+Z steps back exactly one edit. (The earlier bug was
+ * callers pushing only the pre-edit state, which left the first edit with
+ * nothing to undo to and made later undos jump a step too far.)
  *
  * Documents are plain data, so a snapshot is the document itself — no
  * serialisation, and every edit already returns a new object.
+ *
+ * Backed by a subscribable store rather than bare refs. Refs alone cannot tell
+ * React that `canUndo`/`canRedo` changed, so a toolbar button could never grey
+ * itself out — which the design requires. `getSnapshot` returns a NUMBER, not
+ * an object: returning a fresh object each call makes useSyncExternalStore
+ * loop forever.
  */
-export function useDocHistory(): DocHistoryControls {
-  const historyRef = useRef<EditorDoc[]>([]);
-  const indexRef = useRef(-1);
+function createHistoryStore() {
+  let history: EditorDoc[] = [];
+  let index = -1;
+  let version = 0;
+  const listeners = new Set<() => void>();
 
-  const pushSnapshot = useCallback((doc: EditorDoc) => {
-    const history = historyRef.current;
-    const idx = indexRef.current;
-    if (idx >= 0 && history[idx] === doc) return;
-
-    historyRef.current = history.slice(0, idx + 1);
-    historyRef.current.push(doc);
-    if (historyRef.current.length > MAX_HISTORY) {
-      historyRef.current = historyRef.current.slice(-MAX_HISTORY);
-    }
-    indexRef.current = historyRef.current.length - 1;
-  }, []);
-
-  const undo = useCallback((): EditorDoc | null => {
-    if (indexRef.current <= 0) return null;
-    indexRef.current--;
-    return historyRef.current[indexRef.current];
-  }, []);
-
-  const redo = useCallback((): EditorDoc | null => {
-    if (indexRef.current >= historyRef.current.length - 1) return null;
-    indexRef.current++;
-    return historyRef.current[indexRef.current];
-  }, []);
+  const emit = () => {
+    version++;
+    listeners.forEach((l) => l());
+  };
 
   return {
-    pushSnapshot,
-    undo,
-    redo,
-    get canUndo() {
-      return indexRef.current > 0;
+    subscribe(l: () => void) {
+      listeners.add(l);
+      return () => { listeners.delete(l); };
     },
-    get canRedo() {
-      return indexRef.current < historyRef.current.length - 1;
+    getSnapshot: () => version,
+    push(doc: EditorDoc) {
+      if (index >= 0 && history[index] === doc) return;
+      history = history.slice(0, index + 1);
+      history.push(doc);
+      if (history.length > MAX_HISTORY) history = history.slice(-MAX_HISTORY);
+      index = history.length - 1;
+      emit();
     },
+    undo(): EditorDoc | null {
+      if (index <= 0) return null;
+      index--;
+      emit();
+      return history[index];
+    },
+    redo(): EditorDoc | null {
+      if (index >= history.length - 1) return null;
+      index++;
+      emit();
+      return history[index];
+    },
+    get canUndo() { return index > 0; },
+    get canRedo() { return index < history.length - 1; },
+  };
+}
+
+export function useDocHistory(): DocHistoryControls {
+  // useState's lazy initialiser rather than a ref: the store is created once,
+  // and reading it during render is safe.
+  const [store] = useState(createHistoryStore);
+
+  // The third argument matters: this runs inside a client component Next may
+  // prerender, and omitting getServerSnapshot throws.
+  useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+
+  return {
+    pushSnapshot: store.push,
+    undo: store.undo,
+    redo: store.redo,
+    canUndo: store.canUndo,
+    canRedo: store.canRedo,
   };
 }

@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/Icon";
 import { addItem, makeId, type Asset, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
+import { usePlayheadStore } from "@/hooks/usePlayhead";
 
 /**
  * Everything imported into this project, in one place — and the way to import
@@ -19,7 +20,6 @@ interface Props {
   projectId: string;
   doc: EditorDoc;
   onChange: (next: EditorDoc) => void;
-  currentFrame: number;
   onSelect?: (itemId: string) => void;
 }
 
@@ -39,7 +39,10 @@ export function readMediaDuration(src: string, kind: "video" | "audio") {
   });
 }
 
-export default function FootageBrowser({ projectId, doc, onChange, currentFrame, onSelect }: Props) {
+export default function FootageBrowser({ projectId, doc, onChange, onSelect }: Props) {
+  // Needed only when a clip is dropped, so read it then rather than
+  // re-rendering this list on every frame of playback.
+  const playhead = usePlayheadStore();
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [durations, setDurations] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -114,7 +117,7 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
     const item = {
       type: kind === "audio" ? "audio" : kind === "image" ? "image" : "video",
       id: makeId(kind),
-      from: currentFrame,
+      from: playhead.getFrame(),
       durationInFrames: Math.max(1, Math.round((durationSec ?? 3) * doc.size.fps)),
       layout: { x: 0, y: 0, width: doc.size.width, height: doc.size.height },
       assetId: asset.id,
@@ -123,7 +126,7 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
 
     onChange(addItem(existing ? doc : { ...doc, assets: [...doc.assets, asset] }, trackId, item));
     onSelect?.(item.id);
-  }, [doc, projectId, durations, currentFrame, onChange, onSelect]);
+  }, [doc, projectId, durations, playhead, onChange, onSelect]);
 
   const used = new Set(doc.assets.map((a) => a.src));
 

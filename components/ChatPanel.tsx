@@ -8,6 +8,7 @@ import Kbd from "@/components/ui/Kbd";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import { normalizeTapeQuotes } from "@/lib/tape-parser";
+import { usePlayheadStore } from "@/hooks/usePlayhead";
 
 function extractCodeFromResponse(text: string, animationType?: string): string {
   // Accept tsx/js/html fences — older responses used a variety of them.
@@ -88,7 +89,6 @@ interface ChatPanelProps {
    */
   doc?: EditorDoc;
   selectedIds?: string[];
-  playheadFrame?: number;
   onDocChanged?: (doc: EditorDoc, opts?: { transient?: boolean }) => void;
 }
 
@@ -119,11 +119,12 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     onUseSfxChange,
     doc,
     selectedIds,
-    playheadFrame,
     onDocChanged,
   },
   ref,
 ) {
+  // Only needed when a message is sent, so this never subscribes.
+  const playhead = usePlayheadStore();
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
@@ -218,7 +219,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     // doc === undefined — so a first pass would write a TSX file and silently
     // ignore the timeline it was supposed to fill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError, doc, selectedIds, playheadFrame, onDocChanged],
+    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError, doc, selectedIds, playhead, onDocChanged],
   );
 
   async function sendMessage(text: string, overrideCode?: string, opts: { force?: boolean } = {}) {
@@ -409,7 +410,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         doc,
         projectId,
         selectedIds: selectedIds ?? [],
-        playheadFrame: playheadFrame ?? 0,
+        playheadFrame: playhead.getFrame(),
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);

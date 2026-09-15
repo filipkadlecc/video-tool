@@ -7,6 +7,7 @@ import { EditorComposition } from "@/remotion/EditorComposition";
 import EditorCanvas from "@/components/EditorCanvas";
 import EditorPlayerControls from "@/components/EditorPlayerControls";
 import { docDuration, type EditorDoc } from "@/lib/editor-doc";
+import { usePlayheadFrame, usePlayheadPlaying } from "@/hooks/usePlayhead";
 
 /**
  * Preview for a document-based project. Mounts the SAME component the export
@@ -20,24 +21,24 @@ import { docDuration, type EditorDoc } from "@/lib/editor-doc";
 export default function EditorPreview({
   doc,
   playerRef,
-  currentFrame = 0,
   selectedIds,
   onSelectionChange,
   onChange,
-  isPlaying,
   onSeek,
   onTogglePlay,
 }: {
   doc: EditorDoc;
   playerRef?: React.RefObject<PlayerRef | null>;
-  currentFrame?: number;
   selectedIds?: Set<string>;
   onSelectionChange?: (next: Set<string>) => void;
   onChange?: (next: EditorDoc, opts?: { transient?: boolean }) => void;
-  isPlaying?: boolean;
   onSeek?: (frame: number) => void;
   onTogglePlay?: () => void;
 }) {
+  // Subscribes: the selection box must sit on the item as RENDERED, and the
+  // transport's timecode ticks. Both genuinely change every frame.
+  const currentFrame = usePlayheadFrame();
+  const isPlaying = usePlayheadPlaying();
   const durationInFrames = useMemo(() => docDuration(doc), [doc]);
   const inputProps = useMemo(() => ({ doc }), [doc]);
   const { width, height, fps } = doc.size;

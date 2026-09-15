@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
+import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import ShortcutsModal from "@/components/ShortcutsModal";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
@@ -52,7 +53,6 @@ export interface MediaFile {
 interface Props {
   doc: EditorDoc;
   onChange: (next: EditorDoc) => void;
-  currentFrame: number;
   onSeek?: (frame: number) => void;
   onScrubStart?: () => void;
   onTogglePlay?: () => void;
@@ -88,7 +88,7 @@ const ITEM_ICONS: Record<string, string> = {
 };
 
 export default function DocTimeline({
-  doc, onChange, currentFrame, onSeek, onScrubStart, onTogglePlay,
+  doc, onChange, onSeek, onScrubStart, onTogglePlay,
   mediaFiles, mediaDurations, projectId, selectedIds, onSelectionChange,
   onPromptAnimation,
 }: Props) {
@@ -99,6 +99,8 @@ export default function DocTimeline({
   const [containerWidth, setContainerWidth] = useState(900);
   const [pickerOpen, setPickerOpen] = useState(false);
   const toast = useToast();
+  // Subscribes: the playhead line and the ruler repaint every frame.
+  const currentFrame = usePlayheadFrame();
   const [captionsBusy, setCaptionsBusy] = useState<string | null>(null);
   // The same file list serves two jobs: dropping a clip on a track, and turning
   // a clip's speech into subtitles. Captions used to be reachable only as a

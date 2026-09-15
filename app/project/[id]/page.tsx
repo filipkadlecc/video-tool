@@ -34,6 +34,7 @@ import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegment
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PlayerRef } from "@remotion/player";
 import { useToast } from "@/components/ui/Toast";
+import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
 
 const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
   ssr: false,
@@ -152,8 +153,9 @@ export default function ProjectEditor() {
 
   // Synced playhead: the timeline drives / follows the preview <Player>.
   const playerRef = useRef<PlayerRef | null>(null);
-  const [currentFrame, setCurrentFrame] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  // The playhead lives in a store, not in page state: a rAF setState here
+  // re-rendered this entire 1,460-line component on every frame of playback.
+  const playhead = useNewPlayheadStore();
 
   // Load project
   useEffect(() => {
@@ -537,14 +539,15 @@ export default function ProjectEditor() {
       const p = playerRef.current;
       if (p) {
         const f = p.getCurrentFrame();
-        if (typeof f === "number") setCurrentFrame(f);
-        setIsPlaying(p.isPlaying());
+        // `set` no-ops when neither value changed, so a paused editor costs
+        // nothing beyond the rAF tick itself.
+        if (typeof f === "number") playhead.set(f, p.isPlaying());
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [playhead]);
 
   const seekTo = useCallback((frame: number) => {
     const p = playerRef.current;
@@ -645,7 +648,7 @@ export default function ProjectEditor() {
     const item: SceneItem = {
       type: "scene",
       id: makeId("snippet"),
-      from: currentFrame,
+      from: playhead.getFrame(),
       // A scene authored at 25fps needs MORE frames in a 30fps document to play
       // to its end — inside EditorComposition it is driven by the document's
       // rate, not its own. Taking the raw number cut every 25fps snippet 20%
@@ -666,7 +669,7 @@ export default function ProjectEditor() {
     };
     commitDoc(addItem(doc, trackId, fitSceneItem(item, doc.size.fps)));
     setSelectedItemIds(new Set([item.id]));
-  }, [doc, currentFrame, commitComposition, commitDoc]);
+  }, [doc, playhead, commitComposition, commitDoc]);
 
   /**
    * Describe an animation, get it as a block on its own track at the playhead.
@@ -704,7 +707,7 @@ export default function ProjectEditor() {
     const item: SceneItem = {
       type: "scene",
       id: makeId("scene"),
-      from: currentFrame,
+      from: playhead.getFrame(),
       durationInFrames: duration,
       layout: fullFrameLayout(doc.size),
       code: retimeSceneCode(data.code, duration, doc.size.fps),
@@ -714,7 +717,7 @@ export default function ProjectEditor() {
     };
     commitDoc(addItem(withTrack, trackId, item));
     setSelectedItemIds(new Set([item.id]));
-  }, [doc, project, styleMode, currentFrame, commitDoc]);
+  }, [doc, project, styleMode, playhead, commitDoc]);
 
   /**
    * Put a brand asset on a track. In the code editor an asset's only use is its
@@ -732,13 +735,13 @@ export default function ProjectEditor() {
       return;
     }
     const frames = doc.size.fps * 3;
-    const { doc: host, trackId } = trackWithRoomAt(doc, currentFrame, frames);
+    const { doc: host, trackId } = trackWithRoomAt(doc, playhead.getFrame(), frames);
     const asset = { id: makeId("asset"), kind: "image" as const, src: path, name: path.split("/").pop() ?? path };
     const size = Math.round(Math.min(doc.size.width, doc.size.height) * 0.4);
     const item = {
       type: "image" as const,
       id: makeId("image"),
-      from: currentFrame,
+      from: playhead.getFrame(),
       durationInFrames: frames,
       layout: {
         x: Math.round((doc.size.width - size) / 2),
@@ -751,7 +754,7 @@ export default function ProjectEditor() {
     };
     commitDoc(addItem({ ...host, assets: [...host.assets, asset] }, trackId, item));
     setSelectedItemIds(new Set([item.id]));
-  }, [doc, currentFrame, commitDoc]);
+  }, [doc, playhead, commitDoc]);
 
   const handleChatUpdate = useCallback((messages: ChatMessage[]) => {
     setChatHistory(messages);
@@ -849,6 +852,7 @@ export default function ProjectEditor() {
   const hasTimeline = Boolean(docView);
 
   return (
+    <PlayheadContext.Provider value={playhead}>
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Toolbar */}
       <div
@@ -883,21 +887,34 @@ export default function ProjectEditor() {
         </div>
         <TypeBadge type={project.animationType} />
         <div style={{ flex: 1 }} />
-        {/* Undo / Redo */}
-        <div style={{ display: "flex", gap: 1 }}>
+        {/* Undo / Redo — 2px gap, circular arrows, disabled when there is
+            nothing to go back (or forward) to.
+
+            These used to call codeHistory unconditionally, so in a doc-backed
+            project the buttons undid the LEGACY CODE while Cmd+Z correctly
+            undid the document. Branch the same way the keyboard handler does. */}
+        <div style={{ display: "flex", gap: 2 }}>
           <IconButton
             icon="undo"
             size={26}
             title="Undo (Cmd+Z)"
-            onClick={() => { const prev = codeHistory.undo(); if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); } }}
-            style={{ opacity: codeHistory.canUndo ? 1 : 0.3 }}
+            disabled={doc ? !docHistory.canUndo : !codeHistory.canUndo}
+            onClick={() => {
+              if (doc) { const prevDoc = docHistory.undo(); if (prevDoc !== null) setDoc(prevDoc); return; }
+              const prev = codeHistory.undo();
+              if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); }
+            }}
           />
           <IconButton
             icon="redo"
             size={26}
             title="Redo (Cmd+Shift+Z)"
-            onClick={() => { const next = codeHistory.redo(); if (next !== null) { setCode(next.code); setChatHistory(next.chat); } }}
-            style={{ opacity: codeHistory.canRedo ? 1 : 0.3 }}
+            disabled={doc ? !docHistory.canRedo : !codeHistory.canRedo}
+            onClick={() => {
+              if (doc) { const nextDoc = docHistory.redo(); if (nextDoc !== null) setDoc(nextDoc); return; }
+              const next = codeHistory.redo();
+              if (next !== null) { setCode(next.code); setChatHistory(next.chat); }
+            }}
           />
         </div>
         <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
@@ -1162,11 +1179,9 @@ export default function ProjectEditor() {
                     <EditorPreview
                       doc={docView}
                       playerRef={playerRef}
-                      currentFrame={currentFrame}
                       selectedIds={selectedItemIds}
                       onSelectionChange={setSelectedItemIds}
                       onChange={commitDoc}
-                      isPlaying={isPlaying}
                       onSeek={seekTo}
                       onTogglePlay={togglePlay}
                     />
@@ -1196,8 +1211,7 @@ export default function ProjectEditor() {
                       <DocTimeline
                         doc={docView}
                         onChange={commitDoc}
-                        currentFrame={currentFrame}
-                        onSeek={seekTo}
+                          onSeek={seekTo}
                         onScrubStart={handleScrubStart}
                         onTogglePlay={togglePlay}
                         mediaFiles={docMedia}
@@ -1236,8 +1250,7 @@ export default function ProjectEditor() {
                             projectId={projectId}
                             doc={docView}
                             onChange={commitDoc}
-                            currentFrame={currentFrame}
-                            onSelect={(id: string) => setSelectedItemIds(new Set([id]))}
+                                  onSelect={(id: string) => setSelectedItemIds(new Set([id]))}
                           />
                         )}
                         {bottomTab === "assets" && (
@@ -1344,7 +1357,6 @@ export default function ProjectEditor() {
                 sceneError={sceneError}
                 doc={docView}
                 selectedIds={[...selectedItemIds]}
-                playheadFrame={currentFrame}
                 onDocChanged={commitDoc}
               />
               )}
@@ -1463,5 +1475,6 @@ export default function ProjectEditor() {
 
       <GeneratingOverlay visible={isGenerating} />
     </div>
+    </PlayheadContext.Provider>
   );
 }
