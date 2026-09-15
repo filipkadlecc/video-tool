@@ -14,8 +14,44 @@ export interface RenderJob {
   sceneId: string;
   status: "queued" | "rendering" | "done" | "error";
   progress: number;
+  /**
+   * Real frame counts, straight from the renderer's own "Rendered X/Y".
+   *
+   * Frames are what tell you a render isn't stuck — a percentage that sits on
+   * 41% for a minute is indistinguishable from a hang, while 214 -> 215 is
+   * obviously alive. These were already being parsed and thrown away; only the
+   * rounded percentage survived, so the UI had to reconstruct a frame count by
+   * multiplying the percentage back out, which is wrong by up to 1% of the
+   * duration and only lands on the true total at 100%.
+   */
+  renderedFrames?: number;
+  totalFrames?: number;
+  /** When the render actually started, for an honest "about N left". */
+  startedAt?: number;
   outputPath?: string;
   error?: string;
+}
+
+/**
+ * Pull progress out of a line of the renderer's output.
+ *
+ * "Rendered X/Y" is preferred and keeps the real numbers; a bare percentage is
+ * the fallback for phases that don't report frames (bundling, stitching).
+ */
+function readProgress(job: RenderJob, line: string): void {
+  const rendered = line.match(/Rendered\s+(\d+)\/(\d+)/);
+  if (rendered) {
+    const done = parseInt(rendered[1], 10);
+    const total = parseInt(rendered[2], 10);
+    if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+      job.renderedFrames = done;
+      job.totalFrames = total;
+      job.progress = Math.round((done / total) * 100);
+      return;
+    }
+  }
+  const pct = line.match(/(\d+)%/);
+  if (pct) job.progress = parseInt(pct[1], 10);
 }
 
 // Use globalThis to persist state across Next.js dev mode module re-evaluations
@@ -165,6 +201,7 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 
   queue.add(async () => {
     job.status = "rendering";
+    job.startedAt = Date.now();
 
     const scenePath = path.join(
       process.cwd(),
@@ -249,31 +286,12 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         proc.stderr.on("data", (data: Buffer) => {
           const line = data.toString();
           stderrLog += line;
-          const match = line.match(/(\d+)%/);
-          if (match) {
-            job.progress = parseInt(match[1], 10);
-          }
-          // Also parse "Rendered X/Y" format
-          const renderedMatch = line.match(/Rendered\s+(\d+)\/(\d+)/);
-          if (renderedMatch) {
-            job.progress = Math.round(
-              (parseInt(renderedMatch[1], 10) / parseInt(renderedMatch[2], 10)) * 100
-            );
-          }
+          readProgress(job, line);
         });
 
         proc.stdout.on("data", (data: Buffer) => {
           const line = data.toString();
-          const match = line.match(/(\d+)%/);
-          if (match) {
-            job.progress = parseInt(match[1], 10);
-          }
-          const renderedMatch = line.match(/Rendered\s+(\d+)\/(\d+)/);
-          if (renderedMatch) {
-            job.progress = Math.round(
-              (parseInt(renderedMatch[1], 10) / parseInt(renderedMatch[2], 10)) * 100
-            );
-          }
+          readProgress(job, line);
         });
 
         proc.on("close", (exitCode) => {

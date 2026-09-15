@@ -3,6 +3,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import Tag from "@/components/ui/Tag";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import Input from "@/components/ui/Input";
@@ -76,6 +77,9 @@ export default function ExportDialog({
   // stops) — this drives the "close anyway?" confirmation.
   const [confirmingClose, setConfirmingClose] = useState(false);
   const [progress, setProgress] = useState(0);
+  // Straight from the renderer, not reconstructed from a percentage.
+  const [frames, setFrames] = useState<{ done: number; total: number } | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState(projectName.replace(/\s+/g, "-").toLowerCase());
@@ -95,6 +99,19 @@ export default function ExportDialog({
   const [savePresetName, setSavePresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
   const presetRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * "About N left", from measured throughput. Only shown once there is enough
+   * signal to be worth saying — a guess made from three frames is noise.
+   */
+  const remaining = (() => {
+    if (!frames || !startedAt || frames.done < 10) return null;
+    const perFrame = (Date.now() - startedAt) / frames.done;
+    const secs = Math.round((perFrame * (frames.total - frames.done)) / 1000);
+    if (!Number.isFinite(secs) || secs <= 0) return null;
+    if (secs < 60) return `${secs}s`;
+    return `${Math.round(secs / 60)}m`;
+  })();
 
   const [cacheStats, setCacheStats] = useState<{ count: number; totalBytes: number } | null>(null);
   const [cleaning, setCleaning] = useState(false);
@@ -263,6 +280,10 @@ export default function ExportDialog({
 
           setStatus(statusData.status);
           setProgress(statusData.progress);
+          if (typeof statusData.renderedFrames === "number" && typeof statusData.totalFrames === "number") {
+            setFrames({ done: statusData.renderedFrames, total: statusData.totalFrames });
+          }
+          if (typeof statusData.startedAt === "number") setStartedAt(statusData.startedAt);
 
           if (statusData.status === "done") {
             stopPolling();
@@ -312,6 +333,26 @@ export default function ExportDialog({
   }
 
   const seconds = (durationInFrames / fps).toFixed(1);
+  /**
+   * Clips whose source asset is no longer in the document.
+   *
+   * Missing sources are the one thing that silently ruins an export — they
+   * render as black — so they are stated BEFORE you commit, not after. Amber,
+   * because you may proceed past it.
+   */
+  const missingSources = (() => {
+    if (!doc) return [] as string[];
+    const ids = new Set(doc.assets.map((a) => a.id));
+    const out: string[] = [];
+    for (const t of doc.tracks) {
+      for (const it of t.items) {
+        const assetId = (it as { assetId?: string }).assetId;
+        if (assetId && !ids.has(assetId)) out.push(it.id);
+      }
+    }
+    return out;
+  })();
+
   const stats = [
     { label: "Resolution", value: `${width}\u00d7${height}` },
     { label: "Duration", value: `${seconds}s` },
@@ -323,8 +364,37 @@ export default function ExportDialog({
   ];
 
   return (
-    <Modal open={open} onClose={handleClose} width={480} title="Export" stepLabel="Render to file" dismissible={!isRendering}>
+    <Modal
+      open={open}
+      onClose={handleClose}
+      width={520}
+      title="Export video"
+      subtitle={`${fileName || "export"} · ${durationInFrames} frames at ${fps}fps`}
+      dismissible={!isRendering}
+    >
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+        {missingSources.length > 0 && status === "idle" && (
+          <div
+            style={{
+              display: "flex", gap: 10, padding: 12,
+              background: "var(--surface-raised)",
+              border: "1px solid var(--warning-tint-line)",
+              borderRadius: "var(--r-panel)",
+            }}
+          >
+            <Icon name="warn" size={16} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div className="t-body" style={{ color: "var(--ink-primary)" }}>
+                {missingSources.length === 1
+                  ? "One clip is missing its source file"
+                  : `${missingSources.length} clips are missing their source files`}
+              </div>
+              <div className="t-caption" style={{ color: "var(--ink-tertiary)", marginTop: 2 }}>
+                {missingSources.length === 1 ? "It will" : "They will"} export as black. Export anyway, or close and relink first.
+              </div>
+            </div>
+          </div>
+        )}
         {/* Presets */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ position: "relative" }} ref={presetRef}>
@@ -702,28 +772,34 @@ export default function ExportDialog({
         )}
 
         {(status === "queued" || status === "rendering") && (
+          /*
+           * The one place green is allowed to persist: a render IS happening
+           * right now. Frames lead, because a percentage stuck on 41% looks
+           * exactly like a hang while 214 -> 215 is obviously alive.
+           */
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="mono cap" style={{ color: "var(--ink-secondary)" }}>
-                {status === "queued" ? "Queued..." : "Rendering"}
-              </span>
-              <span className="mono nums" style={{ fontSize: 12, color: "var(--brand)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Tag tone="live">{status === "queued" ? "Queued" : "Rendering"}</Tag>
+              <div style={{ flex: 1 }} />
+              <span className="t-data-m" style={{ color: "var(--live)" }}>
                 {Math.min(100, Math.round(progress))}%
               </span>
             </div>
-            <div style={{ height: 6, background: "var(--surface-void)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: 4, background: "var(--surface-void)", borderRadius: 2, overflow: "hidden" }}>
               <div
                 style={{
                   width: `${Math.min(100, progress)}%`,
                   height: "100%",
-                  background: "linear-gradient(90deg, var(--brand), oklch(0.92 0.22 124))",
-                  transition: "width 100ms linear",
-                  boxShadow: "0 0 12px oklch(0.88 0.22 124 / 0.5)",
+                  background: "var(--live)",
+                  transition: "width 200ms linear",
                 }}
               />
             </div>
-            <div className="mono nums" style={{ fontSize: 11, color: "var(--ink-disabled)" }}>
-              frame {Math.round((progress / 100) * durationInFrames)} / {durationInFrames}
+            <div className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
+              {frames
+                ? `${frames.done} / ${frames.total} frames`
+                : `0 / ${durationInFrames} frames`}
+              {remaining && ` · about ${remaining} left`}
             </div>
           </div>
         )}
