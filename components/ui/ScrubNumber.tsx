@@ -25,6 +25,8 @@ export interface ScrubNumberProps {
   /** Decimal places shown and committed. */
   precision?: number;
   suffix?: string;
+  /** Leading label inside the field — the axis letter on an X/Y pair. */
+  prefix?: string;
   disabled?: boolean;
 }
 
@@ -44,7 +46,7 @@ export function scrubValue(
 }
 
 export default function ScrubNumber({
-  value, onChange, step = 1, min, max, precision = 0, suffix, disabled,
+  value, onChange, step = 1, min, max, precision = 0, suffix, prefix, disabled,
 }: ScrubNumberProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -143,12 +145,17 @@ export default function ScrubNumber({
         userSelect: "none",
       }}
     >
-      {round(value)}{suffix ?? ""}
+      {prefix && (
+        <span className="t-data-s" style={{ color: "var(--ink-disabled)", marginRight: 6 }}>{prefix}</span>
+      )}
+      <span style={{ flex: 1, textAlign: prefix ? "right" : undefined }}>{round(value)}{suffix ?? ""}</span>
     </div>
   );
 }
 
 const field: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
   background: "var(--surface-raised)",
   border: "1px solid var(--border-hairline)",
   borderRadius: 3,
