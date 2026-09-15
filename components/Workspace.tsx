@@ -7,6 +7,7 @@ import StorageModal from "@/components/StorageModal";
 import Button from "@/components/ui/Button";
 import AppHeader from "@/components/AppHeader";
 import Menu from "@/components/ui/Menu";
+import AboutDialog from "@/components/AboutDialog";
 import IconButton from "@/components/ui/IconButton";
 import HomeScreen from "@/components/HomeScreen";
 import ProjectsScreen from "@/components/ProjectsScreen";
@@ -45,6 +46,7 @@ export default function Workspace({
     router.push(c ? `/collection/${c.id}` : "/");
   const [modalOpen, setModalOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -256,6 +258,7 @@ export default function Workspace({
         onClose={() => setStorageOpen(false)}
         onProjectsDeleted={() => fetchProjects()}
       />
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   );
 
@@ -275,7 +278,12 @@ export default function Workspace({
       />,
       <AppHeader
         search={{ value: query, onChange: setQuery }}
-        onSettings={() => setStorageOpen(true)}
+        onSettings={undefined}
+        settingsMenu={[
+          { label: "Storage…", icon: "storage", onSelect: () => setStorageOpen(true) },
+          { separator: true as const },
+          { label: "About Video tool", icon: "info", onSelect: () => setAboutOpen(true) },
+        ]}
       />,
     );
   }
@@ -302,7 +310,12 @@ export default function Workspace({
       <AppHeader
         back={{ label: "Home", onClick: () => setSelectedCollection(null) }}
         search={{ value: query, onChange: setQuery, placeholder: `Search ${selectedCollection.name}` }}
-        onSettings={() => setStorageOpen(true)}
+        onSettings={undefined}
+        settingsMenu={[
+          { label: "Storage…", icon: "storage", onSelect: () => setStorageOpen(true) },
+          { separator: true as const },
+          { label: "About Video tool", icon: "info", onSelect: () => setAboutOpen(true) },
+        ]}
         actions={
           <>
             <Menu

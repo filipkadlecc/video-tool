@@ -4,6 +4,7 @@ import React from "react";
 import ApifySymbol from "@/components/ui/ApifySymbol";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
+import Menu, { type MenuItem } from "@/components/ui/Menu";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import { version as APP_VERSION } from "../package.json";
@@ -19,11 +20,13 @@ interface AppHeaderProps {
   back?: { label: string; onClick: () => void };
   search?: { value: string; onChange: (v: string) => void; placeholder?: string };
   onSettings?: () => void;
+  /** A menu on the gear, when settings is more than one thing. */
+  settingsMenu?: MenuItem[];
   /** Right-hand actions, e.g. New project on the grid screen. */
   actions?: React.ReactNode;
 }
 
-export default function AppHeader({ back, search, onSettings, actions }: AppHeaderProps) {
+export default function AppHeader({ back, search, onSettings, settingsMenu, actions }: AppHeaderProps) {
   return (
     <header
       style={{
@@ -67,7 +70,13 @@ export default function AppHeader({ back, search, onSettings, actions }: AppHead
       {/* Kept from the old header: the build you are looking at, at a glance. */}
       <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>v{APP_VERSION}</span>
 
-      {onSettings && <IconButton icon="settings" onClick={onSettings} title="Storage & settings" />}
+      {settingsMenu ? (
+        <Menu align="right" items={settingsMenu}>
+          <IconButton icon="settings" title="Settings" />
+        </Menu>
+      ) : onSettings ? (
+        <IconButton icon="settings" onClick={onSettings} title="Storage & settings" />
+      ) : null}
     </header>
   );
 }

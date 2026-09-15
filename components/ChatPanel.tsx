@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import { normalizeTapeQuotes } from "@/lib/tape-parser";
 import { usePlayheadStore } from "@/hooks/usePlayhead";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 function extractCodeFromResponse(text: string, animationType?: string): string {
   // Accept tsx/js/html fences — older responses used a variety of them.
@@ -812,7 +813,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                     Select SVG to animate
                   </div>
                   {svgLoading ? (
-                    <div style={{ padding: 10, fontSize: 11, color: "var(--ink-tertiary)" }}>Loading...</div>
+                    <div style={{ padding: 10 }}><SkeletonList rows={3} height={11} /></div>
                   ) : svgOptions.length === 0 ? (
                     <div style={{ padding: 10, fontSize: 11, color: "var(--ink-tertiary)" }}>No SVG files in assets</div>
                   ) : (

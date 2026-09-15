@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import Modal from "@/components/ui/Modal";
 import type { FeedbackEntry } from "@/lib/feedback";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function FeedbackViewer() {
   const router = useRouter();
@@ -79,7 +80,7 @@ export default function FeedbackViewer() {
 
         {loading ? (
           <div className="mono" style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
-            Loading…
+            <SkeletonList rows={3} />
           </div>
         ) : entries.length === 0 ? (
           <div

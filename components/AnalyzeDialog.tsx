@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 interface MediaFile {
   name: string;
@@ -239,7 +240,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
               )}
             </div>
 
-            {loading && <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>Loading media…</div>}
+            {loading && <SkeletonList rows={3} />}
             {!loading && files.length === 0 && (
               <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>No video or audio files in this project.</div>
             )}

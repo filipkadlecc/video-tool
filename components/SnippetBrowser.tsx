@@ -8,6 +8,7 @@ import { SNIPPET_SCHEMAS } from "@/lib/snippet-schemas";
 import { SNIPPET_ICONS } from "@/lib/snippet-icons";
 import { renderSnippet } from "@/lib/snippet-template";
 import SnippetParamsForm from "@/components/SnippetParamsForm";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 interface Snippet {
   id: string;
@@ -178,7 +179,7 @@ export default function SnippetBrowser({
 
           {loading && (
             <div style={{ padding: 28, textAlign: "center", color: "var(--ink-disabled)", fontSize: 12 }}>
-              Loading…
+              <SkeletonList rows={4} />
             </div>
           )}
 

@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import { formatBytes, type ProjectStorageEntry } from "@/lib/format";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 interface StorageModalProps {
   open: boolean;
@@ -168,7 +169,7 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
           <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
             {loading && projects.length === 0 && (
               <div style={{ padding: 40, textAlign: "center", color: "var(--ink-disabled)", fontSize: 12 }}>
-                Loading…
+                <SkeletonList rows={5} />
               </div>
             )}
             {!loading && projects.length === 0 && (
