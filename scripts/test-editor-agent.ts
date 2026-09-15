@@ -23,6 +23,7 @@ import {
   silenceGaps, sourceSecondToFrame, wordsForItem,
 } from "../lib/editor-transcript";
 import { splitItem } from "../lib/editor-doc";
+import { itemEffects } from "../lib/editor-effects";
 import type { TranscriptWord } from "../lib/transcribe";
 import fs from "fs";
 import path from "path";
@@ -175,10 +176,15 @@ head("only the allowed animations can be expressed");
   }
   // Per-character reveals decompose text, so they cannot apply to footage.
   refused(doc, "set_animation", { itemId: "vid", in: { preset: "type" } }, "type on a video clip");
+  // The agent writes through the effect STACK now, so read it the way the
+  // renderer does. What is being asserted is unchanged.
+  const entrance = (d: EditorDoc, id: string) =>
+    itemEffects(findItem(d, id)!.item).find((e) => e.kind === "animateIn");
   const withAnim = ok(doc, "set_animation", { itemId: "t", in: { preset: "type", durationInFrames: 20 } });
-  a(findItem(withAnim, "t")!.item.animateIn?.preset === "type", "but type on text works");
+  a(entrance(withAnim, "t")?.preset === "type", "but type on text works");
   const dflt = ok(doc, "set_animation", { itemId: "vid", in: { preset: "rise" } });
-  a(findItem(dflt, "vid")!.item.animateIn?.durationInFrames === 12, "a missing length falls back to 12, never NaN");
+  a(entrance(dflt, "vid")?.durationInFrames === 12, "a missing length falls back to 12, never NaN");
+  a(entrance(withAnim, "t")?.enabled === true, "and it arrives enabled");
   refused(doc, "set_animation", { itemId: "t" }, "neither an in nor an out was given");
 }
 

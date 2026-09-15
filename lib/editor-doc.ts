@@ -23,9 +23,36 @@
  * trim, and removes a whole class of source-vs-composition frame confusion.
  */
 
-import type { AnimationSpec } from "./editor-effects";
+import type { AnimationSpec, Effect } from "./editor-effects";
+import { itemEffects } from "./editor-effects";
 
-export const EDITOR_DOC_VERSION = 1;
+export const EDITOR_DOC_VERSION = 2;
+
+/**
+ * v1 -> v2 adds `item.effects`.
+ *
+ * Every addition is OPTIONAL and every default reproduces v1 behaviour, so a v1
+ * document IS a valid v2 document — the migration is READING it, not rewriting
+ * it. `migrateDoc` stamps the version and folds the two legacy animation slots
+ * into the effect list; nothing on disk changes until the user edits something,
+ * and an untouched v1 file still opens in a v1 build.
+ *
+ * Run it in exactly one place: where the editor loads a document.
+ */
+export function migrateDoc(doc: EditorDoc): EditorDoc {
+  let touched = doc.version !== EDITOR_DOC_VERSION;
+  const tracks = doc.tracks.map((t) => {
+    const items = t.items.map((it) => {
+      if (it.effects || (!it.animateIn && !it.animateOut)) return it;
+      touched = true;
+      const { animateIn: _in, animateOut: _out, ...rest } = it;
+      return { ...rest, effects: itemEffects(it) } as EditorItem;
+    });
+    return items.some((x, i) => x !== t.items[i]) ? { ...t, items } : t;
+  });
+  if (!touched) return doc;
+  return { ...doc, version: EDITOR_DOC_VERSION, tracks };
+}
 
 export interface DocSize {
   width: number;
@@ -71,11 +98,20 @@ interface ItemBase {
   durationInFrames: number;
   layout: ItemLayout;
   /**
-   * How the item arrives and leaves. Available on every visual layer, so an
-   * image or a snippet block animates the same way a title does.
+   * How the item arrives and leaves.
+   *
+   * @deprecated Superseded by `effects`, which is an ordered list and can be
+   * bypassed without losing its values. These stay readable so an untouched v1
+   * document still opens: `itemEffects()` synthesises the list from them when
+   * `effects` is absent, and nothing is rewritten on disk until you edit one.
    */
   animateIn?: AnimationSpec;
   animateOut?: AnimationSpec;
+  /**
+   * The effect stack — ordered, each independently bypassable. Effects apply
+   * top to bottom, and order is observable because transforms do not commute.
+   */
+  effects?: Effect[];
 }
 
 /** Fields shared by anything with a soundtrack or a source file to trim. */

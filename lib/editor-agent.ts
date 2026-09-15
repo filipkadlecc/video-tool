@@ -67,7 +67,7 @@ import {
   type VideoItem,
   retimeSceneCode,
 } from "./editor-doc";
-import { ANIMATION_PRESETS, presetsFor, type AnimationPreset } from "./editor-effects";
+import { ANIMATION_PRESETS, presetsFor, type AnimationPreset , itemEffects, setEffectPreset } from "./editor-effects";
 import {
   allItems,
   cutRange,
@@ -906,9 +906,16 @@ export function applyDocTool(
         const animateIn = animSpec(input.in, item.type, "in");
         const animateOut = animSpec(input.out, item.type, "out");
         if (!animateIn && !animateOut) throw new ToolError("Give an in, an out, or both.");
-        const patch: Record<string, unknown> = {};
-        if (animateIn) patch.animateIn = animateIn;
-        if (animateOut) patch.animateOut = animateOut;
+        // Write through the effect STACK, not the legacy slots. An item that
+        // already has an `effects` array would otherwise shadow the write and
+        // the AI's change would silently do nothing.
+        //
+        // No schema change and no new vocabulary: the presets are still the
+        // same closed enum, so the bans hold for the agent exactly as before.
+        let effects = itemEffects(item);
+        if (animateIn) effects = setEffectPreset({ ...item, effects }, "animateIn", animateIn.preset, animateIn.durationInFrames);
+        if (animateOut) effects = setEffectPreset({ ...item, effects }, "animateOut", animateOut.preset, animateOut.durationInFrames);
+        const patch: Record<string, unknown> = { effects };
         return {
           doc: updateItem(doc, item.id, patch as Partial<EditorItem>),
           result: `Set ${[animateIn && `entrance ${animateIn.preset}`, animateOut && `exit ${animateOut.preset}`].filter(Boolean).join(" and ")} on ${item.id}.`,

@@ -30,7 +30,7 @@ import Segmented from "@/components/ui/Segmented";
 import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
-import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
+import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem , migrateDoc } from "@/lib/editor-doc";
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
@@ -193,9 +193,14 @@ export default function ProjectEditor() {
         // can be undone back to it (code + chat together).
         codeHistory.pushSnapshot(data.code, data.chatHistory);
         if (data.doc) {
-          setDoc(data.doc);
-          docHistory.pushSnapshot(data.doc);
-          lastSavedDocRef.current = JSON.stringify(data.doc);
+          // The one place migration runs. A v1 document is already a valid v2
+          // document, so this only folds the two legacy animation slots into
+          // the effect list — and returns the SAME object when there is nothing
+          // to do, so merely opening a project never dirties it into a save.
+          const migrated = migrateDoc(data.doc);
+          setDoc(migrated);
+          docHistory.pushSnapshot(migrated);
+          lastSavedDocRef.current = JSON.stringify(migrated);
         }
         setTerminalAnnotations(data.terminalAnnotations);
         setCustomTheme(Boolean(data.customTheme));

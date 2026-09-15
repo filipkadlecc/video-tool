@@ -32,6 +32,124 @@ export interface AnimationSpec {
   durationInFrames: number;
 }
 
+/* ────────────────────────── the effect stack ──────────────────────────
+ *
+ * An item's effects are an ORDERED LIST, not two named slots.
+ *
+ * The bug the list fixes: turning an animation off used to mean setting
+ * `preset: "none"`, which threw `durationInFrames` away. `enabled: false` is
+ * the off switch now, and it KEEPS every value — that is how you A/B an
+ * effect, and it is what the design means by "bypassed".
+ *
+ * Order is observable, because transforms do not commute: translate-then-
+ * rotate is not rotate-then-translate. That is what makes dragging a section
+ * to reorder the stack a real edit rather than decoration.
+ *
+ * The preset vocabulary is UNCHANGED. The bans above still hold, and the AI
+ * agent still writes through this same closed enum.
+ */
+
+export interface EffectBase {
+  id: string;
+  /** Off keeps every value. Never delete to disable. */
+  enabled: boolean;
+  /** Purely presentational — whether the section is expanded. Stored so it
+   *  survives a reload. */
+  open?: boolean;
+}
+
+export interface EdgeAnimationEffect extends EffectBase {
+  kind: "animateIn" | "animateOut";
+  preset: AnimationPreset;
+  durationInFrames: number;
+}
+
+/** The union will grow; the array shape will not. */
+export type Effect = EdgeAnimationEffect;
+
+/** Enough of an item for the effect helpers — avoids importing editor-doc. */
+interface EffectHost {
+  id: string;
+  effects?: Effect[];
+  animateIn?: AnimationSpec;
+  animateOut?: AnimationSpec;
+}
+
+/**
+ * The effect list for an item, synthesised from the two legacy slots when that
+ * is all there is.
+ *
+ * This is a LAZY migration: nothing on disk changes until the user edits an
+ * effect, so an untouched v1 document still opens in a v1 build. Ids are
+ * derived from the item id rather than generated, so React keys stay stable
+ * across renders.
+ */
+export function itemEffects(item: EffectHost): Effect[] {
+  if (item.effects) return item.effects;
+  const out: Effect[] = [];
+  if (item.animateIn) {
+    out.push({ id: `${item.id}:in`, kind: "animateIn", enabled: true,
+      preset: item.animateIn.preset, durationInFrames: item.animateIn.durationInFrames });
+  }
+  if (item.animateOut) {
+    out.push({ id: `${item.id}:out`, kind: "animateOut", enabled: true,
+      preset: item.animateOut.preset, durationInFrames: item.animateOut.durationInFrames });
+  }
+  return out;
+}
+
+/**
+ * Fold a stack of styles into one.
+ *
+ * Opacity takes the MINIMUM rather than the product: two edge animations are
+ * alternatives in time, not layers, and multiplying would change how every
+ * existing render looks wherever an in and an out overlap. This matches what
+ * the renderer already did with the two slots.
+ */
+export function composeEffects(styles: AnimationStyle[]): AnimationStyle {
+  if (styles.length === 0) return { opacity: 1, transform: "none" };
+  const transforms = styles.map((s) => s.transform).filter((t) => t !== "none");
+  return {
+    opacity: Math.min(...styles.map((s) => s.opacity)),
+    transform: transforms.length > 0 ? transforms.join(" ") : "none",
+  };
+}
+
+/** Set an edge's preset, creating the effect if the stack has none yet. */
+export function setEffectPreset(
+  item: EffectHost,
+  kind: "animateIn" | "animateOut",
+  preset: AnimationPreset,
+  durationInFrames: number,
+): Effect[] {
+  const list = itemEffects(item);
+  const at = list.findIndex((e) => e.kind === kind);
+  if (at === -1) {
+    return [...list, { id: `${item.id}:${kind === "animateIn" ? "in" : "out"}`, kind, enabled: true, preset, durationInFrames }];
+  }
+  const next = [...list];
+  next[at] = { ...next[at], preset, durationInFrames, enabled: true };
+  return next;
+}
+
+/** Bypass without forgetting. */
+export function setEffectEnabled(list: Effect[], id: string, enabled: boolean): Effect[] {
+  return list.map((e) => (e.id === id ? { ...e, enabled } : e));
+}
+
+export function setEffectOpen(list: Effect[], id: string, open: boolean): Effect[] {
+  return list.map((e) => (e.id === id ? { ...e, open } : e));
+}
+
+/** Move an effect within the stack. Effects apply top to bottom. */
+export function reorderEffects(list: Effect[], from: number, to: number): Effect[] {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
+  const next = [...list];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
+
 export interface PresetInfo {
   id: AnimationPreset;
   label: string;

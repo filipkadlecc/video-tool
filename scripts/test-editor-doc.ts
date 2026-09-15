@@ -13,7 +13,7 @@ import path from "path";
 import { compositionSpans, docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments, windowedSceneItem } from "../lib/editor-import";
 import { planCuts, DEFAULT_THRESHOLDS } from "../lib/cut-plan";
 import type { Transcript } from "../lib/transcribe";
-import { ANIMATION_PRESETS, animationFrames, presetStyle, presetsFor, visibleCharacters, wordProgress } from "../lib/editor-effects";
+import { ANIMATION_PRESETS, animationFrames, composeEffects, itemEffects, presetStyle, presetsFor, reorderEffects, setEffectEnabled, setEffectPreset, visibleCharacters, wordProgress } from "../lib/editor-effects";
 import { scrubValue } from "../components/ui/ScrubNumber";
 import { timecode } from "../components/EditorPlayerControls";
 import { evalSceneCode } from "../remotion/DynamicScene";
@@ -25,6 +25,8 @@ import {
   hasRoomAt, resizeLayout, snapBox, splitItem, trackWithRoomAt, trimItem, updateItem,
   fitSceneItem, retimeSceneCode, sceneFit,
   type Asset, type CaptionToken, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
+  migrateDoc, EDITOR_DOC_VERSION,
+  type EditorItem,
 } from "../lib/editor-doc";
 
 let pass = 0, fail = 0;
@@ -405,6 +407,83 @@ head("duplicate and clone");
   const copy = cloneItem(items[0], 500);
   a(copy.id !== items[0].id && copy.from === 500, "clone takes a new id and position");
   a(duplicateItem(doc, "missing") === doc, "duplicating nothing is a no-op");
+}
+
+head("the effect stack: bypassing keeps the values");
+{
+  // The bug this exists to prevent: turning an animation off used to mean
+  // preset "none", which threw the duration away. Off must be reversible.
+  const item = { id: "t1", animateIn: { preset: "rise" as const, durationInFrames: 37 } };
+
+  const list = itemEffects(item);
+  a(list.length === 1, "a legacy item reads as a one-effect stack");
+  a(list[0].kind === "animateIn" && list[0].enabled, "synthesised from the old slot, enabled");
+  a(list[0].id === "t1:in", "with an id derived from the item, so React keys are stable");
+  a(itemEffects({ id: "x" }).length === 0, "and an item with nothing has an empty stack");
+
+  const off = setEffectEnabled(list, "t1:in", false);
+  a(off[0].enabled === false, "the switch turns it off");
+  a(off[0].preset === "rise" && off[0].durationInFrames === 37, "and KEEPS preset and duration");
+  const back = setEffectEnabled(off, "t1:in", true);
+  a(back[0].preset === "rise" && back[0].durationInFrames === 37, "re-enabling restores exactly");
+
+  // A bypassed effect contributes nothing, which is what the renderer filters on.
+  const neutral = composeEffects([]);
+  a(neutral.opacity === 1 && neutral.transform === "none", "an empty stack is neutral");
+
+  // Order is observable — that is what makes drag-to-reorder a real edit.
+  const two = [
+    { id: "a", kind: "animateIn" as const, enabled: true, preset: "rise" as const, durationInFrames: 10 },
+    { id: "b", kind: "animateOut" as const, enabled: true, preset: "drift" as const, durationInFrames: 10 },
+  ];
+  const ab = composeEffects(two.map((e, i) => presetStyle(e.preset, 0.5, i === 0 ? "in" : "out")));
+  const ba = composeEffects([...two].reverse().map((e, i) => presetStyle(e.preset, 0.5, i === 0 ? "out" : "in")));
+  a(ab.transform !== ba.transform, "reordering the stack changes the render");
+  a(reorderEffects(two, 0, 1)[0].id === "b", "reorder moves the section");
+  a(reorderEffects(two, 0, 0) === two, "a no-op reorder returns the same array");
+
+  // Setting a preset on an item that has no stack yet creates one.
+  const made = setEffectPreset({ id: "t2" }, "animateIn", "pop", 14);
+  a(made.length === 1 && made[0].preset === "pop" && made[0].enabled, "setting a preset creates an enabled effect");
+  const replaced = setEffectPreset({ id: "t2", effects: made }, "animateIn", "settle", 20);
+  a(replaced.length === 1 && replaced[0].preset === "settle", "and setting it again replaces rather than appends");
+
+  // The bans still hold across a COMPOSED stack, not just a single preset.
+  for (const p of [0, 0.5, 1]) {
+    const st = composeEffects(ANIMATION_PRESETS.map((x) => presetStyle(x.id, p, "in")));
+    a(!/blur/i.test(st.transform), `a composed stack never blurs (@ ${p})`);
+    a(st.opacity >= 0 && st.opacity <= 1, `a composed stack keeps opacity in range (@ ${p})`);
+  }
+}
+
+head("v1 documents are valid v2 documents");
+{
+  const d = emptyDoc({ width: 1920, height: 1080, fps: 25 });
+  const withTrack = addTrack({ ...d, version: 1 }, "V1");
+  const trackId = withTrack.tracks[withTrack.tracks.length - 1].id;
+  const v1 = addItem(withTrack, trackId, {
+    id: "legacy", type: "text", from: 0, durationInFrames: 50,
+    layout: { x: 0, y: 0, width: 100, height: 40 },
+    text: "hi", style: {},
+    animateIn: { preset: "rise", durationInFrames: 12 },
+  } as EditorItem);
+
+  const m = migrateDoc(v1);
+  a(m.version === EDITOR_DOC_VERSION, "migration stamps the version");
+  const mi = findItem(m, "legacy")!.item;
+  a(mi.effects?.length === 1, "the legacy slot becomes one effect");
+  a(mi.effects![0].preset === "rise" && mi.effects![0].durationInFrames === 12, "carrying its values");
+  a(mi.animateIn === undefined, "and the legacy slot is folded away");
+  a(isValidDoc(m), "the migrated document is valid");
+  a(docDuration(m) === docDuration(v1), "and nothing about the timing moved");
+
+  // Idempotent: running it twice changes nothing further.
+  a(migrateDoc(m) === m, "migration is idempotent");
+
+  // A document with nothing to migrate is returned untouched, so loading a
+  // current document never dirties it into a save.
+  const clean = { ...d, version: EDITOR_DOC_VERSION };
+  a(migrateDoc(clean) === clean, "a current document is returned as-is");
 }
 
 head("animation presets — the bans, asserted in code");

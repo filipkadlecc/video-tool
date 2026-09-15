@@ -2,7 +2,8 @@ import React, { useMemo } from "react";
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { evalSceneCode } from "./DynamicScene";
 import { SPRINGS } from "./motion";
-import { animationFrames, presetStyle, visibleCharacters, wordProgress } from "../lib/editor-effects";
+import { animationFrames, composeEffects, itemEffects, presetStyle, visibleCharacters, wordProgress } from "../lib/editor-effects";
+import type { Effect } from "../lib/editor-effects";
 import {
   captionPageAt,
   docDuration,
@@ -146,7 +147,9 @@ const ImageLayer: React.FC<{ item: ImageItem | GifItem; asset?: Asset }> = ({ it
 
 const TextLayer: React.FC<{ item: TextItem }> = ({ item }) => {
   const { inProgress } = useAnimationProgress(item);
-  const preset = item.animateIn?.preset;
+  // Typing and the word cascade decompose the text itself, so the layer has
+  // to know which entrance is active — and a bypassed one must not count.
+  const preset = enabledEffects(item).find((e) => e.kind === "animateIn")?.preset;
   const body = { ...textStyle(item.style), width: "100%", whiteSpace: "pre-wrap" as const };
 
   // A typewriter is per-CHARACTER — never a mask sweep with a feathered edge,
@@ -290,12 +293,25 @@ const SceneLayer: React.FC<{ item: SceneItem }> = ({ item }) => {
  * Returned as a pair because opacity takes the MINIMUM of the two — the idiom
  * the branded scenes use for an element that arrives and later leaves.
  */
+/**
+ * The enabled effects on an item, as the renderer sees them.
+ *
+ * A BYPASSED effect keeps all its values but contributes nothing — that is the
+ * whole point of the switch, and it is why this filters rather than deletes.
+ */
+function enabledEffects(item: EditorItem): Effect[] {
+  return itemEffects(item).filter((e) => e.enabled);
+}
+
 function useAnimationProgress(item: EditorItem) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  const inSpec = item.animateIn;
-  const outSpec = item.animateOut;
+  const list = enabledEffects(item);
+  const inFx = list.find((e) => e.kind === "animateIn");
+  const outFx = list.find((e) => e.kind === "animateOut");
+  const inSpec = inFx && { preset: inFx.preset, durationInFrames: inFx.durationInFrames };
+  const outSpec = outFx && { preset: outFx.preset, durationInFrames: outFx.durationInFrames };
   // `durationInFrames` stretches the spring to the requested length. Driving it
   // with a plain delayed spring instead — as this first did — ignores the field
   // entirely, because a spring's length comes from its config, so changing the
@@ -327,19 +343,26 @@ function useAnimationProgress(item: EditorItem) {
  */
 const Animated: React.FC<{ item: EditorItem; children: React.ReactNode }> = ({ item, children }) => {
   const { inProgress, outProgress } = useAnimationProgress(item);
-  if (!item.animateIn && !item.animateOut) return <>{children}</>;
+  const list = enabledEffects(item);
+  // Keep the fast path: with nothing enabled the wrapper div does not exist at
+  // all, so it only costs a node when it is earning one.
+  if (list.length === 0) return <>{children}</>;
 
-  const enter = presetStyle(item.animateIn?.preset ?? "none", inProgress, "in");
-  const leave = presetStyle(item.animateOut?.preset ?? "none", outProgress, "out");
-  const transforms = [enter.transform, leave.transform].filter((t) => t !== "none");
+  const composed = composeEffects(
+    list.map((e) => presetStyle(
+      e.preset,
+      e.kind === "animateIn" ? inProgress : outProgress,
+      e.kind === "animateIn" ? "in" : "out",
+    )),
+  );
 
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
-        opacity: Math.min(enter.opacity, leave.opacity),
-        transform: transforms.length > 0 ? transforms.join(" ") : undefined,
+        opacity: composed.opacity,
+        transform: composed.transform === "none" ? undefined : composed.transform,
       }}
     >
       {children}

@@ -2,7 +2,8 @@
 
 import React from "react";
 import {
-  ANIMATION_PRESETS, presetsFor, type AnimationPreset, type PresetInfo,
+  ANIMATION_PRESETS, itemEffects, presetsFor, setEffectEnabled, setEffectPreset,
+  type AnimationPreset, type PresetInfo,
 } from "@/lib/editor-effects";
 import { findItem, updateItem, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
 
@@ -31,8 +32,13 @@ export default function EffectsPanel({ doc, selectedIds, onChange }: Props) {
   const apply = (preset: AnimationPreset, edge: "in" | "out", target?: EditorItem) => {
     const t = target ?? item;
     if (!t) return;
-    const spec = preset === "none" ? undefined : { preset, durationInFrames: DEFAULT_FRAMES };
-    onChange(updateItem(doc, t.id, edge === "in" ? { animateIn: spec } : { animateOut: spec }));
+    const kind = edge === "in" ? "animateIn" : "animateOut";
+    // "Cut" bypasses rather than deletes, so the duration you set survives
+    // being turned off and comes back when you turn it on again.
+    const effects = preset === "none"
+      ? setEffectEnabled(itemEffects(t), `${t.id}:${edge}`, false)
+      : setEffectPreset(t, kind, preset, DEFAULT_FRAMES);
+    onChange(updateItem(doc, t.id, { effects } as Partial<EditorItem>));
   };
 
   const available: PresetInfo[] = item ? presetsFor(item.type) : ANIMATION_PRESETS;
