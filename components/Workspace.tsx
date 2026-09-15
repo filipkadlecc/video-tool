@@ -202,18 +202,18 @@ export default function Workspace({
   // the collection-detail screen below instead of re-rendering this picker.
   if (selectedType === null && !selectedCollection) {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg-1)" }}>
+      <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
         <header
           style={{
             display: "flex",
             alignItems: "center",
             padding: "16px 28px",
-            borderBottom: "0.5px solid var(--line-1)",
+            borderBottom: "1px solid var(--border-hairline)",
           }}
         >
           <Logo />
           <div style={{ flex: 1 }} />
-          <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 10 }}>
+          <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 10 }}>
             {projects.length} {projects.length === 1 ? "project" : "projects"} · v{APP_VERSION}
           </div>
           <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
@@ -238,13 +238,13 @@ export default function Workspace({
           }}
         >
           <div>
-            <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 10 }}>
+            <div className="mono cap" style={{ color: "var(--ink-tertiary)", marginBottom: 10 }}>
               Workspace
             </div>
             <h1 style={{ margin: 0, fontSize: 36, letterSpacing: -0.8, fontWeight: 600 }}>
               What are you making?
             </h1>
-            <p style={{ margin: "10px 0 0", color: "var(--text-1)", fontSize: 14, maxWidth: 560 }}>
+            <p style={{ margin: "10px 0 0", color: "var(--ink-secondary)", fontSize: 14, maxWidth: 560 }}>
               Pick a style to see past projects or start a new one.
             </p>
           </div>
@@ -270,7 +270,7 @@ export default function Workspace({
           {/* Collections — cross-type groups (e.g. all clips for one video) */}
           <div>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <div className="mono cap" style={{ color: "var(--text-2)" }}>
+              <div className="mono cap" style={{ color: "var(--ink-tertiary)" }}>
                 Collections
               </div>
               <div style={{ flex: 1 }} />
@@ -279,7 +279,7 @@ export default function Workspace({
               </Button>
             </div>
             {collections.length === 0 ? (
-              <p className="mono" style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>
+              <p className="mono" style={{ fontSize: 11, color: "var(--ink-disabled)", margin: 0 }}>
                 Group projects from any type into one collection — handy when several clips make one video.
               </p>
             ) : (
@@ -299,23 +299,23 @@ export default function Workspace({
                       alignItems: "center",
                       gap: 10,
                       padding: "14px 16px",
-                      background: "var(--bg-2)",
-                      border: "0.5px solid var(--line-2)",
-                      borderRadius: "var(--r-md)",
+                      background: "var(--surface-chrome)",
+                      border: "1px solid var(--border-hairline)",
+                      borderRadius: "var(--r-panel)",
                       cursor: "pointer",
                       textAlign: "left",
-                      color: "var(--text-0)",
+                      color: "var(--ink-primary)",
                       transition: "border-color 120ms",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--line-2)")}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--brand)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-hairline)")}
                   >
-                    <Icon name="folder" size={16} style={{ color: "var(--accent)" }} />
+                    <Icon name="folder" size={16} style={{ color: "var(--brand)" }} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {col.name}
                       </div>
-                      <div className="mono" style={{ fontSize: 10, color: "var(--text-2)" }}>
+                      <div className="mono" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
                         {countsByCollection[col.id] ?? 0} {(countsByCollection[col.id] ?? 0) === 1 ? "project" : "projects"}
                       </div>
                     </div>
@@ -333,7 +333,7 @@ export default function Workspace({
   if (selectedCollection) {
     const inCollection = projects.filter((p) => p.collectionId === selectedCollection.id);
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg-1)" }}>
+      <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
         <header
           style={{
             position: "sticky",
@@ -342,9 +342,9 @@ export default function Workspace({
             display: "flex",
             alignItems: "center",
             padding: "16px 28px",
-            background: "color-mix(in oklab, var(--bg-1) 85%, transparent)",
+            background: "color-mix(in oklab, var(--surface-void) 85%, transparent)",
             backdropFilter: "blur(12px)",
-            borderBottom: "0.5px solid var(--line-1)",
+            borderBottom: "1px solid var(--border-hairline)",
           }}
         >
           <Logo onClick={() => setSelectedCollection(null)} />
@@ -358,19 +358,19 @@ export default function Workspace({
               gap: 6,
               padding: "6px 10px",
               background: "transparent",
-              border: "0.5px solid var(--line-2)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 4,
-              color: "var(--text-1)",
+              color: "var(--ink-secondary)",
               fontSize: 11,
               cursor: "pointer",
             }}
           >
-            <Icon name="arrowLeft" size={11} />
+            <Icon name="chevronLeft" size={11} />
             Workspace
           </button>
           <div style={{ flex: 1 }} />
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 8 }}>
+            <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 8 }}>
               {inCollection.length} {inCollection.length === 1 ? "project" : "projects"}
             </div>
             <Button variant="ghost" size="sm" icon="copy" onClick={() => renameCollection(selectedCollection)}>
@@ -382,22 +382,22 @@ export default function Workspace({
           </div>
         </header>
 
-        <div style={{ padding: "36px 28px 20px", borderBottom: "0.5px solid var(--line-1)" }}>
-          <div className="mono cap" style={{ color: "var(--accent)", marginBottom: 8 }}>
+        <div style={{ padding: "36px 28px 20px", borderBottom: "1px solid var(--border-hairline)" }}>
+          <div className="mono cap" style={{ color: "var(--brand)", marginBottom: 8 }}>
             Collection
           </div>
           <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.8, fontWeight: 600 }}>
             {selectedCollection.name}
           </h1>
-          <p style={{ margin: "6px 0 0", color: "var(--text-1)", fontSize: 14, maxWidth: 520 }}>
+          <p style={{ margin: "6px 0 0", color: "var(--ink-secondary)", fontSize: 14, maxWidth: 520 }}>
             Projects of any type grouped under this collection.
           </p>
         </div>
 
         {inCollection.length === 0 ? (
-          <div style={{ padding: "48px 28px", color: "var(--text-2)", fontSize: 13 }}>
+          <div style={{ padding: "48px 28px", color: "var(--ink-tertiary)", fontSize: 13 }}>
             No projects here yet. Open a project&apos;s menu (the folder icon on its card) to add it to{" "}
-            <span style={{ color: "var(--text-0)", fontWeight: 500 }}>{selectedCollection.name}</span>.
+            <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{selectedCollection.name}</span>.
           </div>
         ) : (
           <div
@@ -426,8 +426,8 @@ export default function Workspace({
         <Modal open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} width={380}>
           <div style={{ padding: 24 }}>
             <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Delete this project?</div>
-            <div style={{ fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5, marginBottom: 18 }}>
-              <span style={{ color: "var(--text-0)", fontWeight: 500 }}>{deleteConfirm?.name}</span> will be
+            <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
+              <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{deleteConfirm?.name}</span> will be
               permanently removed. This cannot be undone.
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -456,7 +456,7 @@ export default function Workspace({
   const filtered = projects.filter((p) => normalizeAnimationType(p.animationType) === selectedType);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-1)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
       <header
         style={{
           position: "sticky",
@@ -465,9 +465,9 @@ export default function Workspace({
           display: "flex",
           alignItems: "center",
           padding: "16px 28px",
-          background: "color-mix(in oklab, var(--bg-1) 85%, transparent)",
+          background: "color-mix(in oklab, var(--surface-void) 85%, transparent)",
           backdropFilter: "blur(12px)",
-          borderBottom: "0.5px solid var(--line-1)",
+          borderBottom: "1px solid var(--border-hairline)",
         }}
       >
         <Logo onClick={() => setSelectedType(null)} />
@@ -481,19 +481,19 @@ export default function Workspace({
             gap: 6,
             padding: "6px 10px",
             background: "transparent",
-            border: "0.5px solid var(--line-2)",
+            border: "1px solid var(--border-hairline)",
             borderRadius: 4,
-            color: "var(--text-1)",
+            color: "var(--ink-secondary)",
             fontSize: 11,
             cursor: "pointer",
           }}
         >
-          <Icon name="arrowLeft" size={11} />
+          <Icon name="chevronLeft" size={11} />
           All types
         </button>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 8 }}>
+          <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 8 }}>
             {filtered.length} {filtered.length === 1 ? "project" : "projects"} · v{APP_VERSION}
           </div>
           <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
@@ -511,7 +511,7 @@ export default function Workspace({
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "space-between",
-          borderBottom: "0.5px solid var(--line-1)",
+          borderBottom: "1px solid var(--border-hairline)",
         }}
       >
         <div>
@@ -524,7 +524,7 @@ export default function Workspace({
           <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.8, fontWeight: 600 }}>
             {meta.label} projects
           </h1>
-          <p style={{ margin: "6px 0 0", color: "var(--text-1)", fontSize: 14, maxWidth: 520 }}>
+          <p style={{ margin: "6px 0 0", color: "var(--ink-secondary)", fontSize: 14, maxWidth: 520 }}>
             {meta.subtitle}.
           </p>
         </div>
@@ -541,9 +541,9 @@ export default function Workspace({
         {/* Only the dashed tile shows on a fresh install, which says nothing about
             how to start — and ⌘N was documented nowhere in the app. */}
         {filtered.length === 0 && (
-          <div style={{ gridColumn: "1 / -1", fontSize: 13, color: "var(--text-2)", marginBottom: -4 }}>
+          <div style={{ gridColumn: "1 / -1", fontSize: 13, color: "var(--ink-tertiary)", marginBottom: -4 }}>
             No {meta.label.toLowerCase()} projects yet. Start one below, or press{" "}
-            <span className="mono" style={{ color: "var(--text-1)" }}>⌘N</span>.
+            <span className="mono" style={{ color: "var(--ink-secondary)" }}>⌘N</span>.
           </div>
         )}
         {filtered.map((project) => (
@@ -569,10 +569,10 @@ export default function Workspace({
             justifyContent: "center",
             gap: 10,
             background: "transparent",
-            border: "1px dashed var(--line-2)",
-            borderRadius: "var(--r-md)",
+            border: "1px dashed var(--border-hairline)",
+            borderRadius: "var(--r-panel)",
             cursor: "pointer",
-            color: "var(--text-2)",
+            color: "var(--ink-tertiary)",
             transition: "border-color 120ms, color 120ms",
           }}
           onMouseEnter={(e) => {
@@ -580,8 +580,8 @@ export default function Workspace({
             e.currentTarget.style.color = meta.color;
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "var(--line-2)";
-            e.currentTarget.style.color = "var(--text-2)";
+            e.currentTarget.style.borderColor = "var(--border-hairline)";
+            e.currentTarget.style.color = "var(--ink-tertiary)";
           }}
         >
           <Icon name="plus" size={22} />
@@ -609,18 +609,18 @@ export default function Workspace({
               width: 36,
               height: 36,
               borderRadius: 18,
-              background: "var(--red-soft)",
+              background: "var(--danger-tint-bg)",
               display: "grid",
               placeItems: "center",
-              color: "var(--red)",
+              color: "var(--danger)",
               marginBottom: 14,
             }}
           >
             <Icon name="trash" size={16} />
           </div>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Delete this project?</div>
-          <div style={{ fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5, marginBottom: 18 }}>
-            <span style={{ color: "var(--text-0)", fontWeight: 500 }}>{deleteConfirm?.name}</span> and its chat
+          <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
+            <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{deleteConfirm?.name}</span> and its chat
             history will be permanently removed. This cannot be undone.
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

@@ -10,21 +10,21 @@ export default function Logo({ size = 22, onClick }: { size?: number; onClick?: 
           width: size,
           height: size,
           borderRadius: 6,
-          background: "var(--accent)",
+          background: "var(--brand)",
           display: "grid",
           placeItems: "center",
-          boxShadow: "0 0 0 0.5px rgba(0,0,0,0.3), 0 4px 12px oklch(0.88 0.22 124 / 0.3)",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.3), 0 4px 12px oklch(0.88 0.22 124 / 0.3)",
         }}
       >
-        <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 16 16" fill="var(--accent-ink)">
+        <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 16 16" fill="var(--brand-ink)">
           <path d="M9 2L3 9h4l-1 5 6-7H8z" />
         </svg>
       </div>
       <span
         className="mono"
-        style={{ fontSize: 13, letterSpacing: -0.2, fontWeight: 600, color: "var(--text-0)" }}
+        style={{ fontSize: 13, letterSpacing: -0.2, fontWeight: 600, color: "var(--ink-primary)" }}
       >
-        video<span style={{ color: "var(--text-2)" }}>/</span>tool
+        video<span style={{ color: "var(--ink-tertiary)" }}>/</span>tool
       </span>
     </>
   );

@@ -37,7 +37,7 @@ import type { PlayerRef } from "@remotion/player";
 const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
   ssr: false,
   loading: () => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--ink-tertiary)", fontSize: 13 }}>
       Loading preview...
     </div>
   ),
@@ -52,7 +52,7 @@ const SnippetEditDialog = dynamic(() => import("@/components/SnippetEditDialog")
 const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
   ssr: false,
   loading: () => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--ink-tertiary)", fontSize: 13 }}>
       Loading preview...
     </div>
   ),
@@ -63,7 +63,7 @@ const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
   ssr: false,
   loading: () => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-2)", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--ink-tertiary)", fontSize: 13 }}>
       Loading editor...
     </div>
   ),
@@ -71,10 +71,10 @@ const CodeEditor = dynamic(() => import("@/components/CodeEditor"), {
 
 const SAVE_LABEL = { saved: "SAVED", unsaved: "UNSAVED", saving: "SAVING", error: "UNSAVED" } as const;
 const SAVE_DOT = {
-  saved: "var(--accent)",
-  unsaved: "var(--text-3)",
-  saving: "var(--amber)",
-  error: "var(--red)",
+  saved: "var(--brand)",
+  unsaved: "var(--ink-disabled)",
+  saving: "var(--warning)",
+  error: "var(--danger)",
 } as const;
 const SAVE_TITLE = {
   saved: "All changes saved",
@@ -823,7 +823,7 @@ export default function ProjectEditor() {
 
   if (loading) {
     return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-2)", fontSize: 13 }}>
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-tertiary)", fontSize: 13 }}>
         Loading project...
       </div>
     );
@@ -853,8 +853,8 @@ export default function ProjectEditor() {
           gap: 12,
           padding: "10px 16px",
           height: 48,
-          background: "var(--bg-2)",
-          borderBottom: "0.5px solid var(--line-1)",
+          background: "var(--surface-chrome)",
+          borderBottom: "1px solid var(--border-hairline)",
           position: "relative",
           zIndex: 5,
           flexShrink: 0,
@@ -863,15 +863,15 @@ export default function ProjectEditor() {
         {/* Back to the list this project came from, not the root — the type now
             has a URL of its own, so "back" can mean what it looks like. */}
         <IconButton
-          icon="arrowLeft"
+          icon="chevronLeft"
           onClick={() => router.push(project ? `/${normalizeAnimationType(project.animationType)}` : "/")}
           title="Back to projects"
         />
         <Logo size={20} onClick={() => router.push("/")} />
-        <div style={{ width: 1, height: 20, background: "var(--line-2)", marginLeft: 4 }} />
+        <div style={{ width: 1, height: 20, background: "var(--border-hairline)", marginLeft: 4 }} />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</div>
-          <div className="mono nums" style={{ fontSize: 10, color: "var(--text-2)" }}>
+          <div className="mono nums" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
             {resLabel} &middot; {project.settings.fps}fps &middot;{" "}
             {project.settings.orientation === "horizontal" ? "16:9" : project.settings.orientation === "vertical" ? "9:16" : "1:1"}
           </div>
@@ -881,33 +881,33 @@ export default function ProjectEditor() {
         {/* Undo / Redo */}
         <div style={{ display: "flex", gap: 1 }}>
           <IconButton
-            icon="arrowLeft"
+            icon="undo"
             size={26}
             title="Undo (Cmd+Z)"
             onClick={() => { const prev = codeHistory.undo(); if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); } }}
             style={{ opacity: codeHistory.canUndo ? 1 : 0.3 }}
           />
           <IconButton
-            icon="arrowRight"
+            icon="redo"
             size={26}
             title="Redo (Cmd+Shift+Z)"
             onClick={() => { const next = codeHistory.redo(); if (next !== null) { setCode(next.code); setChatHistory(next.chat); } }}
             style={{ opacity: codeHistory.canRedo ? 1 : 0.3 }}
           />
         </div>
-        <div style={{ width: 1, height: 20, background: "var(--line-2)" }} />
+        <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 2,
             padding: 3,
-            background: "var(--bg-inset)",
-            border: "0.5px solid var(--line-2)",
-            borderRadius: "var(--r-sm)",
+            background: "var(--surface-void)",
+            border: "1px solid var(--border-hairline)",
+            borderRadius: "var(--r-panel)",
           }}
         >
-          <span className="mono" style={{ fontSize: 10, color: "var(--text-2)", padding: "0 6px" }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--ink-tertiary)", padding: "0 6px" }}>
             {SAVE_LABEL[saveState]}
           </span>
           <span
@@ -971,10 +971,10 @@ export default function ProjectEditor() {
                   marginTop: 6,
                   minWidth: 200,
                   padding: 5,
-                  background: "var(--bg-3)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
-                  boxShadow: "var(--sh-float)",
+                  background: "var(--surface-raised)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
+                  boxShadow: "var(--shadow-float)",
                   zIndex: 20,
                 }}
               >
@@ -991,12 +991,12 @@ export default function ProjectEditor() {
                     style={{
                       display: "flex", alignItems: "center", gap: 8, width: "100%",
                       padding: "8px 8px", fontSize: 12, background: "transparent", border: "none",
-                      color: "var(--text-0)", borderRadius: 4, cursor: "pointer", textAlign: "left",
+                      color: "var(--ink-primary)", borderRadius: 4, cursor: "pointer", textAlign: "left",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
-                    <Icon name={item.icon} size={13} style={{ color: "var(--text-2)" }} />
+                    <Icon name={item.icon} size={13} style={{ color: "var(--ink-tertiary)" }} />
                     {item.label}
                   </button>
                 ))}
@@ -1123,7 +1123,7 @@ export default function ProjectEditor() {
       </div>
 
       {/* Studio layout: resizable panels */}
-      <div style={{ flex: 1, minHeight: 0, background: "var(--line-1)" }}>
+      <div style={{ flex: 1, minHeight: 0, background: "var(--border-hairline)" }}>
         <Group
           orientation="horizontal"
           defaultLayout={horizontalLayout.defaultLayout}
@@ -1184,7 +1184,7 @@ export default function ProjectEditor() {
                 <>
                   <Separator className="resize-handle resize-handle-horizontal" />
                   <Panel id="timeline" defaultSize="30%" minSize="12%">
-                    <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                    <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                       {docView && (
                       <DocTimeline
                         doc={docView}
@@ -1207,10 +1207,10 @@ export default function ProjectEditor() {
               )}
               <Separator className="resize-handle resize-handle-horizontal" />
               <Panel id="code" defaultSize={hasTimeline ? "20%" : "35%"} minSize="10%">
-                <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                   {docView ? (
                     <>
-                      <div style={{ padding: "5px 8px", borderBottom: "0.5px solid var(--line-1)" }}>
+                      <div style={{ padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
                         <Segmented
                           value={bottomTab}
                           onChange={(v) => setBottomTab(v as typeof bottomTab)}
@@ -1278,9 +1278,9 @@ export default function ProjectEditor() {
           </Panel>
           <Separator className="resize-handle resize-handle-vertical" />
           <Panel id="chat" defaultSize="28%" minSize="18%" maxSize="50%">
-            <div style={{ background: "var(--bg-2)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
               {docView && (
-                <div style={{ padding: "5px 8px", borderBottom: "0.5px solid var(--line-1)" }}>
+                <div style={{ padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
                   <Segmented
                     value={rightTab}
                     onChange={(v) => setRightTab(v as typeof rightTab)}

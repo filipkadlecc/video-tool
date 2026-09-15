@@ -164,12 +164,12 @@ export default function SnippetBrowser({
         />
       ) : (
         <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 560 }}>
-          <div style={{ padding: "16px 20px", borderBottom: "0.5px solid var(--line-1)" }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-hairline)" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
               Self-contained Remotion scenes with Apify branding baked in. Pick one to fill in your
               text and values — the snippet is generated deterministically, no AI required.
               {hasExistingCode && (
-                <span style={{ color: "var(--text-1)" }}>
+                <span style={{ color: "var(--ink-secondary)" }}>
                   {" "}This project already has code — inserting will replace it (you can undo).
                 </span>
               )}
@@ -177,7 +177,7 @@ export default function SnippetBrowser({
           </div>
 
           {loading && (
-            <div style={{ padding: 28, textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>
+            <div style={{ padding: 28, textAlign: "center", color: "var(--ink-disabled)", fontSize: 12 }}>
               Loading…
             </div>
           )}
@@ -195,22 +195,22 @@ export default function SnippetBrowser({
                     flexDirection: "column",
                     gap: 10,
                     padding: 14,
-                    background: "var(--bg-inset)",
-                    border: "0.5px solid var(--line-2)",
-                    borderRadius: "var(--r-md)",
+                    background: "var(--surface-void)",
+                    border: "1px solid var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
                   }}
                 >
                   <div
                     style={{
                       aspectRatio: "16 / 9",
-                      borderRadius: "var(--r-sm)",
+                      borderRadius: "var(--r-panel)",
                       background: BRAND.colors.bg,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexDirection: "column",
                       gap: 8,
-                      border: `0.5px solid ${accent}33`,
+                      border: `1px solid ${accent}33`,
                       position: "relative",
                       overflow: "hidden",
                     }}
@@ -221,7 +221,7 @@ export default function SnippetBrowser({
                         height: 38,
                         borderRadius: 10,
                         background: `${accent}22`,
-                        border: `0.5px solid ${accent}55`,
+                        border: `1px solid ${accent}55`,
                         display: "grid",
                         placeItems: "center",
                         color: accent,
@@ -233,7 +233,7 @@ export default function SnippetBrowser({
                       style={{
                         fontSize: 12,
                         fontWeight: 600,
-                        color: "var(--text-0)",
+                        color: "var(--ink-primary)",
                         letterSpacing: "-0.01em",
                       }}
                     >
@@ -252,10 +252,10 @@ export default function SnippetBrowser({
                     />
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-0)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-primary)" }}>
                       {s.name}
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.4 }}>
                       {s.subtitle}
                     </div>
                   </div>
@@ -266,10 +266,10 @@ export default function SnippetBrowser({
                         flex: 1,
                         height: 28,
                         padding: "0 10px",
-                        background: "var(--accent)",
-                        color: "var(--accent-ink)",
+                        background: "var(--brand)",
+                        color: "var(--brand-ink)",
                         border: "none",
-                        borderRadius: "var(--r-sm)",
+                        borderRadius: "var(--r-panel)",
                         fontSize: 11,
                         fontWeight: 600,
                         cursor: "pointer",
@@ -288,10 +288,10 @@ export default function SnippetBrowser({
                       style={{
                         height: 28,
                         padding: "0 10px",
-                        background: "var(--bg-3)",
-                        color: justCopied ? "var(--accent)" : "var(--text-1)",
-                        border: "0.5px solid var(--line-2)",
-                        borderRadius: "var(--r-sm)",
+                        background: "var(--surface-raised)",
+                        color: justCopied ? "var(--brand)" : "var(--ink-secondary)",
+                        border: "1px solid var(--border-hairline)",
+                        borderRadius: "var(--r-panel)",
                         fontSize: 11,
                         fontWeight: 500,
                         cursor: "pointer",
@@ -330,9 +330,9 @@ export default function SnippetBrowser({
             style={{
               maxWidth: 380,
               width: "100%",
-              background: "var(--bg-2)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-md)",
+              background: "var(--surface-chrome)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
               padding: 22,
               display: "flex",
               flexDirection: "column",
@@ -340,7 +340,7 @@ export default function SnippetBrowser({
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600 }}>Replace existing code?</div>
-            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
               The customized snippet will replace what&rsquo;s currently in the editor. You can undo
               with Cmd+Z.
             </div>
@@ -350,10 +350,10 @@ export default function SnippetBrowser({
                 style={{
                   height: 30,
                   padding: "0 14px",
-                  background: "var(--bg-3)",
-                  color: "var(--text-1)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
+                  background: "var(--surface-raised)",
+                  color: "var(--ink-secondary)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
@@ -365,10 +365,10 @@ export default function SnippetBrowser({
                 style={{
                   height: 30,
                   padding: "0 14px",
-                  background: "var(--accent)",
-                  color: "var(--accent-ink)",
+                  background: "var(--brand)",
+                  color: "var(--brand-ink)",
                   border: "none",
-                  borderRadius: "var(--r-sm)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",

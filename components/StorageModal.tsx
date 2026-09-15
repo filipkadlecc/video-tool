@@ -116,14 +116,14 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
           <div
             style={{
               padding: "14px 20px",
-              borderBottom: "0.5px solid var(--line-1)",
+              borderBottom: "1px solid var(--border-hairline)",
               display: "flex",
               alignItems: "center",
               gap: 14,
             }}
           >
             <div>
-              <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 2 }}>
+              <div className="mono cap" style={{ color: "var(--ink-tertiary)", marginBottom: 2 }}>
                 Total
               </div>
               <div className="mono nums" style={{ fontSize: 16, fontWeight: 600 }}>
@@ -131,7 +131,7 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
               </div>
             </div>
             <div style={{ flex: 1 }} />
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
+            <div className="mono" style={{ fontSize: 11, color: "var(--ink-disabled)" }}>
               {projects.length} project{projects.length === 1 ? "" : "s"}
             </div>
           </div>
@@ -144,18 +144,18 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
                 alignItems: "center",
                 gap: 10,
                 padding: "12px 20px",
-                background: "var(--bg-inset)",
-                borderBottom: "0.5px solid var(--line-1)",
+                background: "var(--surface-void)",
+                borderBottom: "1px solid var(--border-hairline)",
               }}
             >
-              <Icon name="folder" size={14} style={{ color: "var(--text-2)" }} />
+              <Icon name="folder" size={14} style={{ color: "var(--ink-tertiary)" }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13 }}>Render cache</div>
-                <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
+                <div className="mono" style={{ fontSize: 11, color: "var(--ink-disabled)" }}>
                   {renderCache.count} file{renderCache.count === 1 ? "" : "s"} · auto-deletes after 7 days
                 </div>
               </div>
-              <div className="mono nums" style={{ fontSize: 12, color: "var(--text-1)", marginRight: 8 }}>
+              <div className="mono nums" style={{ fontSize: 12, color: "var(--ink-secondary)", marginRight: 8 }}>
                 {formatBytes(renderCache.totalBytes)}
               </div>
               <Button variant="ghost" size="sm" onClick={handleClearCache} disabled={busy}>
@@ -167,12 +167,12 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
           {/* Projects list */}
           <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
             {loading && projects.length === 0 && (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>
+              <div style={{ padding: 40, textAlign: "center", color: "var(--ink-disabled)", fontSize: 12 }}>
                 Loading…
               </div>
             )}
             {!loading && projects.length === 0 && (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>
+              <div style={{ padding: 40, textAlign: "center", color: "var(--ink-disabled)", fontSize: 12 }}>
                 No projects on disk.
               </div>
             )}
@@ -186,9 +186,9 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
                     alignItems: "center",
                     gap: 10,
                     padding: "10px 20px",
-                    borderBottom: "0.5px solid var(--line-1)",
+                    borderBottom: "1px solid var(--border-hairline)",
                     cursor: "pointer",
-                    background: isSelected ? "var(--accent-soft)" : "transparent",
+                    background: isSelected ? "var(--brand-tint-bg)" : "transparent",
                     transition: "background 100ms",
                   }}
                 >
@@ -210,7 +210,7 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
                     >
                       {p.name}
                     </div>
-                    <div className="mono" style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 2 }}>
+                    <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-disabled)", marginTop: 2 }}>
                       {p.animationType} · updated {formatDate(p.updatedAt)}
                       {p.mediaBytes > 0 && ` · media ${formatBytes(p.mediaBytes)}`}
                     </div>
@@ -220,7 +220,7 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: p.bytes > 1024 * 1024 * 1024 ? "var(--red)" : "var(--text-0)",
+                      color: p.bytes > 1024 * 1024 * 1024 ? "var(--danger)" : "var(--ink-primary)",
                       minWidth: 70,
                       textAlign: "right",
                     }}
@@ -249,11 +249,11 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
               alignItems: "center",
               gap: 10,
               padding: "12px 20px",
-              borderTop: "0.5px solid var(--line-1)",
-              background: "var(--bg-2)",
+              borderTop: "1px solid var(--border-hairline)",
+              background: "var(--surface-chrome)",
             }}
           >
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-2)" }}>
+            <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>
               {selected.size > 0
                 ? `${selected.size} selected · ${formatBytes(selectedBytes)}`
                 : "Select projects to delete"}
@@ -279,10 +279,10 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
               width: 36,
               height: 36,
               borderRadius: 18,
-              background: "var(--red-soft)",
+              background: "var(--danger-tint-bg)",
               display: "grid",
               placeItems: "center",
-              color: "var(--red)",
+              color: "var(--danger)",
               marginBottom: 14,
             }}
           >
@@ -291,8 +291,8 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
             Delete {selected.size} project{selected.size === 1 ? "" : "s"}?
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5, marginBottom: 18 }}>
-            This will free <span style={{ color: "var(--text-0)", fontWeight: 500 }}>{formatBytes(selectedBytes)}</span>.
+          <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
+            This will free <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{formatBytes(selectedBytes)}</span>.
             All chat history and media will be permanently removed. This cannot be undone.
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

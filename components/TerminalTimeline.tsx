@@ -73,8 +73,8 @@ export default function TerminalTimeline({
         style={{
           position: "relative",
           height: EVENTS_HEIGHT,
-          background: "var(--bg-3)",
-          border: "0.5px solid var(--line-2)",
+          background: "var(--surface-raised)",
+          border: "1px solid var(--border-hairline)",
           borderRadius: 4,
           overflow: "hidden",
         }}
@@ -85,11 +85,11 @@ export default function TerminalTimeline({
             const width = Math.max(0.4, (ev.durationFrames / total) * 100);
             const palette: Record<TapeEvent["kind"], { bg: string; bd: string; tx: string }> = {
               type: { bg: "rgba(255,140,80,0.55)", bd: "#ff8c50", tx: "#fff" },
-              sleep: { bg: "rgba(150,150,160,0.35)", bd: "rgba(180,180,190,0.6)", tx: "var(--text-1)" },
+              sleep: { bg: "rgba(150,150,160,0.35)", bd: "rgba(180,180,190,0.6)", tx: "var(--ink-secondary)" },
               key: { bg: "rgba(100,200,255,0.45)", bd: "#64c8ff", tx: "#fff" },
-              set: { bg: "transparent", bd: "transparent", tx: "var(--text-3)" },
-              comment: { bg: "transparent", bd: "transparent", tx: "var(--text-3)" },
-              unknown: { bg: "transparent", bd: "transparent", tx: "var(--text-3)" },
+              set: { bg: "transparent", bd: "transparent", tx: "var(--ink-disabled)" },
+              comment: { bg: "transparent", bd: "transparent", tx: "var(--ink-disabled)" },
+              unknown: { bg: "transparent", bd: "transparent", tx: "var(--ink-disabled)" },
             };
             const c = palette[ev.kind];
             const label =
@@ -117,7 +117,7 @@ export default function TerminalTimeline({
                   width: `${width}%`,
                   minWidth: 2,
                   background: c.bg,
-                  border: `0.5px solid ${c.bd}`,
+                  border: `1px solid ${c.bd}`,
                   borderRadius: 2,
                   color: c.tx,
                   fontSize: 9,
@@ -144,7 +144,7 @@ export default function TerminalTimeline({
               bottom: 0,
               left: `${(currentFrame / total) * 100}%`,
               width: 1,
-              background: "var(--text-1)",
+              background: "var(--ink-secondary)",
               pointerEvents: "none",
             }}
           />
@@ -158,8 +158,8 @@ export default function TerminalTimeline({
         style={{
           position: "relative",
           height: TRACK_HEIGHT,
-          background: "var(--bg-3)",
-          border: "0.5px solid var(--line-2)",
+          background: "var(--surface-raised)",
+          border: "1px solid var(--border-hairline)",
           borderRadius: 4,
           overflow: "hidden",
           cursor: "pointer",
@@ -236,7 +236,7 @@ export default function TerminalTimeline({
             bottom: 0,
             left: `${(currentFrame / Math.max(1, total)) * 100}%`,
             width: 1,
-            background: "var(--text-1)",
+            background: "var(--ink-secondary)",
             pointerEvents: "none",
           }}
         />
@@ -320,7 +320,7 @@ function ZoomChip({ zoom, total, videoDurationFrames, trackRef, onUpdate, onSeek
         left: `${(zoom.startFrame / total) * 100}%`,
         width: `${((zoom.endFrame - zoom.startFrame) / total) * 100}%`,
         background: "rgba(255,100,184,0.45)",
-        border: "1px solid var(--accent)",
+        border: "1px solid var(--live)",
         borderRadius: 2,
         cursor: "grab",
       }}
@@ -334,7 +334,7 @@ function ZoomChip({ zoom, total, videoDurationFrames, trackRef, onUpdate, onSeek
           bottom: -1,
           width: 6,
           cursor: "ew-resize",
-          background: "var(--accent)",
+          background: "var(--live)",
           borderRadius: 1,
         }}
       />
@@ -347,7 +347,7 @@ function ZoomChip({ zoom, total, videoDurationFrames, trackRef, onUpdate, onSeek
           bottom: -1,
           width: 6,
           cursor: "ew-resize",
-          background: "var(--accent)",
+          background: "var(--live)",
           borderRadius: 1,
         }}
       />

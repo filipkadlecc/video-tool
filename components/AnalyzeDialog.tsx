@@ -196,7 +196,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
     <Modal open={open} onClose={onClose} width={640} title="Analyze video" stepLabel="Probe · scene cuts · transcript — so the AI can see your footage">
       <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 560, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
         {!hasMediaFolder && (
-          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
             This project has no media folder. Upload a video first.
           </div>
         )}
@@ -204,7 +204,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
         {hasMediaFolder && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span className="mono cap" style={{ color: "var(--text-2)" }}>Transcription model</span>
+              <span className="mono cap" style={{ color: "var(--ink-tertiary)" }}>Transcription model</span>
               <div style={{ display: "flex", gap: 4 }}>
                 {MODELS.map((m) => (
                   <button
@@ -214,10 +214,10 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                     style={{
                       fontSize: 11,
                       padding: "4px 10px",
-                      borderRadius: "var(--r-sm)",
-                      border: "0.5px solid var(--line-2)",
-                      background: model === m.value ? "var(--accent-soft)" : "var(--bg-inset)",
-                      color: model === m.value ? "var(--accent)" : "var(--text-2)",
+                      borderRadius: "var(--r-panel)",
+                      border: "1px solid var(--border-hairline)",
+                      background: model === m.value ? "var(--brand-tint-bg)" : "var(--surface-void)",
+                      color: model === m.value ? "var(--brand)" : "var(--ink-tertiary)",
                       cursor: "pointer",
                     }}
                   >
@@ -239,9 +239,9 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
               )}
             </div>
 
-            {loading && <div style={{ fontSize: 12, color: "var(--text-2)" }}>Loading media…</div>}
+            {loading && <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>Loading media…</div>}
             {!loading && files.length === 0 && (
-              <div style={{ fontSize: 12, color: "var(--text-2)" }}>No video or audio files in this project.</div>
+              <div style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>No video or audio files in this project.</div>
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -249,10 +249,10 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                 <div
                   key={f.file.path}
                   style={{
-                    border: "0.5px solid var(--line-2)",
-                    borderRadius: "var(--r-md)",
+                    border: "1px solid var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
                     padding: "12px 14px",
-                    background: "var(--bg-inset)",
+                    background: "var(--surface-void)",
                     display: "flex",
                     flexDirection: "column",
                     gap: 6,
@@ -262,12 +262,12 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                     <div style={{ fontSize: 13, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {f.file.name}
                     </div>
-                    <span className="mono" style={{ fontSize: 10, color: "var(--text-2)" }}>{f.file.sizeFormatted}</span>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>{f.file.sizeFormatted}</span>
                     <StatusPill state={f} />
                   </div>
 
                   {/* Summary line */}
-                  <div className="mono nums" style={{ fontSize: 10, color: "var(--text-2)" }}>
+                  <div className="mono nums" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
                     {f.summary?.durationSeconds != null
                       ? `${fmtDuration(f.summary.durationSeconds)} · ${f.summary.fps?.toFixed(0) ?? "?"}fps${f.summary.width ? ` · ${f.summary.width}×${f.summary.height}` : ""}`
                       : "not probed"}
@@ -278,7 +278,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
 
                   {/* Progress line while running */}
                   {f.status === "running" && (
-                    <div style={{ fontSize: 11, color: "var(--accent)" }}>
+                    <div style={{ fontSize: 11, color: "var(--brand)" }}>
                       {f.stage === "probe" && "Probing…"}
                       {f.stage === "scenes" && `Detecting scene cuts…${f.progress != null ? ` ${Math.round(f.progress * 100)}%` : ""}`}
                       {f.stage === "transcript" && `Transcribing…${f.transcriptLine ? ` ${f.transcriptLine}` : ""}`}
@@ -286,7 +286,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
                     </div>
                   )}
                   {f.status === "error" && (
-                    <div style={{ fontSize: 11, color: "var(--red, #e5484d)" }}>{f.error}</div>
+                    <div style={{ fontSize: 11, color: "var(--danger)" }}>{f.error}</div>
                   )}
 
                   {(f.status === "pending" || f.status === "analyzed" || f.status === "error") && (
@@ -306,7 +306,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
               ))}
             </div>
 
-            <div style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.5, borderTop: "0.5px solid var(--line-1)", paddingTop: 12 }}>
+            <div style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.5, borderTop: "1px solid var(--border-hairline)", paddingTop: 12 }}>
               Once analyzed, the AI chat can see each clip&apos;s length, transcript timestamps, and scene cuts —
               so &ldquo;trim to where they say X&rdquo; or &ldquo;cut on the first scene change&rdquo; lands correctly.
             </div>
@@ -319,11 +319,11 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
 
 function StatusPill({ state }: { state: FileState }) {
   const map: Record<FileState["status"], { label: string; color: string; bg: string }> = {
-    checking: { label: "…", color: "var(--text-2)", bg: "var(--bg-3)" },
-    pending: { label: "not analyzed", color: "var(--text-2)", bg: "var(--bg-3)" },
-    running: { label: "analyzing", color: "var(--accent)", bg: "var(--accent-soft)" },
-    analyzed: { label: "analyzed", color: "var(--green, #30a46c)", bg: "var(--bg-3)" },
-    error: { label: "error", color: "var(--red, #e5484d)", bg: "var(--bg-3)" },
+    checking: { label: "…", color: "var(--ink-tertiary)", bg: "var(--surface-raised)" },
+    pending: { label: "not analyzed", color: "var(--ink-tertiary)", bg: "var(--surface-raised)" },
+    running: { label: "analyzing", color: "var(--brand)", bg: "var(--brand-tint-bg)" },
+    analyzed: { label: "analyzed", color: "var(--live)", bg: "var(--surface-raised)" },
+    error: { label: "error", color: "var(--danger)", bg: "var(--surface-raised)" },
   };
   const s = map[state.status];
   return (

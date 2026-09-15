@@ -2,27 +2,39 @@
 
 import React from "react";
 
+/**
+ * Segmented control — for EITHER/OR values. (Underline tabs are for places;
+ * see Tabs.) Container is `surface-void` with a hairline; the active segment is
+ * `surface-hover`, NOT brand. Orange is reserved for the one primary action.
+ */
 interface SegmentedOption {
   value: string | number;
   label: string;
+  /** Optional shortcut shown beside the label, e.g. the Cut/Direct switcher. */
+  shortcut?: string;
+  disabled?: boolean;
 }
 
 interface SegmentedProps {
   value: string | number;
   onChange: (value: string | number) => void;
   options: SegmentedOption[];
+  /** 26 is the toolbar switcher; 24 the dense filter row. */
+  height?: number;
+  style?: React.CSSProperties;
 }
 
-export default function Segmented({ value, onChange, options }: SegmentedProps) {
+export default function Segmented({ value, onChange, options, height = 26, style }: SegmentedProps) {
   return (
     <div
       style={{
         display: "inline-flex",
         padding: 2,
         gap: 2,
-        background: "var(--bg-inset)",
-        borderRadius: "var(--r-sm)",
-        border: "0.5px solid var(--line-2)",
+        background: "var(--surface-void)",
+        borderRadius: "var(--r-control)",
+        border: "1px solid var(--border-hairline)",
+        ...style,
       }}
     >
       {options.map((o) => {
@@ -30,23 +42,37 @@ export default function Segmented({ value, onChange, options }: SegmentedProps) 
         return (
           <button
             key={String(o.value)}
-            onClick={() => onChange(o.value)}
-            className="mono"
+            onClick={() => !o.disabled && onChange(o.value)}
+            disabled={o.disabled}
+            className="focus-ring"
             style={{
-              height: 26,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              height,
               padding: "0 10px",
-              minWidth: 42,
-              fontSize: 11,
-              fontWeight: 500,
-              color: active ? "var(--accent-ink)" : "var(--text-1)",
-              background: active ? "var(--accent)" : "transparent",
+              fontSize: "var(--t-control-size)",
+              fontWeight: "var(--t-control-weight)" as unknown as number,
+              lineHeight: 1,
+              color: o.disabled
+                ? "var(--ink-disabled)"
+                : active ? "var(--ink-primary)" : "var(--ink-secondary)",
+              background: active ? "var(--surface-hover)" : "transparent",
               border: "none",
-              borderRadius: 4,
-              cursor: "pointer",
-              transition: "all 120ms",
+              borderRadius: "var(--r-item)",
+              cursor: o.disabled ? "not-allowed" : "pointer",
+              transition: "background var(--dur-state) var(--ease), color var(--dur-state) var(--ease)",
             }}
           >
             {o.label}
+            {o.shortcut && (
+              <span
+                className="t-data-s"
+                style={{ color: active ? "var(--ink-tertiary)" : "var(--ink-disabled)" }}
+              >
+                {o.shortcut}
+              </span>
+            )}
           </button>
         );
       })}

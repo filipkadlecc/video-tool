@@ -187,12 +187,12 @@ export default function TapeExamplesPicker({
       stepLabel="Replace the current tape with a recipe"
     >
       <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 540 }}>
-        <div style={{ padding: "14px 20px", borderBottom: "0.5px solid var(--line-1)" }}>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-hairline)" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
             Click a recipe to load it into the editor, then hit{" "}
-            <span style={{ color: "var(--accent)" }}>Render</span>.
+            <span style={{ color: "var(--brand)" }}>Render</span>.
             {hasExistingCode && (
-              <span style={{ color: "var(--text-1)" }}>
+              <span style={{ color: "var(--ink-secondary)" }}>
                 {" "}This replaces what&rsquo;s currently in the editor (Cmd+Z to undo).
               </span>
             )}
@@ -201,7 +201,7 @@ export default function TapeExamplesPicker({
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 20 }}>
           {EXAMPLES.map((ex) => {
-            const accent = PREVIEW_COLORS[ex.id] ?? "var(--accent)";
+            const accent = PREVIEW_COLORS[ex.id] ?? "var(--brand)";
             return (
               <button
                 key={ex.id}
@@ -211,19 +211,19 @@ export default function TapeExamplesPicker({
                   alignItems: "stretch",
                   gap: 12,
                   padding: 12,
-                  background: "var(--bg-inset)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-md)",
+                  background: "var(--surface-void)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
                   cursor: "pointer",
                   textAlign: "left",
-                  color: "var(--text-0)",
+                  color: "var(--ink-primary)",
                   transition: "border-color 120ms",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.borderColor = accent;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--line-2)";
+                  e.currentTarget.style.borderColor = "var(--border-hairline)";
                 }}
               >
                 <div
@@ -246,19 +246,19 @@ export default function TapeExamplesPicker({
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{ex.name}</span>
                     <span
                       className="mono"
-                      style={{ fontSize: 10, color: "var(--text-3)" }}
+                      style={{ fontSize: 10, color: "var(--ink-disabled)" }}
                     >
                       {ex.duration}
                     </span>
                   </div>
-                  <span style={{ fontSize: 11, color: "var(--text-2)" }}>
+                  <span style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>
                     {ex.subtitle}
                   </span>
                 </div>
                 <Icon
                   name="arrowRight"
                   size={14}
-                  style={{ color: "var(--text-3)", alignSelf: "center" }}
+                  style={{ color: "var(--ink-disabled)", alignSelf: "center" }}
                 />
               </button>
             );
@@ -285,9 +285,9 @@ export default function TapeExamplesPicker({
             style={{
               maxWidth: 380,
               width: "100%",
-              background: "var(--bg-2)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-md)",
+              background: "var(--surface-chrome)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
               padding: 22,
               display: "flex",
               flexDirection: "column",
@@ -295,7 +295,7 @@ export default function TapeExamplesPicker({
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600 }}>Replace tape source?</div>
-            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
               The example will replace what&rsquo;s currently in the editor. You can undo with Cmd+Z.
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -304,10 +304,10 @@ export default function TapeExamplesPicker({
                 style={{
                   height: 30,
                   padding: "0 14px",
-                  background: "var(--bg-3)",
-                  color: "var(--text-1)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
+                  background: "var(--surface-raised)",
+                  color: "var(--ink-secondary)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
@@ -319,10 +319,10 @@ export default function TapeExamplesPicker({
                 style={{
                   height: 30,
                   padding: "0 14px",
-                  background: "var(--accent)",
-                  color: "var(--accent-ink)",
+                  background: "var(--brand)",
+                  color: "var(--brand-ink)",
                   border: "none",
-                  borderRadius: "var(--r-sm)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",

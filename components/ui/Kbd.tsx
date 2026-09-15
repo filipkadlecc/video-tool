@@ -14,12 +14,12 @@ export default function Kbd({ children }: { children: React.ReactNode }) {
         minWidth: 18,
         height: 18,
         padding: "0 5px",
-        background: "var(--bg-3)",
-        border: "0.5px solid var(--line-2)",
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border-hairline)",
         borderBottomWidth: 1.5,
         borderRadius: 4,
         fontSize: 10,
-        color: "var(--text-1)",
+        color: "var(--ink-secondary)",
         whiteSpace: "nowrap",
       }}
     >

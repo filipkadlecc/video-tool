@@ -13,7 +13,7 @@ const Fallback: React.FC = () => (
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      color: "var(--text-2)",
+      color: "var(--ink-tertiary)",
       fontSize: 48,
       fontFamily: "sans-serif",
     }}
@@ -48,7 +48,7 @@ class PlayerErrorBoundary extends Component<
             alignItems: "center",
             justifyContent: "center",
             background: "#000",
-            color: "var(--red)",
+            color: "var(--danger)",
             fontSize: 13,
             padding: 16,
             textAlign: "center",
@@ -56,7 +56,7 @@ class PlayerErrorBoundary extends Component<
         >
           <div>
             <p style={{ fontWeight: 600, marginBottom: 4 }}>Preview error</p>
-            <p style={{ fontSize: 12, color: "var(--text-2)" }}>{this.state.error}</p>
+            <p style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>{this.state.error}</p>
           </div>
         </div>
       );
@@ -120,7 +120,7 @@ export default function PreviewPanel({ code, width = 3840, height = 2160, svgCon
           fontSize: 10,
           color: "rgba(255,255,255,0.75)",
           borderRadius: 3,
-          border: "0.5px solid rgba(255,255,255,0.1)",
+          border: "1px solid rgba(255,255,255,0.1)",
         }}
       >
         {durationInFrames}F / {fps}FPS / {seconds}S
@@ -156,7 +156,7 @@ export default function PreviewPanel({ code, width = 3840, height = 2160, svgCon
               >
                 <div style={{ color: "#f87171", fontSize: 28, textAlign: "center", fontFamily: "sans-serif" }}>
                   <div style={{ marginBottom: 12 }}>Scene error</div>
-                  <div style={{ color: "var(--text-2)", fontSize: 20 }}>{error.message}</div>
+                  <div style={{ color: "var(--ink-tertiary)", fontSize: 20 }}>{error.message}</div>
                 </div>
               </AbsoluteFill>
             )}

@@ -176,7 +176,7 @@ export default function EditorCanvas({
             }}
             style={{
               position: "absolute", ...box, cursor: item.type === "text" ? "text" : "move",
-              outline: selected ? "1.5px solid var(--accent)" : "1px dashed rgba(255,255,255,0.25)",
+              outline: selected ? "1.5px solid var(--brand)" : "1px dashed rgba(255,255,255,0.25)",
               outlineOffset: 0,
               background: "transparent",
             }}
@@ -207,7 +207,7 @@ export default function EditorCanvas({
                   position: "absolute", inset: 0, width: "100%", height: "100%",
                   // Match the rendered text so editing looks like the result.
                   background: "rgba(0,0,0,0.45)",
-                  border: "1.5px solid var(--accent)",
+                  border: "1.5px solid var(--brand)",
                   color: (item as TextItem).style.color,
                   fontFamily: (item as TextItem).style.fontFamily,
                   fontSize: (item as TextItem).style.fontSize * scale,
@@ -228,7 +228,7 @@ export default function EditorCanvas({
                   left: `calc(${h.x * 100}% - 4px)`,
                   top: `calc(${h.y * 100}% - 4px)`,
                   width: 8, height: 8, borderRadius: 2,
-                  background: "var(--accent)", border: "1px solid #fff",
+                  background: "var(--brand)", border: "1px solid #fff",
                   cursor: h.cursor,
                 }}
               />
@@ -238,10 +238,10 @@ export default function EditorCanvas({
       })}
 
       {guides.x != null && (
-        <div style={{ position: "absolute", left: guides.x * scale, top: 0, bottom: 0, width: 1, background: "var(--accent)", opacity: 0.8, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", left: guides.x * scale, top: 0, bottom: 0, width: 1, background: "var(--brand)", opacity: 0.8, pointerEvents: "none" }} />
       )}
       {guides.y != null && (
-        <div style={{ position: "absolute", top: guides.y * scale, left: 0, right: 0, height: 1, background: "var(--accent)", opacity: 0.8, pointerEvents: "none" }} />
+        <div style={{ position: "absolute", top: guides.y * scale, left: 0, right: 0, height: 1, background: "var(--brand)", opacity: 0.8, pointerEvents: "none" }} />
       )}
     </div>
   );

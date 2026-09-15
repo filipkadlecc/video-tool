@@ -438,14 +438,14 @@ export default function TerminalPreview({
           padding: "10px 14px",
           background: "rgba(0,0,0,0.6)",
           backdropFilter: "blur(8px)",
-          borderBottom: "0.5px solid var(--line-1)",
+          borderBottom: "1px solid var(--border-hairline)",
           zIndex: 2,
         }}
       >
-        <Icon name="code" size={13} style={{ color: "var(--cyan)" }} />
+        <Icon name="code" size={13} style={{ color: "var(--ink-secondary)" }} />
         <span
           className="mono cap"
-          style={{ fontSize: 10, color: "var(--text-1)", letterSpacing: "0.05em" }}
+          style={{ fontSize: 10, color: "var(--ink-secondary)", letterSpacing: "0.05em" }}
         >
           VHS Terminal
         </span>
@@ -459,13 +459,13 @@ export default function TerminalPreview({
               gap: 6,
               padding: "3px 8px",
               fontSize: 10,
-              color: "var(--text-2)",
-              background: "var(--bg-3)",
-              border: "0.5px solid var(--line-2)",
+              color: "var(--ink-tertiary)",
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 3,
             }}
           >
-            <span style={{ color: "var(--accent)" }}>●</span>
+            <span style={{ color: "var(--brand)" }}>●</span>
             {formatBytes(bytes)}
             {renderMs != null && <span>· {(renderMs / 1000).toFixed(1)}s</span>}
             {annotations && (
@@ -492,10 +492,10 @@ export default function TerminalPreview({
               gap: 5,
               padding: "5px 10px",
               height: 26,
-              background: customTheme ? "var(--accent)" : "var(--bg-3)",
-              color: customTheme ? "var(--accent-ink)" : "var(--text-1)",
-              border: customTheme ? "none" : "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-sm)",
+              background: customTheme ? "var(--brand)" : "var(--surface-raised)",
+              color: customTheme ? "var(--brand-ink)" : "var(--ink-secondary)",
+              border: customTheme ? "none" : "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
               fontSize: 11,
               fontWeight: 500,
               cursor: "pointer",
@@ -515,10 +515,10 @@ export default function TerminalPreview({
               gap: 5,
               padding: "5px 10px",
               height: 26,
-              background: "var(--bg-3)",
-              color: "var(--text-1)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-sm)",
+              background: "var(--surface-raised)",
+              color: "var(--ink-secondary)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
               fontSize: 11,
               fontWeight: 500,
               cursor: "pointer",
@@ -538,10 +538,10 @@ export default function TerminalPreview({
             gap: 6,
             padding: "5px 12px",
             height: 26,
-            background: rendering ? "var(--bg-3)" : "var(--accent)",
-            color: rendering ? "var(--text-2)" : "var(--accent-ink)",
+            background: rendering ? "var(--surface-raised)" : "var(--brand)",
+            color: rendering ? "var(--ink-tertiary)" : "var(--brand-ink)",
             border: "none",
-            borderRadius: "var(--r-sm)",
+            borderRadius: "var(--r-panel)",
             fontSize: 11,
             fontWeight: 600,
             cursor: rendering || !code.trim() ? "default" : "pointer",
@@ -633,7 +633,7 @@ export default function TerminalPreview({
                       position: "absolute",
                       inset: 0,
                       background: "rgba(0,0,0,0.25)",
-                      border: "1px dashed var(--accent)",
+                      border: "1px dashed var(--brand)",
                       cursor: "crosshair",
                       zIndex: 100,
                       userSelect: "none",
@@ -649,8 +649,8 @@ export default function TerminalPreview({
                           padding: "4px 8px",
                           fontSize: 11,
                           fontWeight: 600,
-                          background: "var(--accent)",
-                          color: "var(--accent-ink)",
+                          background: "var(--brand)",
+                          color: "var(--brand-ink)",
                           borderRadius: 4,
                           pointerEvents: "none",
                         }}
@@ -683,7 +683,7 @@ export default function TerminalPreview({
                               top: `${norm.y * 100}%`,
                               width: `${norm.w * 100}%`,
                               height: `${norm.h * 100}%`,
-                              border: "2px solid var(--accent)",
+                              border: "2px solid var(--brand)",
                               background: "rgba(255,100,184,0.18)",
                               pointerEvents: "none",
                             }}
@@ -697,8 +697,8 @@ export default function TerminalPreview({
                                 top: `calc(${(norm.y + norm.h) * 100}% + 4px)`,
                                 padding: "2px 6px",
                                 fontSize: 10,
-                                color: "var(--accent-ink)",
-                                background: "var(--accent)",
+                                color: "var(--brand-ink)",
+                                background: "var(--brand)",
                                 borderRadius: 3,
                                 whiteSpace: "nowrap",
                                 pointerEvents: "none",
@@ -736,7 +736,7 @@ export default function TerminalPreview({
                 flexDirection: "column",
                 alignItems: "center",
                 gap: 14,
-                color: "var(--text-2)",
+                color: "var(--ink-tertiary)",
                 fontSize: 12,
                 textAlign: "center",
                 maxWidth: 460,
@@ -747,11 +747,11 @@ export default function TerminalPreview({
                   width: 48,
                   height: 48,
                   borderRadius: 12,
-                  background: "var(--bg-3)",
-                  border: "0.5px solid var(--line-2)",
+                  background: "var(--surface-raised)",
+                  border: "1px solid var(--border-hairline)",
                   display: "grid",
                   placeItems: "center",
-                  color: "var(--text-3)",
+                  color: "var(--ink-disabled)",
                 }}
               >
                 <Icon name="film" size={20} />
@@ -759,13 +759,13 @@ export default function TerminalPreview({
               {error ? (
                 <div
                   style={{
-                    color: "var(--red)",
-                    fontFamily: "var(--mono)",
+                    color: "var(--danger)",
+                    fontFamily: "var(--font-mono)",
                     fontSize: 11,
                     whiteSpace: "pre-wrap",
                     textAlign: "left",
                     background: "rgba(255,0,0,0.06)",
-                    border: "0.5px solid var(--red)",
+                    border: "1px solid var(--danger)",
                     borderRadius: 4,
                     padding: 12,
                     maxHeight: 220,
@@ -777,11 +777,11 @@ export default function TerminalPreview({
                 </div>
               ) : (
                 <>
-                  <div style={{ color: "var(--text-1)", fontWeight: 500 }}>
+                  <div style={{ color: "var(--ink-secondary)", fontWeight: 500 }}>
                     No render yet
                   </div>
                   <div>
-                    Click <span style={{ color: "var(--accent)" }}>Render</span> to run the
+                    Click <span style={{ color: "var(--brand)" }}>Render</span> to run the
                     .tape script through vhs and produce out.mp4.
                     {onReplaceCode && (
                       <>
@@ -791,7 +791,7 @@ export default function TerminalPreview({
                           style={{
                             background: "transparent",
                             border: "none",
-                            color: "var(--accent)",
+                            color: "var(--brand)",
                             padding: 0,
                             cursor: "pointer",
                             textDecoration: "underline",
@@ -872,11 +872,11 @@ export default function TerminalPreview({
             right: 12,
             background: "rgba(0,0,0,0.7)",
             backdropFilter: "blur(8px)",
-            border: "0.5px solid var(--line-1)",
+            border: "1px solid var(--border-hairline)",
             borderRadius: 4,
             fontSize: 10,
-            fontFamily: "var(--mono)",
-            color: "var(--text-2)",
+            fontFamily: "var(--font-mono)",
+            color: "var(--ink-tertiary)",
             maxHeight: 100,
             overflow: "hidden",
           }}
@@ -941,7 +941,7 @@ function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRow
 
   const labelStyle: React.CSSProperties = {
     fontSize: 9,
-    color: "var(--text-3)",
+    color: "var(--ink-disabled)",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
   };
@@ -950,11 +950,11 @@ function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRow
     width: 44,
     padding: "1px 4px",
     fontSize: 10,
-    background: "var(--bg-2)",
-    color: "var(--text-1)",
-    border: "0.5px solid var(--line-2)",
+    background: "var(--surface-chrome)",
+    color: "var(--ink-secondary)",
+    border: "1px solid var(--border-hairline)",
     borderRadius: 3,
-    fontFamily: "var(--mono)",
+    fontFamily: "var(--font-mono)",
   };
 
   return (
@@ -964,8 +964,8 @@ function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRow
         flexDirection: "column",
         gap: 4,
         padding: "6px 8px",
-        background: "var(--bg-3)",
-        border: "0.5px solid var(--line-2)",
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border-hairline)",
         borderRadius: 4,
       }}
     >
@@ -975,14 +975,14 @@ function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRow
           alignItems: "center",
           gap: 8,
           fontSize: 11,
-          color: "var(--text-2)",
+          color: "var(--ink-tertiary)",
         }}
       >
-        <span style={{ color: "var(--accent)" }}>●</span>
+        <span style={{ color: "var(--brand)" }}>●</span>
         <span className="mono nums">
           zoom · {(zoom.startFrame / fps).toFixed(2)}s → {(zoom.endFrame / fps).toFixed(2)}s
         </span>
-        <span style={{ color: "var(--text-3)" }}>
+        <span style={{ color: "var(--ink-disabled)" }}>
           rect {(zoom.rect.w * 100).toFixed(0)}×{(zoom.rect.h * 100).toFixed(0)}%
         </span>
         <div style={{ flex: 1 }} />
@@ -992,8 +992,8 @@ function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRow
             padding: "2px 6px",
             fontSize: 10,
             background: "transparent",
-            color: "var(--text-3)",
-            border: "0.5px solid var(--line-2)",
+            color: "var(--ink-disabled)",
+            border: "1px solid var(--border-hairline)",
             borderRadius: 3,
             cursor: "pointer",
           }}
@@ -1041,11 +1041,11 @@ function ZoomRow({ zoom, fps, videoDurationFrames, onUpdate, onDelete }: ZoomRow
             style={{
               padding: "1px 4px",
               fontSize: 10,
-              background: "var(--bg-2)",
-              color: "var(--text-1)",
-              border: "0.5px solid var(--line-2)",
+              background: "var(--surface-chrome)",
+              color: "var(--ink-secondary)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 3,
-              fontFamily: "var(--mono)",
+              fontFamily: "var(--font-mono)",
             }}
           >
             {ZOOM_EASING_OPTIONS.map((o) => (
@@ -1107,8 +1107,8 @@ function AnnotatorPanel({
       style={{
         marginTop: 12,
         padding: 10,
-        background: "var(--bg-2)",
-        border: "0.5px solid var(--line-1)",
+        background: "var(--surface-chrome)",
+        border: "1px solid var(--border-hairline)",
         borderRadius: 6,
         display: "flex",
         flexDirection: "column",
@@ -1122,9 +1122,9 @@ function AnnotatorPanel({
             padding: "5px 10px",
             fontSize: 11,
             fontWeight: 600,
-            background: drawMode ? "var(--accent)" : "var(--bg-3)",
-            color: drawMode ? "var(--accent-ink)" : "var(--text-1)",
-            border: "0.5px solid var(--line-2)",
+            background: drawMode ? "var(--brand)" : "var(--surface-raised)",
+            color: drawMode ? "var(--brand-ink)" : "var(--ink-secondary)",
+            border: "1px solid var(--border-hairline)",
             borderRadius: 4,
             cursor: "pointer",
           }}
@@ -1152,7 +1152,7 @@ function AnnotatorPanel({
         <div style={{ flex: 1 }} />
         <div
           className="mono nums"
-          style={{ fontSize: 10, color: "var(--text-2)" }}
+          style={{ fontSize: 10, color: "var(--ink-tertiary)" }}
         >
           frame {Math.round(currentFrame)} / {videoDurationFrames + freezeTotalFrames + (annotations.endCard ? END_CARD_FRAMES : 0)}
         </div>
@@ -1194,10 +1194,10 @@ function AnnotatorPanel({
                 alignItems: "center",
                 gap: 8,
                 fontSize: 11,
-                color: "var(--text-2)",
+                color: "var(--ink-tertiary)",
                 padding: "4px 8px",
-                background: "var(--bg-3)",
-                border: "0.5px solid var(--line-2)",
+                background: "var(--surface-raised)",
+                border: "1px solid var(--border-hairline)",
                 borderRadius: 4,
               }}
             >
@@ -1212,8 +1212,8 @@ function AnnotatorPanel({
                   padding: "2px 6px",
                   fontSize: 10,
                   background: "transparent",
-                  color: "var(--text-3)",
-                  border: "0.5px solid var(--line-2)",
+                  color: "var(--ink-disabled)",
+                  border: "1px solid var(--border-hairline)",
                   borderRadius: 3,
                   cursor: "pointer",
                 }}
@@ -1232,16 +1232,16 @@ function AnnotatorPanel({
             alignItems: "center",
             gap: 8,
             fontSize: 11,
-            color: "var(--text-2)",
+            color: "var(--ink-tertiary)",
             padding: "4px 8px",
-            background: "var(--bg-3)",
-            border: "0.5px solid var(--line-2)",
+            background: "var(--surface-raised)",
+            border: "1px solid var(--border-hairline)",
             borderRadius: 4,
           }}
         >
           <span style={{ color: "#5aa8ff" }}>●</span>
           <span>banner · &quot;{annotations.banner.text}&quot;</span>
-          <span className="mono nums" style={{ color: "var(--text-3)" }}>
+          <span className="mono nums" style={{ color: "var(--ink-disabled)" }}>
             {(annotations.banner.startFrame / fps).toFixed(1)}s–{(annotations.banner.endFrame / fps).toFixed(1)}s
           </span>
           <div style={{ flex: 1 }} />
@@ -1251,8 +1251,8 @@ function AnnotatorPanel({
               padding: "2px 6px",
               fontSize: 10,
               background: "transparent",
-              color: "var(--text-3)",
-              border: "0.5px solid var(--line-2)",
+              color: "var(--ink-disabled)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 3,
               cursor: "pointer",
             }}
@@ -1269,10 +1269,10 @@ function AnnotatorPanel({
             alignItems: "center",
             gap: 8,
             fontSize: 11,
-            color: "var(--text-2)",
+            color: "var(--ink-tertiary)",
             padding: "4px 8px",
-            background: "var(--bg-3)",
-            border: "0.5px solid var(--line-2)",
+            background: "var(--surface-raised)",
+            border: "1px solid var(--border-hairline)",
             borderRadius: 4,
           }}
         >
@@ -1285,8 +1285,8 @@ function AnnotatorPanel({
               padding: "2px 6px",
               fontSize: 10,
               background: "transparent",
-              color: "var(--text-3)",
-              border: "0.5px solid var(--line-2)",
+              color: "var(--ink-disabled)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 3,
               cursor: "pointer",
             }}
@@ -1304,9 +1304,9 @@ const panelButtonStyle: React.CSSProperties = {
   padding: "5px 10px",
   fontSize: 11,
   fontWeight: 500,
-  background: "var(--bg-3)",
-  color: "var(--text-1)",
-  border: "0.5px solid var(--line-2)",
+  background: "var(--surface-raised)",
+  color: "var(--ink-secondary)",
+  border: "1px solid var(--border-hairline)",
   borderRadius: 4,
   cursor: "pointer",
 };
@@ -1381,7 +1381,7 @@ function BannerEditor({ fps, totalFrames, currentFrame, initial, onClose, onSave
               endFrame: ef,
             });
           }}
-          style={{ ...panelButtonStyle, background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 600 }}
+          style={{ ...panelButtonStyle, background: "var(--brand)", color: "var(--brand-ink)", fontWeight: 600 }}
         >
           Save
         </button>
@@ -1436,7 +1436,7 @@ function EndCardEditor({ initial, onClose, onSave }: EndCardEditorProps) {
               url: url.trim() || undefined,
             });
           }}
-          style={{ ...panelButtonStyle, background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 600 }}
+          style={{ ...panelButtonStyle, background: "var(--brand)", color: "var(--brand-ink)", fontWeight: 600 }}
         >
           Save
         </button>
@@ -1462,8 +1462,8 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--bg-2)",
-          border: "0.5px solid var(--line-1)",
+          background: "var(--surface-chrome)",
+          border: "1px solid var(--border-hairline)",
           borderRadius: 8,
           padding: 18,
           minWidth: 360,
@@ -1472,7 +1472,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           gap: 10,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>{title}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-secondary)" }}>{title}</div>
         {children}
       </div>
     </div>
@@ -1482,7 +1482,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
-      <span style={{ fontSize: 10, color: "var(--text-3)", letterSpacing: "0.05em" }}>{label}</span>
+      <span style={{ fontSize: 10, color: "var(--ink-disabled)", letterSpacing: "0.05em" }}>{label}</span>
       {children}
     </label>
   );
@@ -1491,9 +1491,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputStyle: React.CSSProperties = {
   padding: "6px 8px",
   fontSize: 12,
-  background: "var(--bg-3)",
-  color: "var(--text-1)",
-  border: "0.5px solid var(--line-2)",
+  background: "var(--surface-raised)",
+  color: "var(--ink-secondary)",
+  border: "1px solid var(--border-hairline)",
   borderRadius: 4,
-  fontFamily: "var(--mono)",
+  fontFamily: "var(--font-mono)",
 };

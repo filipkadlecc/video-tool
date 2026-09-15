@@ -540,17 +540,17 @@ export default function DocTimeline({
     <div
       key={track.id}
       style={{
-        display: "flex", height: TRACK_H, borderBottom: "0.5px solid var(--line-1)",
-        background: hoverTrack === laneIndex && dragState?.mode === "move" ? "var(--bg-3)" : undefined,
+        display: "flex", height: TRACK_H, borderBottom: "1px solid var(--border-hairline)",
+        background: hoverTrack === laneIndex && dragState?.mode === "move" ? "var(--surface-raised)" : undefined,
       }}
     >
       <div
         style={{
           width: LABEL_W, flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
-          padding: "0 6px", borderRight: "0.5px solid var(--line-1)", background: "var(--bg-2)",
+          padding: "0 6px", borderRight: "1px solid var(--border-hairline)", background: "var(--surface-chrome)",
         }}
       >
-        <span className="mono cap" style={{ fontSize: 9, color: "var(--text-3)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {track.name}
         </span>
         <button
@@ -561,7 +561,7 @@ export default function DocTimeline({
           <Icon
             name={track.hidden ? "eyeOff" : "eye"}
             size={12}
-            style={{ color: track.hidden ? "var(--text-3)" : "var(--text-1)" }}
+            style={{ color: track.hidden ? "var(--ink-disabled)" : "var(--ink-secondary)" }}
           />
         </button>
         <button
@@ -572,7 +572,7 @@ export default function DocTimeline({
           <Icon
             name={track.muted ? "speakerOff" : "speaker"}
             size={12}
-            style={{ color: track.muted ? "var(--text-3)" : "var(--text-1)" }}
+            style={{ color: track.muted ? "var(--ink-disabled)" : "var(--ink-secondary)" }}
           />
         </button>
         {doc.tracks.length > 1 && (
@@ -581,7 +581,7 @@ export default function DocTimeline({
             onClick={() => commit(removeTrack(doc, track.id))}
             style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
           >
-            <Icon name="trash" size={11} style={{ color: "var(--text-3)" }} />
+            <Icon name="trash" size={11} style={{ color: "var(--ink-disabled)" }} />
           </button>
         )}
       </div>
@@ -589,7 +589,7 @@ export default function DocTimeline({
       <div
         style={{
           position: "relative", width: contentW, flexShrink: 0,
-          outline: dropping === laneIndex ? "1px dashed var(--accent)" : undefined,
+          outline: dropping === laneIndex ? "1px dashed var(--brand-tint-line)" : undefined,
           outlineOffset: -2,
         }}
         onPointerDown={deselect}
@@ -674,9 +674,9 @@ export default function DocTimeline({
               style={{
                 position: "absolute", left: g.from * pxPerFrame, width: clipW,
                 top: 4, height: TRACK_H - 9, borderRadius: 3, cursor: "grab",
-                background: ITEM_COLORS[item.type] ?? "var(--accent)",
+                background: ITEM_COLORS[item.type] ?? "var(--brand)",
                 opacity: track.hidden ? 0.35 : 0.9,
-                outline: selected ? "2px solid var(--text-0)" : "none",
+                outline: selected ? "2px solid var(--ink-primary)" : "none",
                 display: "flex", alignItems: "center", gap: 4, padding: "0 6px", overflow: "hidden",
               }}
             >
@@ -752,7 +752,7 @@ export default function DocTimeline({
       style={{
         width: 34, flexShrink: 0, display: "flex", flexDirection: "column",
         alignItems: "center", gap: 2, padding: "6px 0",
-        borderRight: "0.5px solid var(--line-1)", background: "var(--bg-2)",
+        borderRight: "1px solid var(--border-hairline)", background: "var(--surface-chrome)",
         position: "relative", zIndex: 6,
       }}
       onPointerLeave={() => setHoveredTool(null)}
@@ -767,14 +767,14 @@ export default function DocTimeline({
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 26, height: 26, borderRadius: 4, padding: 0,
-              background: hoveredTool === t.id && !t.disabled ? "var(--bg-4)" : "transparent",
+              background: hoveredTool === t.id && !t.disabled ? "var(--surface-hover)" : "transparent",
               border: "none", cursor: t.disabled ? "default" : "pointer",
             }}
           >
             <Icon
               name={t.icon}
               size={14}
-              style={{ color: t.disabled ? "var(--text-3)" : "var(--text-1)" }}
+              style={{ color: t.disabled ? "var(--ink-disabled)" : "var(--ink-secondary)" }}
             />
           </button>
           {hoveredTool === t.id && (
@@ -782,10 +782,10 @@ export default function DocTimeline({
               className="mono"
               style={{
                 position: "absolute", left: 32, top: 5, whiteSpace: "nowrap",
-                fontSize: 10, color: "var(--text-0)", background: "var(--bg-4)",
-                border: "0.5px solid var(--line-2)", borderRadius: 3,
+                fontSize: 10, color: "var(--ink-primary)", background: "var(--surface-hover)",
+                border: "1px solid var(--border-hairline)", borderRadius: 3,
                 padding: "3px 7px", pointerEvents: "none", zIndex: 20,
-                boxShadow: "var(--sh-float)",
+                boxShadow: "var(--shadow-float)",
               }}
             >
               {t.label}
@@ -801,25 +801,25 @@ export default function DocTimeline({
     // text, so dragging the playhead across them selected them — and since
     // globals.css paints ::selection with the accent colour, that read as the
     // timeline lighting up green rather than as a stray selection.
-    <div style={{ display: "flex", height: "100%", minHeight: 0, background: "var(--bg-1)", userSelect: "none" }}>
+    <div style={{ display: "flex", height: "100%", minHeight: 0, background: "var(--surface-void)", userSelect: "none" }}>
       {rail}
       <div
         ref={wrapRef}
         style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}
       >
       {/* Status strip — the tools themselves live in the rail on the left. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderBottom: "0.5px solid var(--line-1)" }}>
-        <span className="mono cap" style={{ fontSize: 9, color: "var(--text-3)" }}>Editor</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
+        <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>Editor</span>
         {uploading && (
-          <span className="mono" style={{ fontSize: 9, color: "var(--accent)" }}>
+          <span className="mono" style={{ fontSize: 9, color: "var(--live)" }}>
             uploading {uploading}…
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={() => setSnapOn((v) => !v)} style={{ ...toolBtn, color: snapOn ? "var(--accent)" : "var(--text-3)" }}>SNAP</button>
+        <button onClick={() => setSnapOn((v) => !v)} style={{ ...toolBtn, color: snapOn ? "var(--ink-primary)" : "var(--ink-disabled)" }}>SNAP</button>
         <button onClick={() => setZoom(1)} style={toolBtn}>Fit</button>
         <IconButton icon="help" size={22} title="Keyboard shortcuts" onClick={() => setShortcutsOpen(true)} />
-        <span className="mono nums" style={{ fontSize: 9, color: "var(--text-3)" }}>
+        <span className="mono nums" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
           {Math.floor(currentFrame / fps / 60).toString().padStart(2, "0")}:
           {Math.floor((currentFrame / fps) % 60).toString().padStart(2, "0")}.
           {Math.floor(currentFrame % fps).toString().padStart(2, "0")}
@@ -827,9 +827,9 @@ export default function DocTimeline({
       </div>
 
       {pickerOpen && (
-        <div style={{ padding: 8, borderBottom: "0.5px solid var(--line-1)", background: "var(--bg-2)", maxHeight: 140, overflowY: "auto" }}>
+        <div style={{ padding: 8, borderBottom: "1px solid var(--border-hairline)", background: "var(--surface-chrome)", maxHeight: 140, overflowY: "auto" }}>
           {pickerMode === "captions" && (
-            <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 6 }}>
+            <div style={{ fontSize: 10, color: "var(--ink-disabled)", marginBottom: 6 }}>
               Pick a clip to transcribe. Its words land as an editable subtitle layer at the playhead.
             </div>
           )}
@@ -838,13 +838,13 @@ export default function DocTimeline({
               (f) => pickerMode === "insert" || f.type === "video" || f.type === "audio",
             );
             return shown.length === 0 ? (
-            <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+            <div style={{ fontSize: 11, color: "var(--ink-disabled)" }}>
               {pickerMode === "captions" ? "No video or audio in this project to transcribe." : "No media in this project yet."}
             </div>
           ) : (
             shown.map((f) => (
               <div key={f.path} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
-                <span className="mono" style={{ fontSize: 10, color: "var(--text-1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span className="mono" style={{ fontSize: 10, color: "var(--ink-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {f.name}
                 </span>
                 {pickerMode === "insert" && doc.tracks.map((t) => (
@@ -857,7 +857,7 @@ export default function DocTimeline({
                     onClick={() => addCaptions(f)}
                     disabled={captionsBusy !== null}
                     title="Transcribe this file and add its words as a subtitle layer"
-                    style={{ ...toolBtn, color: "var(--accent)" }}
+                    style={{ ...toolBtn, color: "var(--ink-secondary)" }}
                   >
                     {captionsBusy === f.path ? "transcribing…" : pickerMode === "captions" ? "add subtitles" : "subtitles"}
                   </button>
@@ -871,15 +871,15 @@ export default function DocTimeline({
 
       <div ref={scrollRef} style={{ flex: 1, overflowX: "auto", overflowY: "auto", minHeight: 0, position: "relative" }}>
         <div style={{ display: "flex", width: LABEL_W + contentW }}>
-          <div style={{ width: LABEL_W, flexShrink: 0, height: RULER_H, borderRight: "0.5px solid var(--line-1)", borderBottom: "0.5px solid var(--line-1)", background: "var(--bg-2)" }} />
+          <div style={{ width: LABEL_W, flexShrink: 0, height: RULER_H, borderRight: "1px solid var(--border-hairline)", borderBottom: "1px solid var(--border-hairline)", background: "var(--surface-chrome)" }} />
           <div
             ref={rulerRef}
             onPointerDown={startScrub}
-            style={{ position: "relative", width: contentW, height: RULER_H, borderBottom: "0.5px solid var(--line-1)", cursor: "ew-resize", background: "var(--bg-2)" }}
+            style={{ position: "relative", width: contentW, height: RULER_H, borderBottom: "1px solid var(--border-hairline)", cursor: "ew-resize", background: "var(--surface-chrome)" }}
           >
             {ticks.map((f) => (
-              <div key={f} style={{ position: "absolute", left: f * pxPerFrame, top: 0, bottom: 0, borderLeft: "0.5px solid var(--line-1)", paddingLeft: 3 }}>
-                <span className="mono nums" style={{ fontSize: 8, color: "var(--text-3)" }}>{(f / fps).toFixed(1)}s</span>
+              <div key={f} style={{ position: "absolute", left: f * pxPerFrame, top: 0, bottom: 0, borderLeft: "1px solid var(--border-hairline)", paddingLeft: 3 }}>
+                <span className="mono nums" style={{ fontSize: 8, color: "var(--ink-disabled)" }}>{(f / fps).toFixed(1)}s</span>
               </div>
             ))}
           </div>
@@ -890,9 +890,9 @@ export default function DocTimeline({
         </div>
 
         {/* playhead + snap guide, spanning ruler and tracks */}
-        <div style={{ position: "absolute", left: LABEL_W + currentFrame * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--accent)", pointerEvents: "none", zIndex: 5 }} />
+        <div style={{ position: "absolute", left: LABEL_W + currentFrame * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--live)", pointerEvents: "none", zIndex: 5 }} />
         {snapLine != null && (
-          <div style={{ position: "absolute", left: LABEL_W + snapLine * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--text-0)", opacity: 0.5, pointerEvents: "none", zIndex: 4 }} />
+          <div style={{ position: "absolute", left: LABEL_W + snapLine * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--ink-primary)", opacity: 0.5, pointerEvents: "none", zIndex: 4 }} />
         )}
         </div>
       </div>
@@ -904,10 +904,10 @@ export default function DocTimeline({
 
 
 const toolBtn: React.CSSProperties = {
-  background: "var(--bg-3)",
-  border: "0.5px solid var(--line-2)",
+  background: "var(--surface-raised)",
+  border: "1px solid var(--border-hairline)",
   borderRadius: 3,
-  color: "var(--text-1)",
+  color: "var(--ink-secondary)",
   fontSize: 10,
   padding: "2px 7px",
   cursor: "pointer",

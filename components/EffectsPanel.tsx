@@ -40,12 +40,12 @@ export default function EffectsPanel({ doc, selectedIds, onChange }: Props) {
   return (
     <div style={{ height: "100%", overflowY: "auto", padding: 10 }}>
       {!item && (
-        <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, color: "var(--ink-disabled)", marginBottom: 10 }}>
           Select a clip, then click an effect — or drag one onto a clip on the timeline.
         </div>
       )}
       {item && (
-        <div className="mono cap" style={{ fontSize: 9, color: "var(--text-3)", marginBottom: 8 }}>
+        <div className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)", marginBottom: 8 }}>
           {item.type} · in: {item.animateIn?.preset ?? "cut"} · out: {item.animateOut?.preset ?? "cut"}
         </div>
       )}
@@ -61,13 +61,13 @@ export default function EffectsPanel({ doc, selectedIds, onChange }: Props) {
             }}
             style={{
               display: "flex", alignItems: "center", gap: 8, padding: "6px 8px",
-              background: "var(--bg-3)", border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-sm)", cursor: "grab",
+              background: "var(--surface-raised)", border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)", cursor: "grab",
             }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, color: "var(--text-0)" }}>{p.label}</div>
-              <div style={{ fontSize: 9, color: "var(--text-3)" }}>{p.hint}</div>
+              <div style={{ fontSize: 11, color: "var(--ink-primary)" }}>{p.label}</div>
+              <div style={{ fontSize: 9, color: "var(--ink-disabled)" }}>{p.hint}</div>
             </div>
             <button disabled={!item} onClick={() => apply(p.id, "in")} style={chip(Boolean(item))}>In</button>
             <button disabled={!item} onClick={() => apply(p.id, "out")} style={chip(Boolean(item))}>Out</button>
@@ -75,7 +75,7 @@ export default function EffectsPanel({ doc, selectedIds, onChange }: Props) {
         ))}
       </div>
 
-      <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 12, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 9, color: "var(--ink-disabled)", marginTop: 12, lineHeight: 1.5 }}>
         Elements arrive sharp — no blur reveals, no fades from black, no slides or wipes.
         Typing is genuinely per character.
       </div>
@@ -84,7 +84,7 @@ export default function EffectsPanel({ doc, selectedIds, onChange }: Props) {
 }
 
 const chip = (enabled: boolean): React.CSSProperties => ({
-  background: "var(--bg-4)", border: "0.5px solid var(--line-2)", borderRadius: 3,
-  color: enabled ? "var(--text-1)" : "var(--text-3)", fontSize: 9,
+  background: "var(--surface-hover)", border: "1px solid var(--border-hairline)", borderRadius: 3,
+  color: enabled ? "var(--ink-secondary)" : "var(--ink-disabled)", fontSize: 9,
   padding: "2px 7px", cursor: enabled ? "pointer" : "default",
 });

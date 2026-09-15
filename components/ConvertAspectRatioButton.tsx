@@ -26,8 +26,8 @@ function OrientationPreview({ ratio }: { ratio: string }) {
       style={{
         width: dims.w,
         height: dims.h,
-        background: "var(--bg-4)",
-        border: "0.5px solid var(--line-3)",
+        background: "var(--surface-hover)",
+        border: "1px solid var(--border-edge)",
         borderRadius: 2,
       }}
     />
@@ -141,14 +141,14 @@ export default function ConvertAspectRatioButton({ projectId, currentOrientation
             marginTop: 6,
             minWidth: 200,
             padding: 5,
-            background: "var(--bg-3)",
-            border: "0.5px solid var(--line-2)",
-            borderRadius: "var(--r-sm)",
-            boxShadow: "var(--sh-float)",
+            background: "var(--surface-raised)",
+            border: "1px solid var(--border-hairline)",
+            borderRadius: "var(--r-panel)",
+            boxShadow: "var(--shadow-float)",
             zIndex: 10,
           }}
         >
-          <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
+          <div className="mono cap" style={{ padding: "6px 8px", color: "var(--ink-disabled)" }}>
             Duplicate to...
           </div>
           {availableRatios.map((ratio) => (
@@ -164,12 +164,12 @@ export default function ConvertAspectRatioButton({ projectId, currentOrientation
                 fontSize: 12,
                 background: "transparent",
                 border: "none",
-                color: "var(--text-0)",
+                color: "var(--ink-primary)",
                 borderRadius: 4,
                 cursor: "pointer",
                 textAlign: "left",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
               <OrientationPreview ratio={ratio.value} />

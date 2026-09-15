@@ -37,11 +37,11 @@ function PreviewCell({
         gap: 8,
         padding: 8,
         textAlign: "left",
-        background: active ? "var(--accent-soft)" : "var(--bg-inset)",
-        border: `0.5px solid ${active ? "var(--accent)" : "var(--line-2)"}`,
-        borderRadius: "var(--r-sm)",
+        background: active ? "var(--brand-tint-bg)" : "var(--surface-void)",
+        border: `1px solid ${active ? "var(--brand)" : "var(--border-hairline)"}`,
+        borderRadius: "var(--r-panel)",
         cursor: "pointer",
-        color: "var(--text-0)",
+        color: "var(--ink-primary)",
         transition: "all 120ms",
       }}
     >
@@ -50,15 +50,15 @@ function PreviewCell({
           position: "relative",
           width: "100%",
           aspectRatio: "16 / 9",
-          borderRadius: "var(--r-xs)",
+          borderRadius: "var(--r-control)",
           overflow: "hidden",
-          background: "var(--bg-1)",
+          background: "var(--surface-void)",
           display: "grid",
           placeItems: "center",
         }}
       >
         {failed ? (
-          <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
             no preview
           </span>
         ) : (
@@ -75,9 +75,9 @@ function PreviewCell({
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
-        {active && <Icon name="info" size={11} style={{ color: "var(--accent)" }} />}
+        {active && <Icon name="info" size={11} style={{ color: "var(--brand)" }} />}
       </div>
-      <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>{description}</span>
+      <span style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.4 }}>{description}</span>
     </button>
   );
 }

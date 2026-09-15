@@ -60,14 +60,14 @@ export default function ProjectCard({
       style={{
         position: "relative",
         cursor: "pointer",
-        background: "var(--bg-2)",
-        border: "0.5px solid var(--line-2)",
-        borderRadius: "var(--r-md)",
+        background: "var(--surface-chrome)",
+        border: "1px solid var(--border-hairline)",
+        borderRadius: "var(--r-panel)",
         overflow: "hidden",
         transition: "transform 160ms, border-color 160ms, box-shadow 160ms",
         transform: hover ? "translateY(-2px)" : "none",
-        boxShadow: hover ? "var(--sh-card)" : "none",
-        borderColor: hover ? "var(--line-3)" : "var(--line-2)",
+        boxShadow: hover ? "none" : "none",
+        borderColor: hover ? "var(--border-edge)" : "var(--border-hairline)",
       }}
     >
       {/* Thumbnail */}
@@ -90,7 +90,7 @@ export default function ProjectCard({
               justifyContent: "center",
             }}
           >
-            <span style={{ fontSize: 11, color: "var(--text-3)" }}>No preview</span>
+            <span style={{ fontSize: 11, color: "var(--ink-disabled)" }}>No preview</span>
           </div>
         )}
         {/* Ratio badge */}
@@ -141,9 +141,9 @@ export default function ProjectCard({
                 height: 26,
                 borderRadius: 5,
                 border: "none",
-                background: currentCollection ? "var(--accent)" : "rgba(10,10,14,0.8)",
+                background: currentCollection ? "var(--brand)" : "rgba(10,10,14,0.8)",
                 backdropFilter: "blur(6px)",
-                color: currentCollection ? "var(--accent-ink)" : "var(--text-0)",
+                color: currentCollection ? "var(--brand-ink)" : "var(--ink-primary)",
                 cursor: "pointer",
                 display: "grid",
                 placeItems: "center",
@@ -164,10 +164,10 @@ export default function ProjectCard({
                   maxHeight: 240,
                   overflowY: "auto",
                   padding: 4,
-                  background: "var(--bg-3)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
-                  boxShadow: "var(--sh-float)",
+                  background: "var(--surface-raised)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
+                  boxShadow: "var(--shadow-float)",
                 }}
               >
                 <MenuItem
@@ -202,10 +202,10 @@ export default function ProjectCard({
                       gap: 6,
                       padding: "7px 8px",
                       marginTop: 2,
-                      borderTop: "0.5px solid var(--line-1)",
+                      borderTop: "1px solid var(--border-hairline)",
                       background: "transparent",
                       border: "none",
-                      color: "var(--accent)",
+                      color: "var(--brand)",
                       fontSize: 12,
                       cursor: "pointer",
                       textAlign: "left",
@@ -231,7 +231,7 @@ export default function ProjectCard({
             border: "none",
             background: "rgba(10,10,14,0.8)",
             backdropFilter: "blur(6px)",
-            color: "var(--text-0)",
+            color: "var(--ink-primary)",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
@@ -252,7 +252,7 @@ export default function ProjectCard({
             border: "none",
             background: "rgba(10,10,14,0.8)",
             backdropFilter: "blur(6px)",
-            color: "var(--text-0)",
+            color: "var(--ink-primary)",
             cursor: "pointer",
             display: "grid",
             placeItems: "center",
@@ -276,7 +276,7 @@ export default function ProjectCard({
                 gap: 4,
                 maxWidth: 110,
                 fontSize: 9,
-                color: "var(--accent)",
+                color: "var(--brand)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
@@ -286,21 +286,21 @@ export default function ProjectCard({
               {currentCollection.name}
             </span>
           )}
-          <span className="mono nums" style={{ fontSize: 10, color: "var(--text-2)", marginLeft: "auto" }}>
+          <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-tertiary)", marginLeft: "auto" }}>
             {date}
           </span>
         </div>
         <div style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.1, marginBottom: 4 }}>
           {project.name}
         </div>
-        <div className="mono nums" style={{ fontSize: 10, color: "var(--text-2)", marginBottom: 8 }}>
+        <div className="mono nums" style={{ fontSize: 10, color: "var(--ink-tertiary)", marginBottom: 8 }}>
           {specs}
         </div>
         <div
           style={{
             fontSize: 12,
             lineHeight: 1.45,
-            color: "var(--text-1)",
+            color: "var(--ink-secondary)",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
@@ -327,13 +327,13 @@ function MenuItem({ label, active, onClick }: { label: string; active: boolean; 
         padding: "7px 8px",
         background: "transparent",
         border: "none",
-        borderRadius: "var(--r-xs)",
-        color: active ? "var(--accent)" : "var(--text-0)",
+        borderRadius: "var(--r-control)",
+        color: active ? "var(--brand)" : "var(--ink-primary)",
         fontSize: 12,
         cursor: "pointer",
         textAlign: "left",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
       <span style={{ width: 12, display: "inline-flex" }}>{active && <Icon name="check" size={11} />}</span>

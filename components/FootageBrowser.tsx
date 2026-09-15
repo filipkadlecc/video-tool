@@ -129,13 +129,13 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderBottom: "0.5px solid var(--line-1)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
         <button onClick={() => inputRef.current?.click()} style={btn}>Import…</button>
-        <span className="mono" style={{ fontSize: 9, color: "var(--text-3)" }}>⌘I</span>
-        {busy && <span className="mono" style={{ fontSize: 9, color: "var(--accent)" }}>uploading {busy}…</span>}
+        <span className="mono" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>⌘I</span>
+        {busy && <span className="mono" style={{ fontSize: 9, color: "var(--brand)" }}>uploading {busy}…</span>}
         {error && <span className="mono" style={{ fontSize: 9, color: "#f87171" }}>{error}</span>}
         <div style={{ flex: 1 }} />
-        <span className="mono" style={{ fontSize: 9, color: "var(--text-3)" }}>{files.length} files</span>
+        <span className="mono" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>{files.length} files</span>
       </div>
 
       <input
@@ -153,7 +153,7 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
 
       <div style={{ flex: 1, overflowY: "auto", padding: 8, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))", gap: 8, alignContent: "start" }}>
         {files.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--text-3)", gridColumn: "1 / -1" }}>
+          <div style={{ fontSize: 11, color: "var(--ink-disabled)", gridColumn: "1 / -1" }}>
             Nothing imported yet — press Import or ⌘I, or drop files onto a track.
           </div>
         )}
@@ -174,9 +174,9 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
             >
               <div
                 style={{
-                  width: "100%", aspectRatio: "16 / 9", borderRadius: "var(--r-sm)",
-                  border: `0.5px solid ${used.has(src) ? "var(--accent-line)" : "var(--line-2)"}`,
-                  overflow: "hidden", background: "var(--bg-inset)",
+                  width: "100%", aspectRatio: "16 / 9", borderRadius: "var(--r-panel)",
+                  border: `1px solid ${used.has(src) ? "var(--brand-tint-line)" : "var(--border-hairline)"}`,
+                  overflow: "hidden", background: "var(--surface-void)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   // The filmstrip is already generated for the timeline; show its
                   // first frame rather than decoding anything here.
@@ -189,9 +189,9 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
                   // eslint-disable-next-line @next/next/no-img-element -- local project media, same as AssetBrowser
                   <img src={src} alt={f.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
                 )}
-                {f.type === "audio" && <Icon name="monitor" size={16} style={{ color: "var(--text-3)" }} />}
+                {f.type === "audio" && <Icon name="monitor" size={16} style={{ color: "var(--ink-disabled)" }} />}
               </div>
-              <span className="mono" style={{ fontSize: 9, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span className="mono" style={{ fontSize: 9, color: "var(--ink-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {f.name}
               </span>
             </button>
@@ -203,6 +203,6 @@ export default function FootageBrowser({ projectId, doc, onChange, currentFrame,
 }
 
 const btn: React.CSSProperties = {
-  background: "var(--bg-3)", border: "0.5px solid var(--line-2)", borderRadius: 3,
-  color: "var(--text-1)", fontSize: 10, padding: "3px 9px", cursor: "pointer",
+  background: "var(--surface-raised)", border: "1px solid var(--border-hairline)", borderRadius: 3,
+  color: "var(--ink-secondary)", fontSize: 10, padding: "3px 9px", cursor: "pointer",
 };

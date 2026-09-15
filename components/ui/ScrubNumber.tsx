@@ -123,7 +123,7 @@ export default function ScrubNumber({
           e.stopPropagation();
         }}
         className="nums"
-        style={{ ...field, cursor: "text", outline: "1px solid var(--accent-line)" }}
+        style={{ ...field, cursor: "text", outline: "1px solid var(--brand-tint-line)" }}
       />
     );
   }
@@ -139,7 +139,7 @@ export default function ScrubNumber({
       style={{
         ...field,
         cursor: disabled ? "default" : "ew-resize",
-        color: disabled ? "var(--text-3)" : "var(--text-0)",
+        color: disabled ? "var(--ink-disabled)" : "var(--ink-primary)",
         userSelect: "none",
       }}
     >
@@ -149,10 +149,10 @@ export default function ScrubNumber({
 }
 
 const field: React.CSSProperties = {
-  background: "var(--bg-3)",
-  border: "0.5px solid var(--line-2)",
+  background: "var(--surface-raised)",
+  border: "1px solid var(--border-hairline)",
   borderRadius: 3,
-  color: "var(--text-0)",
+  color: "var(--ink-primary)",
   fontSize: 11,
   padding: "3px 6px",
   width: "100%",

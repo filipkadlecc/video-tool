@@ -127,8 +127,8 @@ export default function CodeEditor({
           height: 36,
           padding: "0 6px",
           gap: 2,
-          borderBottom: "0.5px solid var(--line-1)",
-          background: "var(--bg-2)",
+          borderBottom: "1px solid var(--border-hairline)",
+          background: "var(--surface-chrome)",
         }}
       >
         <div
@@ -139,9 +139,9 @@ export default function CodeEditor({
             height: 28,
             padding: "0 10px",
             fontSize: 11,
-            fontFamily: "var(--mono)",
-            color: "var(--text-0)",
-            background: "var(--bg-3)",
+            fontFamily: "var(--font-mono)",
+            color: "var(--ink-primary)",
+            background: "var(--surface-raised)",
             borderRadius: 4,
           }}
         >
@@ -150,13 +150,13 @@ export default function CodeEditor({
               width: 4,
               height: 4,
               borderRadius: "50%",
-              background: "var(--accent)",
+              background: "var(--brand)",
             }}
           />
           {tabName}
         </div>
         <div style={{ flex: 1 }} />
-        <Icon name="code" size={13} style={{ color: "var(--text-2)", marginRight: 6 }} />
+        <Icon name="code" size={13} style={{ color: "var(--ink-tertiary)", marginRight: 6 }} />
       </div>
 
       {/* Editor */}
@@ -189,11 +189,11 @@ export default function CodeEditor({
           gap: 10,
           padding: "0 10px",
           height: 22,
-          borderTop: "0.5px solid var(--line-1)",
-          background: "var(--bg-2)",
-          fontFamily: "var(--mono)",
+          borderTop: "1px solid var(--border-hairline)",
+          background: "var(--surface-chrome)",
+          fontFamily: "var(--font-mono)",
           fontSize: 10,
-          color: "var(--text-2)",
+          color: "var(--ink-tertiary)",
         }}
       >
         <span>{language === "vhs" ? "VHS" : language === "plaintext" ? "TXT" : "TSX"}</span>

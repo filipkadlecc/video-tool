@@ -54,10 +54,10 @@ export default function Modal({ open, onClose, children, width = 520, title, ste
           maxHeight: "88%",
           display: "flex",
           flexDirection: "column",
-          background: "var(--bg-2)",
-          border: "0.5px solid var(--line-2)",
-          borderRadius: "var(--r-lg)",
-          boxShadow: "var(--sh-float)",
+          background: "var(--surface-chrome)",
+          border: "1px solid var(--border-hairline)",
+          borderRadius: "var(--r-dialog)",
+          boxShadow: "var(--shadow-float)",
           overflow: "hidden",
         }}
       >
@@ -67,12 +67,12 @@ export default function Modal({ open, onClose, children, width = 520, title, ste
               display: "flex",
               alignItems: "center",
               padding: "16px 20px",
-              borderBottom: "0.5px solid var(--line-1)",
+              borderBottom: "1px solid var(--border-hairline)",
             }}
           >
             <div>
               {stepLabel && (
-                <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 4 }}>
+                <div className="mono cap" style={{ color: "var(--ink-tertiary)", marginBottom: 4 }}>
                   {stepLabel}
                 </div>
               )}

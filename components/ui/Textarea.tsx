@@ -7,11 +7,14 @@ interface TextareaProps {
   onChange: (value: string) => void;
   placeholder?: string;
   rows?: number;
+  autoFocus?: boolean;
   style?: React.CSSProperties;
   onKeyDown?: React.KeyboardEventHandler<HTMLTextAreaElement>;
 }
 
-export default function Textarea({ value, onChange, placeholder, rows = 4, style, onKeyDown }: TextareaProps) {
+export default function Textarea({
+  value, onChange, placeholder, rows = 4, autoFocus, style, onKeyDown,
+}: TextareaProps) {
   const [focus, setFocus] = useState(false);
 
   return (
@@ -21,22 +24,22 @@ export default function Textarea({ value, onChange, placeholder, rows = 4, style
       onKeyDown={onKeyDown}
       placeholder={placeholder}
       rows={rows}
+      autoFocus={autoFocus}
       onFocus={() => setFocus(true)}
       onBlur={() => setFocus(false)}
-      className="vt-scroll"
+      className="vt-scroll t-body"
       style={{
         width: "100%",
         padding: "10px 12px",
-        background: "var(--bg-inset)",
-        border: `0.5px solid ${focus ? "var(--accent-line)" : "var(--line-2)"}`,
-        borderRadius: "var(--r-sm)",
-        color: "var(--text-0)",
-        fontSize: 13,
+        background: "var(--surface-raised)",
+        border: `1px solid ${focus ? "var(--border-edge)" : "var(--border-hairline)"}`,
+        borderRadius: "var(--r-control)",
+        boxShadow: focus ? "var(--focus-ring)" : undefined,
+        color: "var(--ink-primary)",
         fontFamily: "inherit",
         resize: "vertical",
         outline: "none",
-        lineHeight: 1.5,
-        transition: "border-color 120ms",
+        transition: "border-color var(--dur-state) var(--ease), box-shadow var(--dur-state) var(--ease)",
         ...style,
       }}
     />

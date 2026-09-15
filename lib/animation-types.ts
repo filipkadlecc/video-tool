@@ -10,14 +10,19 @@ export interface AnimationTypeMeta {
   badgeLabel: string;
 }
 
+/**
+ * Kind colours are deliberately NEUTRAL under M5: a pill states what something
+ * is, it is not a highlight. Brand orange is reserved for the single primary
+ * action on a screen, and green only ever means something is happening now.
+ */
 export const ANIMATION_TYPES: AnimationTypeMeta[] = [
   {
     id: "animation",
     label: "Animation",
     subtitle: "Motion graphics & b-roll",
     icon: "bolt",
-    color: "var(--cyan)",
-    colorSoft: "var(--cyan-soft)",
+    color: "var(--ink-secondary)",
+    colorSoft: "var(--surface-raised)",
     badgeLabel: "ANIMATION",
   },
   {
@@ -25,8 +30,8 @@ export const ANIMATION_TYPES: AnimationTypeMeta[] = [
     label: "SVG",
     subtitle: "Animate SVG assets",
     icon: "layers",
-    color: "var(--amber)",
-    colorSoft: "var(--amber-soft)",
+    color: "var(--ink-secondary)",
+    colorSoft: "var(--surface-raised)",
     badgeLabel: "SVG",
   },
   {
@@ -34,8 +39,8 @@ export const ANIMATION_TYPES: AnimationTypeMeta[] = [
     label: "Video Edit",
     subtitle: "Compose & edit video files",
     icon: "movie",
-    color: "var(--accent)",
-    colorSoft: "var(--accent-soft)",
+    color: "var(--ink-secondary)",
+    colorSoft: "var(--surface-raised)",
     badgeLabel: "VIDEO",
   },
   {
@@ -43,8 +48,8 @@ export const ANIMATION_TYPES: AnimationTypeMeta[] = [
     label: "Terminal",
     subtitle: "Record terminal sessions with vhs",
     icon: "code",
-    color: "var(--cyan)",
-    colorSoft: "var(--cyan-soft)",
+    color: "var(--ink-secondary)",
+    colorSoft: "var(--surface-raised)",
     badgeLabel: "TERMINAL",
   },
 ];

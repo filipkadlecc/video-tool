@@ -101,11 +101,11 @@ export default function FeedbackButton() {
           padding: "0 14px",
           fontSize: 13,
           fontWeight: 500,
-          color: "var(--accent-ink)",
-          background: "var(--accent)",
-          border: "none",
-          borderRadius: "var(--r-md)",
-          boxShadow: "var(--sh-float)",
+          color: "var(--ink-primary)",
+          background: "var(--surface-raised)",
+          border: "1px solid var(--border-edge)",
+          borderRadius: "var(--r-panel)",
+          boxShadow: "var(--shadow-float)",
           cursor: capturing ? "wait" : "pointer",
           opacity: capturing ? 0.7 : 1,
           transition: "opacity 120ms, transform 80ms",
@@ -125,7 +125,7 @@ export default function FeedbackButton() {
                 alignItems: "center",
                 gap: 8,
                 padding: "24px 0",
-                color: "var(--text-1)",
+                color: "var(--ink-secondary)",
               }}
             >
               <div
@@ -135,8 +135,8 @@ export default function FeedbackButton() {
                   width: 40,
                   height: 40,
                   borderRadius: "50%",
-                  background: "var(--accent-soft)",
-                  color: "var(--accent)",
+                  background: "var(--brand-tint-bg)",
+                  color: "var(--brand)",
                 }}
               >
                 <Icon name="check" size={20} />
@@ -159,9 +159,9 @@ export default function FeedbackButton() {
                     alignItems: "center",
                     gap: 10,
                     padding: 8,
-                    background: "var(--bg-inset)",
-                    border: "0.5px solid var(--line-2)",
-                    borderRadius: "var(--r-sm)",
+                    background: "var(--surface-void)",
+                    border: "1px solid var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
                     cursor: "pointer",
                   }}
                 >
@@ -169,7 +169,7 @@ export default function FeedbackButton() {
                     type="checkbox"
                     checked={includeShot}
                     onChange={(e) => setIncludeShot(e.target.checked)}
-                    style={{ accentColor: "var(--accent)" }}
+                    style={{ accentColor: "var(--brand)" }}
                   />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -179,11 +179,11 @@ export default function FeedbackButton() {
                       width: 64,
                       height: 36,
                       objectFit: "cover",
-                      borderRadius: "var(--r-xs)",
-                      border: "0.5px solid var(--line-2)",
+                      borderRadius: "var(--r-control)",
+                      border: "1px solid var(--border-hairline)",
                     }}
                   />
-                  <span style={{ fontSize: 12, color: "var(--text-1)" }}>Include screenshot</span>
+                  <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>Include screenshot</span>
                 </label>
               )}
 

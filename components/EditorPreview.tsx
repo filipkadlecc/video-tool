@@ -76,7 +76,7 @@ export default function EditorPreview({
         style={{
           position: "absolute", top: 12, left: 12, zIndex: 2, padding: "4px 8px",
           background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", fontSize: 10,
-          color: "rgba(255,255,255,0.75)", borderRadius: 3, border: "0.5px solid rgba(255,255,255,0.1)",
+          color: "rgba(255,255,255,0.75)", borderRadius: 3, border: "1px solid rgba(255,255,255,0.1)",
         }}
       >
         {durationInFrames}F / {fps}FPS / {(durationInFrames / fps).toFixed(1)}S
@@ -98,7 +98,7 @@ export default function EditorPreview({
             <AbsoluteFill style={{ backgroundColor: "#040D12", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
               <div style={{ color: "#f87171", fontSize: 28, textAlign: "center", fontFamily: "sans-serif" }}>
                 <div style={{ marginBottom: 12 }}>Render error</div>
-                <div style={{ color: "var(--text-2)", fontSize: 20 }}>{error.message}</div>
+                <div style={{ color: "var(--ink-tertiary)", fontSize: 20 }}>{error.message}</div>
               </div>
             </AbsoluteFill>
           )}
@@ -133,7 +133,7 @@ export default function EditorPreview({
         <div
           style={{
             position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center",
-            pointerEvents: "none", color: "var(--text-2)", fontSize: 13,
+            pointerEvents: "none", color: "var(--ink-tertiary)", fontSize: 13,
           }}
         >
           Drop a clip onto a track to start

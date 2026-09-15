@@ -96,7 +96,7 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
             cy="60"
             r="56"
             fill="none"
-            stroke="var(--accent)"
+            stroke="var(--brand)"
             strokeWidth="1.5"
             strokeDasharray="20 340"
           />
@@ -117,7 +117,7 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
               <circle key={a} cx={x} cy={y} r="4" fill="rgba(255,255,255,0.2)" />
             );
           })}
-          <circle cx="60" cy="60" r="8" fill="var(--accent)" />
+          <circle cx="60" cy="60" r="8" fill="var(--brand)" />
         </svg>
         <div
           style={{
@@ -139,7 +139,7 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
           className="mono"
           style={{
             fontSize: 12,
-            color: "var(--text-2)",
+            color: "var(--ink-tertiary)",
             display: "flex",
             alignItems: "center",
             gap: 6,
@@ -151,7 +151,7 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
               width: 5,
               height: 5,
               borderRadius: "50%",
-              background: "var(--accent)",
+              background: "var(--brand)",
               animation: "vt-pulse 1.4s infinite",
             }}
           />
@@ -164,16 +164,16 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
         style={{
           maxWidth: 440,
           padding: 18,
-          background: "var(--bg-2)",
-          border: "0.5px solid var(--line-2)",
-          borderRadius: "var(--r-md)",
-          boxShadow: "var(--sh-panel)",
+          background: "var(--surface-chrome)",
+          border: "1px solid var(--border-hairline)",
+          borderRadius: "var(--r-panel)",
+          boxShadow: "none",
         }}
       >
         <div
           className="mono cap"
           style={{
-            color: "var(--accent)",
+            color: "var(--brand)",
             marginBottom: 8,
             display: "flex",
             alignItems: "center",
@@ -187,7 +187,7 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
           style={{
             fontSize: 13,
             lineHeight: 1.55,
-            color: "var(--text-0)",
+            color: "var(--ink-primary)",
             animation: "vt-glitch-in 400ms ease",
           }}
         >
@@ -200,7 +200,7 @@ export default function GeneratingOverlay({ visible }: { visible: boolean }) {
               style={{
                 flex: 1,
                 height: 2,
-                background: i === factIndex % 8 ? "var(--accent)" : "var(--bg-4)",
+                background: i === factIndex % 8 ? "var(--brand)" : "var(--surface-hover)",
                 borderRadius: 1,
               }}
             />

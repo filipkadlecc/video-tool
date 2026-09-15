@@ -31,12 +31,12 @@ export default function TypeTile({ type, active = false, size = "sm", count, onC
         flexDirection: "column",
         alignItems: "flex-start",
         gap: isLarge ? 14 : 10,
-        background: active ? "var(--accent-soft)" : hover ? "var(--bg-3)" : "var(--bg-inset)",
-        border: `0.5px solid ${active ? "var(--accent)" : hover ? meta.color : "var(--line-2)"}`,
-        borderRadius: "var(--r-md)",
+        background: active ? "var(--brand-tint-bg)" : hover ? "var(--surface-raised)" : "var(--surface-void)",
+        border: `1px solid ${active ? "var(--brand)" : hover ? meta.color : "var(--border-hairline)"}`,
+        borderRadius: "var(--r-panel)",
         cursor: "pointer",
         textAlign: "left",
-        color: "var(--text-0)",
+        color: "var(--ink-primary)",
         transition: "all 120ms",
       }}
     >
@@ -46,7 +46,7 @@ export default function TypeTile({ type, active = false, size = "sm", count, onC
           height: isLarge ? 44 : 32,
           borderRadius: isLarge ? 10 : 6,
           background: `color-mix(in oklab, ${meta.color} 15%, transparent)`,
-          border: `0.5px solid color-mix(in oklab, ${meta.color} 40%, transparent)`,
+          border: `1px solid color-mix(in oklab, ${meta.color} 40%, transparent)`,
           color: meta.color,
           display: "grid",
           placeItems: "center",
@@ -70,8 +70,8 @@ export default function TypeTile({ type, active = false, size = "sm", count, onC
               className="mono nums"
               style={{
                 fontSize: isLarge ? 11 : 10,
-                color: "var(--text-2)",
-                background: "var(--bg-3)",
+                color: "var(--ink-tertiary)",
+                background: "var(--surface-raised)",
                 padding: "2px 6px",
                 borderRadius: 3,
               }}
@@ -80,7 +80,7 @@ export default function TypeTile({ type, active = false, size = "sm", count, onC
             </span>
           )}
         </div>
-        <div style={{ fontSize: isLarge ? 12 : 11, color: "var(--text-2)", lineHeight: 1.4 }}>
+        <div style={{ fontSize: isLarge ? 12 : 11, color: "var(--ink-tertiary)", lineHeight: 1.4 }}>
           {meta.subtitle}
         </div>
       </div>

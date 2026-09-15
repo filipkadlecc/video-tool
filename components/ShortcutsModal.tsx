@@ -98,7 +98,7 @@ export default function ShortcutsModal({
       <div style={{ padding: "14px 20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
         {groups.map((group) => (
           <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            <span className="mono cap" style={{ fontSize: 9, color: "var(--text-3)" }}>
+            <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
               {group.title}
             </span>
             {group.rows.map((row, i) => (
@@ -106,11 +106,11 @@ export default function ShortcutsModal({
                 key={i}
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
               >
-                <span style={{ fontSize: 12, color: "var(--text-1)" }}>{row.label}</span>
+                <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{row.label}</span>
                 <span style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
                   {row.keys.map((k, j) =>
                     k.startsWith("~") ? (
-                      <span key={j} style={{ fontSize: 11, color: "var(--text-2)" }}>
+                      <span key={j} style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>
                         {k.slice(1)}
                       </span>
                     ) : (

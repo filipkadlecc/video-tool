@@ -39,21 +39,21 @@ export default function FeedbackViewer() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-1)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
       <header
         style={{
           display: "flex",
           alignItems: "center",
           padding: "16px 28px",
-          borderBottom: "0.5px solid var(--line-1)",
+          borderBottom: "1px solid var(--border-hairline)",
         }}
       >
         <Logo onClick={() => router.push("/")} />
         <div style={{ flex: 1 }} />
-        <div className="mono" style={{ fontSize: 11, color: "var(--text-2)", marginRight: 10 }}>
+        <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 10 }}>
           {entries.length} {entries.length === 1 ? "entry" : "entries"}
         </div>
-        <Button variant="ghost" size="sm" icon="arrowLeft" onClick={() => router.push("/")}>
+        <Button variant="ghost" size="sm" icon="chevronLeft" onClick={() => router.push("/")}>
           Home
         </Button>
       </header>
@@ -69,7 +69,7 @@ export default function FeedbackViewer() {
         }}
       >
         <div>
-          <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 10 }}>
+          <div className="mono cap" style={{ color: "var(--ink-tertiary)", marginBottom: 10 }}>
             Feedback
           </div>
           <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.6, fontWeight: 600 }}>
@@ -78,7 +78,7 @@ export default function FeedbackViewer() {
         </div>
 
         {loading ? (
-          <div className="mono" style={{ fontSize: 12, color: "var(--text-2)" }}>
+          <div className="mono" style={{ fontSize: 12, color: "var(--ink-tertiary)" }}>
             Loading…
           </div>
         ) : entries.length === 0 ? (
@@ -86,10 +86,10 @@ export default function FeedbackViewer() {
             style={{
               padding: "48px 24px",
               textAlign: "center",
-              color: "var(--text-2)",
-              background: "var(--bg-2)",
-              border: "0.5px solid var(--line-1)",
-              borderRadius: "var(--r-lg)",
+              color: "var(--ink-tertiary)",
+              background: "var(--surface-chrome)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-dialog)",
             }}
           >
             <Icon name="chat" size={24} style={{ opacity: 0.5 }} />
@@ -108,7 +108,7 @@ export default function FeedbackViewer() {
         {zoom && (
           <div style={{ padding: 12 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={zoom} alt="Screenshot" style={{ width: "100%", borderRadius: "var(--r-sm)" }} />
+            <img src={zoom} alt="Screenshot" style={{ width: "100%", borderRadius: "var(--r-panel)" }} />
           </div>
         )}
       </Modal>
@@ -133,9 +133,9 @@ function FeedbackCard({
         display: "flex",
         gap: 14,
         padding: 16,
-        background: "var(--bg-2)",
-        border: "0.5px solid var(--line-1)",
-        borderRadius: "var(--r-lg)",
+        background: "var(--surface-chrome)",
+        border: "1px solid var(--border-hairline)",
+        borderRadius: "var(--r-dialog)",
       }}
     >
       {entry.screenshot && (
@@ -145,11 +145,11 @@ function FeedbackCard({
           style={{
             flexShrink: 0,
             padding: 0,
-            border: "0.5px solid var(--line-2)",
-            borderRadius: "var(--r-sm)",
+            border: "1px solid var(--border-hairline)",
+            borderRadius: "var(--r-panel)",
             overflow: "hidden",
             cursor: "zoom-in",
-            background: "var(--bg-inset)",
+            background: "var(--surface-void)",
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -162,16 +162,16 @@ function FeedbackCard({
       )}
 
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 14, color: "var(--text-0)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--ink-primary)", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
           {entry.message}
         </p>
         <div
           className="mono"
-          style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 10, fontSize: 11, color: "var(--text-2)" }}
+          style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 10, fontSize: 11, color: "var(--ink-tertiary)" }}
         >
           <span>{when}</span>
           {entry.projectId ? (
-            <a href={`/project/${entry.projectId}`} style={{ color: "var(--accent)" }}>
+            <a href={`/project/${entry.projectId}`} style={{ color: "var(--brand)" }}>
               {entry.url ?? `/project/${entry.projectId}`}
             </a>
           ) : (
@@ -191,10 +191,10 @@ function FeedbackCard({
           placeItems: "center",
           width: 28,
           height: 28,
-          color: "var(--text-2)",
+          color: "var(--ink-tertiary)",
           background: "transparent",
-          border: "0.5px solid transparent",
-          borderRadius: "var(--r-sm)",
+          border: "1px solid transparent",
+          borderRadius: "var(--r-panel)",
           cursor: "pointer",
         }}
       >

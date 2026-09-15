@@ -95,11 +95,11 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
     <>
       <div className="vt-scroll" style={{ overflowY: "auto", height: inline ? "100%" : undefined, maxHeight: inline ? undefined : 560 }}>
         {groups.map((group) => (
-          <div key={group.folder} style={{ padding: "16px 20px", borderBottom: "0.5px solid var(--line-1)" }}>
+          <div key={group.folder} style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-hairline)" }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <Icon name="folder" size={13} style={{ color: "var(--text-2)", marginRight: 7 }} />
+              <Icon name="folder" size={13} style={{ color: "var(--ink-tertiary)", marginRight: 7 }} />
               <span style={{ fontSize: 13, fontWeight: 600 }}>{group.folder}</span>
-              <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 8 }}>
+              <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-disabled)", marginLeft: 8 }}>
                 {group.items.length}
               </span>
               <div style={{ flex: 1 }} />
@@ -135,13 +135,13 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
                       style={{
                         width: "100%",
                         aspectRatio: "1 / 1",
-                        borderRadius: "var(--r-sm)",
-                        border: "0.5px solid var(--line-2)",
+                        borderRadius: "var(--r-panel)",
+                        border: "1px solid var(--border-hairline)",
                         overflow: "hidden",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        background: "var(--bg-inset)",
+                        background: "var(--surface-void)",
                       }}
                     >
                       {item.type === "image" || item.type === "svg" ? (
@@ -151,7 +151,7 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
                           style={{ maxWidth: "80%", maxHeight: "80%", objectFit: "contain" }}
                         />
                       ) : (
-                        <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "uppercase" }}>
+                        <span style={{ fontSize: 10, color: "var(--ink-disabled)", textTransform: "uppercase" }}>
                           {item.type}
                         </span>
                       )}
@@ -161,7 +161,7 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
                         className="mono"
                         style={{
                           fontSize: 10,
-                          color: copiedPath === item.path ? "var(--accent)" : "var(--text-1)",
+                          color: copiedPath === item.path ? "var(--brand)" : "var(--ink-secondary)",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
@@ -171,7 +171,7 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
                         {copiedPath === item.path ? "Copied!" : item.name}
                       </span>
                       {copiedPath === item.path && (
-                        <Icon name="check" size={10} style={{ color: "var(--accent)" }} />
+                        <Icon name="check" size={10} style={{ color: "var(--brand)" }} />
                       )}
                     </div>
                   </button>
@@ -179,7 +179,7 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
               </div>
             ) : (
               <div style={{ padding: "14px 0", textAlign: "center" }}>
-                <span style={{ fontSize: 10, color: "var(--text-3)" }}>No assets yet</span>
+                <span style={{ fontSize: 10, color: "var(--ink-disabled)" }}>No assets yet</span>
               </div>
             )}
           </div>

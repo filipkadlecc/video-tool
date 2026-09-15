@@ -223,7 +223,7 @@ export default function SmartTrimDialog({
     >
       <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 560 }}>
         {!hasMediaFolder && (
-          <div style={{ padding: 24, fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+          <div style={{ padding: 24, fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
             This project has no <code className="mono">mediaFolder</code> configured. Set one
             via the new-project flow, then come back.
           </div>
@@ -232,7 +232,7 @@ export default function SmartTrimDialog({
         {hasMediaFolder && stage === "pick" && (
           <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+              <div className="mono cap" style={{ color: "var(--ink-secondary)", marginBottom: 8 }}>
                 Whisper model
               </div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -248,18 +248,18 @@ export default function SmartTrimDialog({
                       alignItems: "flex-start",
                       gap: 2,
                       background:
-                        model === m.value ? "var(--accent-soft)" : "var(--bg-inset)",
-                      border: `0.5px solid ${
-                        model === m.value ? "var(--accent)" : "var(--line-2)"
+                        model === m.value ? "var(--brand-tint-bg)" : "var(--surface-void)",
+                      border: `1px solid ${
+                        model === m.value ? "var(--brand)" : "var(--border-hairline)"
                       }`,
-                      borderRadius: "var(--r-sm)",
+                      borderRadius: "var(--r-panel)",
                       cursor: "pointer",
-                      color: "var(--text-0)",
+                      color: "var(--ink-primary)",
                       textAlign: "left",
                     }}
                   >
                     <span style={{ fontSize: 12, fontWeight: 600 }}>{m.label}</span>
-                    <span style={{ fontSize: 10, color: "var(--text-3)" }}>{m.hint}</span>
+                    <span style={{ fontSize: 10, color: "var(--ink-disabled)" }}>{m.hint}</span>
                   </button>
                 ))}
               </div>
@@ -268,15 +268,15 @@ export default function SmartTrimDialog({
             <div>
               <div
                 className="mono cap"
-                style={{ color: "var(--text-1)", marginBottom: 8, display: "flex", gap: 8 }}
+                style={{ color: "var(--ink-secondary)", marginBottom: 8, display: "flex", gap: 8 }}
               >
                 <span>Source media</span>
-                <span style={{ color: "var(--text-3)" }}>
+                <span style={{ color: "var(--ink-disabled)" }}>
                   {filesLoading ? "loading…" : `${files.length} file${files.length === 1 ? "" : "s"}`}
                 </span>
               </div>
               {files.length === 0 && !filesLoading ? (
-                <div style={{ padding: 18, fontSize: 11, color: "var(--text-3)", textAlign: "center" }}>
+                <div style={{ padding: 18, fontSize: 11, color: "var(--ink-disabled)", textAlign: "center" }}>
                   No video or audio in mediaFolder.
                 </div>
               ) : (
@@ -290,33 +290,33 @@ export default function SmartTrimDialog({
                         alignItems: "center",
                         gap: 10,
                         padding: "10px 12px",
-                        background: "var(--bg-inset)",
-                        border: "0.5px solid var(--line-2)",
-                        borderRadius: "var(--r-sm)",
+                        background: "var(--surface-void)",
+                        border: "1px solid var(--border-hairline)",
+                        borderRadius: "var(--r-panel)",
                         cursor: "pointer",
-                        color: "var(--text-0)",
+                        color: "var(--ink-primary)",
                         textAlign: "left",
                         transition: "border-color 120ms",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = "var(--accent)";
+                        e.currentTarget.style.borderColor = "var(--brand)";
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = "var(--line-2)";
+                        e.currentTarget.style.borderColor = "var(--border-hairline)";
                       }}
                     >
                       <Icon
                         name={f.type === "video" ? "film" : "monitor"}
                         size={13}
-                        style={{ color: "var(--text-2)" }}
+                        style={{ color: "var(--ink-tertiary)" }}
                       />
                       <span className="mono" style={{ fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {f.path}
                       </span>
-                      <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                      <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
                         {f.sizeFormatted}
                       </span>
-                      <Icon name="arrowRight" size={12} style={{ color: "var(--text-3)" }} />
+                      <Icon name="arrowRight" size={12} style={{ color: "var(--ink-disabled)" }} />
                     </button>
                   ))}
                 </div>
@@ -333,21 +333,21 @@ export default function SmartTrimDialog({
               flexDirection: "column",
               alignItems: "center",
               gap: 16,
-              color: "var(--text-1)",
+              color: "var(--ink-secondary)",
             }}
           >
             <div
               style={{
                 width: 32,
                 height: 32,
-                border: "2.5px solid var(--accent)",
+                border: "2.5px solid var(--brand)",
                 borderTopColor: "transparent",
                 borderRadius: "50%",
                 animation: "spin 0.8s linear infinite",
               }}
             />
             <div style={{ fontSize: 13, fontWeight: 600 }}>Transcribing {selectedFile?.name}…</div>
-            <div style={{ fontSize: 11, color: "var(--text-2)", textAlign: "center", maxWidth: 380 }}>
+            <div style={{ fontSize: 11, color: "var(--ink-tertiary)", textAlign: "center", maxWidth: 380 }}>
               Whisper runs locally — first call downloads the {model} model (~75 MB for tiny, ~500 MB for small). Cached after that.
             </div>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -368,9 +368,9 @@ export default function SmartTrimDialog({
               <Stat
                 label="Trimmed"
                 value={`${plan.trimmedDuration.toFixed(1)}s`}
-                accent="var(--accent)"
+                accent="var(--brand)"
               />
-              <Stat label="Removed" value={`${removedPct}%`} accent="var(--magenta)" />
+              <Stat label="Removed" value={`${removedPct}%`} accent="var(--warning)" />
             </div>
 
             <div
@@ -393,7 +393,7 @@ export default function SmartTrimDialog({
 
             {/* Thresholds */}
             <div>
-              <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 10 }}>
+              <div className="mono cap" style={{ color: "var(--ink-secondary)", marginBottom: 10 }}>
                 Thresholds
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -429,7 +429,7 @@ export default function SmartTrimDialog({
                     checked={removeFillers}
                     onChange={(e) => setRemoveFillers(e.target.checked)}
                   />
-                  <span style={{ color: "var(--text-1)" }}>
+                  <span style={{ color: "var(--ink-secondary)" }}>
                     Remove filler words (um, uh, you know, like…)
                   </span>
                 </label>
@@ -442,7 +442,7 @@ export default function SmartTrimDialog({
                 <summary
                   style={{
                     fontSize: 11,
-                    color: "var(--text-2)",
+                    color: "var(--ink-tertiary)",
                     cursor: "pointer",
                     padding: "4px 0",
                   }}
@@ -454,13 +454,13 @@ export default function SmartTrimDialog({
                     marginTop: 8,
                     maxHeight: 160,
                     overflow: "auto",
-                    background: "var(--bg-inset)",
-                    border: "0.5px solid var(--line-2)",
-                    borderRadius: "var(--r-sm)",
+                    background: "var(--surface-void)",
+                    border: "1px solid var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
                     padding: 8,
-                    fontFamily: "var(--mono)",
+                    fontFamily: "var(--font-mono)",
                     fontSize: 11,
-                    color: "var(--text-2)",
+                    color: "var(--ink-tertiary)",
                     display: "flex",
                     flexDirection: "column",
                     gap: 4,
@@ -480,15 +480,15 @@ export default function SmartTrimDialog({
                           style={{
                             width: 56,
                             color:
-                              r.reason === "filler" ? "var(--magenta)" : "var(--text-3)",
+                              r.reason === "filler" ? "var(--warning)" : "var(--ink-disabled)",
                           }}
                         >
                           {r.reason}
                         </span>
-                        <span className="nums" style={{ width: 110, color: "var(--text-3)" }}>
+                        <span className="nums" style={{ width: 110, color: "var(--ink-disabled)" }}>
                           {r.from.toFixed(2)}s – {r.to.toFixed(2)}s
                         </span>
-                        <span style={{ color: "var(--text-1)", flex: 1 }}>{r.text ?? "—"}</span>
+                        <span style={{ color: "var(--ink-secondary)", flex: 1 }}>{r.text ?? "—"}</span>
                       </div>
                     ))}
                 </div>
@@ -496,7 +496,7 @@ export default function SmartTrimDialog({
             )}
 
             {planning && (
-              <div className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+              <div className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
                 replanning…
               </div>
             )}
@@ -507,10 +507,10 @@ export default function SmartTrimDialog({
                 style={{
                   height: 32,
                   padding: "0 14px",
-                  background: "var(--bg-3)",
-                  color: "var(--text-1)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
+                  background: "var(--surface-raised)",
+                  color: "var(--ink-secondary)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
@@ -524,10 +524,10 @@ export default function SmartTrimDialog({
                 style={{
                   height: 32,
                   padding: "0 16px",
-                  background: "var(--accent)",
-                  color: "var(--accent-ink)",
+                  background: "var(--brand)",
+                  color: "var(--brand-ink)",
                   border: "none",
-                  borderRadius: "var(--r-sm)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: plan.ranges.length === 0 ? "default" : "pointer",
@@ -548,12 +548,12 @@ export default function SmartTrimDialog({
           <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
             <div
               style={{
-                color: "var(--red)",
-                fontFamily: "var(--mono)",
+                color: "var(--danger)",
+                fontFamily: "var(--font-mono)",
                 fontSize: 11,
                 whiteSpace: "pre-wrap",
                 background: "rgba(255,0,0,0.06)",
-                border: "0.5px solid var(--red)",
+                border: "1px solid var(--danger)",
                 borderRadius: 4,
                 padding: 12,
                 maxHeight: 280,
@@ -568,10 +568,10 @@ export default function SmartTrimDialog({
                 alignSelf: "flex-start",
                 height: 30,
                 padding: "0 14px",
-                background: "var(--bg-3)",
-                color: "var(--text-1)",
-                border: "0.5px solid var(--line-2)",
-                borderRadius: "var(--r-sm)",
+                background: "var(--surface-raised)",
+                color: "var(--ink-secondary)",
+                border: "1px solid var(--border-hairline)",
+                borderRadius: "var(--r-panel)",
                 fontSize: 12,
                 cursor: "pointer",
               }}
@@ -602,9 +602,9 @@ export default function SmartTrimDialog({
             style={{
               maxWidth: 380,
               width: "100%",
-              background: "var(--bg-2)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-md)",
+              background: "var(--surface-chrome)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
               padding: 22,
               display: "flex",
               flexDirection: "column",
@@ -612,7 +612,7 @@ export default function SmartTrimDialog({
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600 }}>Replace existing code?</div>
-            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
               The auto-generated trim composition will replace what&rsquo;s currently in the editor. Cmd+Z to undo.
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -621,10 +621,10 @@ export default function SmartTrimDialog({
                 style={{
                   height: 30,
                   padding: "0 14px",
-                  background: "var(--bg-3)",
-                  color: "var(--text-1)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
+                  background: "var(--surface-raised)",
+                  color: "var(--ink-secondary)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
@@ -636,10 +636,10 @@ export default function SmartTrimDialog({
                 style={{
                   height: 30,
                   padding: "0 14px",
-                  background: "var(--accent)",
-                  color: "var(--accent-ink)",
+                  background: "var(--brand)",
+                  color: "var(--brand-ink)",
                   border: "none",
-                  borderRadius: "var(--r-sm)",
+                  borderRadius: "var(--r-panel)",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",
@@ -668,20 +668,20 @@ function Stat({
     <div
       style={{
         padding: "10px 12px",
-        background: "var(--bg-inset)",
-        border: "0.5px solid var(--line-2)",
-        borderRadius: "var(--r-sm)",
+        background: "var(--surface-void)",
+        border: "1px solid var(--border-hairline)",
+        borderRadius: "var(--r-panel)",
         display: "flex",
         flexDirection: "column",
         gap: 2,
       }}
     >
-      <span className="mono cap" style={{ fontSize: 9, color: "var(--text-3)" }}>
+      <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
         {label}
       </span>
       <span
         className="mono nums"
-        style={{ fontSize: 16, fontWeight: 600, color: accent ?? "var(--text-0)" }}
+        style={{ fontSize: 16, fontWeight: 600, color: accent ?? "var(--ink-primary)" }}
       >
         {value}
       </span>
@@ -709,8 +709,8 @@ function SliderRow({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-        <span style={{ color: "var(--text-1)" }}>{label}</span>
-        <span className="mono nums" style={{ color: "var(--text-2)" }}>
+        <span style={{ color: "var(--ink-secondary)" }}>{label}</span>
+        <span className="mono nums" style={{ color: "var(--ink-tertiary)" }}>
           {format(value)}
         </span>
       </div>
@@ -721,7 +721,7 @@ function SliderRow({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ width: "100%", accentColor: "var(--accent)" }}
+        style={{ width: "100%", accentColor: "var(--brand)" }}
       />
     </div>
   );

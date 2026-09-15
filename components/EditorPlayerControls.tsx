@@ -44,7 +44,7 @@ export default function EditorPlayerControls({
   const step = (by: number) => onSeek?.(Math.max(0, Math.min(last, currentFrame + by)));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", background: "var(--bg-2)", borderTop: "0.5px solid var(--line-1)", padding: "4px 0 0" }}>
+    <div style={{ display: "flex", flexDirection: "column", background: "var(--surface-chrome)", borderTop: "1px solid var(--border-hairline)", padding: "4px 0 0" }}>
       {/*
         A native range input needs its appearance reset before it can be this
         thin. Left as `accentColor` on a 3px-tall control, the browser draws its
@@ -63,24 +63,24 @@ export default function EditorPlayerControls({
           height: 3px; border-radius: 2px;
         }
         .vt-scrub::-moz-range-track {
-          height: 3px; border-radius: 2px; background: var(--line-2);
+          height: 3px; border-radius: 2px; background: var(--border-hairline);
         }
         .vt-scrub::-moz-range-progress {
-          height: 3px; border-radius: 2px; background: var(--accent);
+          height: 3px; border-radius: 2px; background: var(--live);
         }
         .vt-scrub::-webkit-slider-thumb {
           -webkit-appearance: none; appearance: none;
           width: 9px; height: 9px; border-radius: 50%;
-          background: var(--accent); border: none;
+          background: var(--live); border: none;
           /* Centre the thumb on a 3px track. */
           margin-top: -3px;
         }
         .vt-scrub::-moz-range-thumb {
           width: 9px; height: 9px; border-radius: 50%;
-          background: var(--accent); border: none;
+          background: var(--live); border: none;
         }
         .vt-scrub:focus-visible::-webkit-slider-thumb {
-          box-shadow: 0 0 0 3px var(--accent-soft);
+          box-shadow: 0 0 0 3px var(--brand-tint-bg);
         }
       `}</style>
       <input
@@ -95,7 +95,7 @@ export default function EditorPlayerControls({
         style={{
           // WebKit has no ::-moz-range-progress equivalent, so the filled part
           // is painted as a gradient stop at the current position.
-          background: `linear-gradient(to right, var(--accent) 0 ${progress}%, var(--line-2) ${progress}% 100%)`,
+          background: `linear-gradient(to right, var(--live) 0 ${progress}%, var(--border-hairline) ${progress}% 100%)`,
           backgroundSize: "100% 3px",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
@@ -103,7 +103,7 @@ export default function EditorPlayerControls({
       />
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 8px 6px" }}>
-        <span className="mono nums" style={{ fontSize: 10, color: "var(--accent)", minWidth: 86 }}>
+        <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-primary)", minWidth: 86 }}>
           {timecode(currentFrame, fps)}
         </span>
 
@@ -128,7 +128,7 @@ export default function EditorPlayerControls({
 
         <div style={{ flex: 1 }} />
 
-        <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)", minWidth: 86, textAlign: "right" }}>
+        <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-disabled)", minWidth: 86, textAlign: "right" }}>
           {timecode(last, fps)}
         </span>
         <Btn
@@ -158,15 +158,15 @@ function Btn({
       style={{
         display: "flex", alignItems: "center", justifyContent: "center",
         width: emphasis ? 28 : 24, height: emphasis ? 28 : 24,
-        background: emphasis ? "var(--bg-4)" : "transparent",
-        border: emphasis ? "0.5px solid var(--line-2)" : "none",
+        background: emphasis ? "var(--surface-hover)" : "transparent",
+        border: emphasis ? "1px solid var(--border-hairline)" : "none",
         borderRadius: 4, cursor: "pointer", padding: 0,
       }}
     >
       <Icon
         name={icon}
         size={emphasis ? 14 : 12}
-        style={{ color: active ? "var(--accent)" : "var(--text-1)" }}
+        style={{ color: active ? "var(--ink-primary)" : "var(--ink-secondary)" }}
       />
     </button>
   );

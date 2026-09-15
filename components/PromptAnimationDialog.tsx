@@ -64,7 +64,7 @@ export default function PromptAnimationDialog({
   return (
     <Modal open={open} onClose={busy ? () => {} : onClose} title="Prompt an animation" width={520}>
       <div style={{ padding: "14px 20px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 12, color: "var(--text-1)" }}>
+        <div style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
           It lands on a new track at the playhead, in your brand's style. Everything
           about it stays editable afterwards.
         </div>
@@ -76,11 +76,11 @@ export default function PromptAnimationDialog({
           onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run(); }}
           placeholder="A title card that reads “Built on Apify data”, the last two words in orange, settling in from below…"
           rows={5}
-          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent-line)"; }}
-          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--line-2)"; }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = "var(--brand-tint-line)"; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-hairline)"; }}
           style={{
-            background: "var(--bg-inset)", border: "0.5px solid var(--line-2)",
-            borderRadius: "var(--r-sm)", color: "var(--text-0)", fontSize: 13,
+            background: "var(--surface-void)", border: "1px solid var(--border-hairline)",
+            borderRadius: "var(--r-panel)", color: "var(--ink-primary)", fontSize: 13,
             padding: "9px 11px", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5,
             // The browser's own focus ring is blue, which is the one colour this
             // palette does not use.
@@ -95,15 +95,15 @@ export default function PromptAnimationDialog({
                 key={i}
                 style={{
                   display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11,
-                  background: "var(--bg-3)", border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)", padding: "3px 6px 3px 8px", color: "var(--text-1)",
+                  background: "var(--surface-raised)", border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)", padding: "3px 6px 3px 8px", color: "var(--ink-secondary)",
                 }}
               >
                 {img.name}
                 <button
                   onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
                   aria-label={`Remove ${img.name}`}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", display: "flex", padding: 0 }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-disabled)", display: "flex", padding: 0 }}
                 >
                   <Icon name="close" size={11} />
                 </button>
@@ -132,11 +132,11 @@ export default function PromptAnimationDialog({
         </div>
 
         {busy && (
-          <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+          <div style={{ fontSize: 11, color: "var(--ink-disabled)" }}>
             Writing and checking the scene — this usually takes under a minute.
           </div>
         )}
-        {error && <div style={{ fontSize: 11, color: "var(--red)" }}>{error}</div>}
+        {error && <div style={{ fontSize: 11, color: "var(--danger)" }}>{error}</div>}
       </div>
     </Modal>
   );

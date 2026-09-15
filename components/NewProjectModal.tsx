@@ -132,8 +132,8 @@ function OrientationPreview({ ratio, active }: { ratio: string; active: boolean 
       style={{
         width: dims.w,
         height: dims.h,
-        background: active ? "var(--accent)" : "var(--bg-3)",
-        border: `0.5px solid ${active ? "var(--accent)" : "var(--line-3)"}`,
+        background: active ? "var(--brand)" : "var(--surface-raised)",
+        border: `1px solid ${active ? "var(--brand)" : "var(--border-edge)"}`,
         borderRadius: 3,
       }}
     />
@@ -143,11 +143,11 @@ function OrientationPreview({ ratio, active }: { ratio: string; active: boolean 
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-      <span className="mono cap" style={{ color: "var(--text-1)" }}>
+      <span className="mono cap" style={{ color: "var(--ink-secondary)" }}>
         {children}
       </span>
       {hint && (
-        <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+        <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
           {hint}
         </span>
       )}
@@ -478,12 +478,12 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     >
       {/* Step progress bar */}
       <div style={{ display: "flex", gap: 6, padding: "0 20px 16px" }}>
-        <div style={{ flex: 1, height: 3, background: "var(--accent)", borderRadius: 2 }} />
+        <div style={{ flex: 1, height: 3, background: "var(--brand)", borderRadius: 2 }} />
         <div
           style={{
             flex: 1,
             height: 3,
-            background: step === 2 ? "var(--accent)" : "var(--bg-3)",
+            background: step === 2 ? "var(--brand)" : "var(--surface-raised)",
             borderRadius: 2,
             transition: "background 200ms",
           }}
@@ -519,10 +519,10 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   width: "100%",
                   height: 34,
                   padding: "0 10px",
-                  background: "var(--bg-inset)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
-                  color: "var(--text-0)",
+                  background: "var(--surface-void)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
+                  color: "var(--ink-primary)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
@@ -603,11 +603,11 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                         alignItems: "center",
                         justifyContent: "center",
                         gap: 8,
-                        background: active ? "var(--accent-soft)" : "var(--bg-inset)",
-                        border: `0.5px solid ${active ? "var(--accent)" : "var(--line-2)"}`,
-                        borderRadius: "var(--r-md)",
+                        background: active ? "var(--brand-tint-bg)" : "var(--surface-void)",
+                        border: `1px solid ${active ? "var(--brand)" : "var(--border-hairline)"}`,
+                        borderRadius: "var(--r-panel)",
                         cursor: "pointer",
-                        color: "var(--text-0)",
+                        color: "var(--ink-primary)",
                         transition: "all 120ms",
                       }}
                     >
@@ -623,7 +623,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                         }}
                       >
                         <span style={{ fontSize: 12, fontWeight: 500 }}>{label}</span>
-                        <span className="mono" style={{ fontSize: 10, color: "var(--text-2)" }}>
+                        <span className="mono" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
                           {sub}
                         </span>
                       </div>
@@ -684,7 +684,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 </div>
                 <div
                   className="mono"
-                  style={{ fontSize: 10, color: "var(--text-3)", marginTop: 8 }}
+                  style={{ fontSize: 10, color: "var(--ink-disabled)", marginTop: 8 }}
                 >
                   {videoMode === "manual"
                     ? "Your footage is imported and the timeline opens empty. Smart trim and Compose stay available from Tools whenever you want them."
@@ -715,27 +715,27 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                       alignItems: "flex-start",
                       gap: 4,
                       background:
-                        selectedSnippetId === null ? "var(--accent-soft)" : "var(--bg-inset)",
-                      border: `0.5px solid ${
-                        selectedSnippetId === null ? "var(--accent)" : "var(--line-2)"
+                        selectedSnippetId === null ? "var(--brand-tint-bg)" : "var(--surface-void)",
+                      border: `1px solid ${
+                        selectedSnippetId === null ? "var(--brand)" : "var(--border-hairline)"
                       }`,
-                      borderRadius: "var(--r-sm)",
+                      borderRadius: "var(--r-panel)",
                       cursor: "pointer",
                       textAlign: "left",
-                      color: "var(--text-0)",
+                      color: "var(--ink-primary)",
                       transition: "all 120ms",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Icon name="sparkle" size={11} style={{ color: "var(--accent)" }} />
+                      <Icon name="sparkle" size={11} style={{ color: "var(--brand)" }} />
                       <span style={{ fontSize: 12, fontWeight: 600 }}>AI prompt</span>
                     </div>
-                    <span style={{ fontSize: 10, color: "var(--text-2)" }}>
+                    <span style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
                       Describe it, AI generates
                     </span>
                   </button>
                   {snippets.map((s) => {
-                    const accent = SNIPPET_ACCENT[s.id] ?? "var(--accent)";
+                    const accent = SNIPPET_ACCENT[s.id] ?? "var(--brand)";
                     const icon = SNIPPET_ICONS[s.id] ?? "film";
                     const active = selectedSnippetId === s.id;
                     return (
@@ -751,12 +751,12 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                           gap: 4,
                           background: active
                             ? `color-mix(in oklab, ${accent} 14%, transparent)`
-                            : "var(--bg-inset)",
-                          border: `0.5px solid ${active ? accent : "var(--line-2)"}`,
-                          borderRadius: "var(--r-sm)",
+                            : "var(--surface-void)",
+                          border: `1px solid ${active ? accent : "var(--border-hairline)"}`,
+                          borderRadius: "var(--r-panel)",
                           cursor: "pointer",
                           textAlign: "left",
-                          color: "var(--text-0)",
+                          color: "var(--ink-primary)",
                           transition: "all 120ms",
                         }}
                       >
@@ -764,7 +764,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                           <Icon name={icon} size={11} style={{ color: accent }} />
                           <span style={{ fontSize: 12, fontWeight: 600 }}>{s.name}</span>
                         </div>
-                        <span style={{ fontSize: 10, color: "var(--text-2)", lineHeight: 1.3 }}>
+                        <span style={{ fontSize: 10, color: "var(--ink-tertiary)", lineHeight: 1.3 }}>
                           {s.subtitle}
                         </span>
                       </button>
@@ -785,9 +785,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   <div
                     style={{
                       padding: 14,
-                      background: "var(--bg-inset)",
-                      border: "0.5px solid var(--line-2)",
-                      borderRadius: "var(--r-sm)",
+                      background: "var(--surface-void)",
+                      border: "1px solid var(--border-hairline)",
+                      borderRadius: "var(--r-panel)",
                     }}
                   >
                     <SnippetParamsForm
@@ -818,10 +818,10 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                       marginBottom: 8,
                       padding: "2px 8px",
                       fontSize: 10,
-                      color: "var(--text-2)",
-                      background: "var(--bg-inset)",
-                      border: "0.5px solid var(--line-2)",
-                      borderRadius: "var(--r-sm)",
+                      color: "var(--ink-tertiary)",
+                      background: "var(--surface-void)",
+                      border: "1px solid var(--border-hairline)",
+                      borderRadius: "var(--r-panel)",
                       cursor: "pointer",
                     }}
                   >
@@ -834,7 +834,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   onChange={(v) => setStyleMode(v as StyleMode)}
                   options={STYLE_MODES.map((m) => ({ label: m.label, value: m.id }))}
                 />
-                <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6 }}>
+                <div className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)", marginTop: 6 }}>
                   {STYLE_MODES.find((m) => m.id === styleMode)?.description}
                 </div>
               </div>
@@ -850,7 +850,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   onChange={(v) => setTransitionStyle(v as TransitionStyle)}
                   options={TRANSITION_MODES.map((m) => ({ label: m.label, value: m.id }))}
                 />
-                <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6 }}>
+                <div className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)", marginTop: 6 }}>
                   {TRANSITION_MODES.find((m) => m.id === transitionStyle)?.description}
                 </div>
               </div>
@@ -916,24 +916,24 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               <div
                 style={{
                   padding: 12,
-                  background: "var(--accent-soft)",
-                  border: "0.5px solid var(--accent)",
-                  borderRadius: "var(--r-sm)",
+                  background: "var(--brand-tint-bg)",
+                  border: "1px solid var(--brand)",
+                  borderRadius: "var(--r-panel)",
                   display: "flex",
                   flexDirection: "column",
                   gap: 6,
                   fontSize: 12,
-                  color: "var(--text-1)",
+                  color: "var(--ink-secondary)",
                   lineHeight: 1.5,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Icon name="sparkle" size={12} style={{ color: "var(--accent)" }} />
-                  <span style={{ fontWeight: 600, color: "var(--text-0)" }}>
+                  <Icon name="sparkle" size={12} style={{ color: "var(--brand)" }} />
+                  <span style={{ fontWeight: 600, color: "var(--ink-primary)" }}>
                     What happens next
                   </span>
                 </div>
-                <div style={{ color: "var(--text-2)" }}>
+                <div style={{ color: "var(--ink-tertiary)" }}>
                   {isSmartTrim
                     ? "On create we analyze your footage (transcript + scene cuts, and auto-reframe if the timeline aspect differs), then auto-cut the silences + filler words into a first cut. You'll see the progress, then land on the edit to refine."
                     : "On create we analyze your footage (transcript + scene cuts, and auto-reframe if the timeline aspect differs), then the AI builds a first cut from your notes. You'll see the progress, then land on the edit to refine."}
@@ -949,9 +949,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 <div
                   style={{
                     padding: 12,
-                    background: "var(--bg-inset)",
-                    border: "0.5px dashed var(--line-2)",
-                    borderRadius: "var(--r-sm)",
+                    background: "var(--surface-void)",
+                    border: "1px dashed var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
                     display: "flex",
                     flexDirection: "column",
                     gap: 10,
@@ -965,7 +965,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     const allMatch = viewBoxes.every((v) => v !== null && v === viewBoxes[0]);
                     if (!allMatch) return null;
                     return (
-                      <div style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>
+                      <div style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.4 }}>
                         Detected animation sequence — Claude will animate the deltas between frames.
                       </div>
                     );
@@ -981,16 +981,16 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                             gap: 6,
                             padding: "4px 6px 4px 10px",
                             height: 26,
-                            background: "var(--bg-3)",
-                            border: "0.5px solid var(--line-2)",
+                            background: "var(--surface-raised)",
+                            border: "1px solid var(--border-hairline)",
                             borderRadius: 4,
                           }}
                         >
-                          <Icon name="image" size={11} style={{ color: "var(--text-2)" }} />
+                          <Icon name="image" size={11} style={{ color: "var(--ink-tertiary)" }} />
                           <span className="mono" style={{ fontSize: 11 }}>
                             {svg.filename}
                           </span>
-                          <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                          <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
                             {svg.content.length.toLocaleString()}ch
                           </span>
                           <button
@@ -1000,7 +1000,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                               height: 16,
                               border: "none",
                               background: "transparent",
-                              color: "var(--text-2)",
+                              color: "var(--ink-tertiary)",
                               cursor: "pointer",
                               display: "grid",
                               placeItems: "center",
@@ -1016,9 +1016,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   <label
                     style={{
                       height: 28,
-                      border: "0.5px dashed var(--line-3)",
+                      border: "1px dashed var(--border-edge)",
                       background: "transparent",
-                      color: "var(--text-1)",
+                      color: "var(--ink-secondary)",
                       borderRadius: 4,
                       cursor: "pointer",
                       fontSize: 11,
@@ -1068,9 +1068,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 <div
                   style={{
                     padding: 12,
-                    background: "var(--bg-inset)",
-                    border: "0.5px dashed var(--line-2)",
-                    borderRadius: "var(--r-sm)",
+                    background: "var(--surface-void)",
+                    border: "1px dashed var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
                     display: "flex",
                     flexDirection: "column",
                     gap: 10,
@@ -1087,13 +1087,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                             gap: 6,
                             padding: "4px 6px 4px 10px",
                             height: 26,
-                            background: "var(--bg-3)",
-                            border: "0.5px solid var(--line-2)",
+                            background: "var(--surface-raised)",
+                            border: "1px solid var(--border-hairline)",
                             borderRadius: 4,
                             maxWidth: "100%",
                           }}
                         >
-                          <Icon name="film" size={11} style={{ color: "var(--text-2)" }} />
+                          <Icon name="film" size={11} style={{ color: "var(--ink-tertiary)" }} />
                           <span
                             className="mono"
                             style={{
@@ -1108,7 +1108,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                           </span>
                           <span
                             className="mono nums"
-                            style={{ fontSize: 10, color: "var(--text-3)" }}
+                            style={{ fontSize: 10, color: "var(--ink-disabled)" }}
                           >
                             {(file.size / (1024 * 1024)).toFixed(1)}MB
                           </span>
@@ -1121,7 +1121,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                               height: 16,
                               border: "none",
                               background: "transparent",
-                              color: "var(--text-2)",
+                              color: "var(--ink-tertiary)",
                               cursor: "pointer",
                               display: "grid",
                               placeItems: "center",
@@ -1152,9 +1152,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     style={{
                       minHeight: 72,
                       padding: "14px 12px",
-                      border: dragActive ? "1.5px dashed var(--accent)" : "1px dashed var(--line-3)",
-                      background: dragActive ? "var(--accent-soft)" : "var(--bg-inset)",
-                      color: dragActive ? "var(--accent)" : "var(--text-1)",
+                      border: dragActive ? "1.5px dashed var(--brand)" : "1px dashed var(--border-edge)",
+                      background: dragActive ? "var(--brand-tint-bg)" : "var(--surface-void)",
+                      color: dragActive ? "var(--brand)" : "var(--ink-secondary)",
                       borderRadius: 6,
                       cursor: "pointer",
                       fontSize: 12,
@@ -1169,7 +1169,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     }}
                   >
                     {dragActive ? "Drop to add" : "＋ Add media"}
-                    <span style={{ fontWeight: 400, fontSize: 11, color: dragActive ? "var(--accent)" : "var(--text-3)" }}>
+                    <span style={{ fontWeight: 400, fontSize: 11, color: dragActive ? "var(--brand)" : "var(--ink-disabled)" }}>
                       {dragActive ? "release the files here" : "drag & drop video files here, or click to browse (select several)"}
                     </span>
                     <input
@@ -1215,7 +1215,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   style={{
                     marginTop: 8,
                     fontSize: 11,
-                    color: pickEvents > 0 ? "var(--accent)" : "var(--text-3)",
+                    color: pickEvents > 0 ? "var(--brand)" : "var(--ink-disabled)",
                     lineHeight: 1.4,
                   }}
                 >
@@ -1252,9 +1252,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   value={notesText}
                   onChange={setNotesText}
                   placeholder={"Everything the AI should follow goes here: what to make (\"a 60s highlight reel\"), plus your KEEP highlights / comments. Or Fetch from a Notion link above."}
-                  style={{ fontFamily: "var(--mono)", fontSize: 12 }}
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
                 />
-                <div className="mono" style={{ fontSize: 10, color: notesText.trim() ? "var(--accent)" : "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
+                <div className="mono" style={{ fontSize: 10, color: notesText.trim() ? "var(--brand)" : "var(--ink-disabled)", marginTop: 6, lineHeight: 1.4 }}>
                   {notesText.trim()
                     ? `${notesText.length.toLocaleString()} characters — after you Analyze the video, the AI matches these to the transcript + scene cuts.`
                     : "After you Analyze the video, the AI matches these notes to the transcript + scene cuts."}
@@ -1276,7 +1276,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     { value: "none", label: "None" },
                   ]}
                 />
-                <div className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginTop: 6, lineHeight: 1.4 }}>
+                <div className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)", marginTop: 6, lineHeight: 1.4 }}>
                   {topicCardStyle === "cards"
                     ? "A branded full-screen card wipes in between answers, then cuts to the clip."
                     : topicCardStyle === "chips"
@@ -1309,7 +1309,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   {notionContent && (
                     <div
                       className="mono"
-                      style={{ fontSize: 10, color: "var(--accent)", marginTop: 6 }}
+                      style={{ fontSize: 10, color: "var(--brand)", marginTop: 6 }}
                     >
                       Fetched {notionContent.length.toLocaleString()} characters
                     </div>
@@ -1323,14 +1323,14 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     value={scriptWithTimestamps}
                     onChange={setScriptWithTimestamps}
                     placeholder={"[00:00] Cold open on the hero surface\n[00:03] Logo reveal, subtle glow\n[00:06] Pan across the UI..."}
-                    style={{ fontFamily: "var(--mono)", fontSize: 12 }}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
                   />
                 </div>
               </>
             )}
 
             <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
-              <Button variant="outline" onClick={() => setStep(1)} icon="arrowLeft">
+              <Button variant="outline" onClick={() => setStep(1)} icon="chevronLeft">
                 Back
               </Button>
               <div style={{ flex: 1 }} />
@@ -1374,26 +1374,26 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               display: "flex",
               flexDirection: "column",
               gap: 14,
-              background: "var(--bg-2)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-lg)",
+              background: "var(--surface-chrome)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-dialog)",
               padding: 20,
-              boxShadow: "var(--sh-float)",
+              boxShadow: "var(--shadow-float)",
             }}
           >
             {phase.kind === "creating-project" && (
               <>
-                <div className="mono cap" style={{ color: "var(--text-2)", fontSize: 10 }}>
+                <div className="mono cap" style={{ color: "var(--ink-tertiary)", fontSize: 10 }}>
                   Setting up project…
                 </div>
-                <div style={{ fontSize: 14, color: "var(--text-1)" }}>
+                <div style={{ fontSize: 14, color: "var(--ink-secondary)" }}>
                   Creating the project on the server. The upload starts right after.
                 </div>
                 <div
                   style={{
                     height: 6,
                     width: "100%",
-                    background: "var(--bg-3)",
+                    background: "var(--surface-raised)",
                     borderRadius: 3,
                     overflow: "hidden",
                   }}
@@ -1402,7 +1402,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     style={{
                       height: "100%",
                       width: "30%",
-                      background: "var(--accent)",
+                      background: "var(--brand)",
                       animation: "vt-indeterminate 1.4s ease-in-out infinite",
                     }}
                   />
@@ -1412,14 +1412,14 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
 
             {phase.kind === "uploading" && (
               <>
-                <div className="mono cap" style={{ color: "var(--text-2)", fontSize: 10 }}>
+                <div className="mono cap" style={{ color: "var(--ink-tertiary)", fontSize: 10 }}>
                   Uploading media · {phase.fileIndex + 1} of {mediaFiles.length}
                 </div>
                 <div
                   style={{
                     fontSize: 14,
                     fontWeight: 600,
-                    color: "var(--text-0)",
+                    color: "var(--ink-primary)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -1432,7 +1432,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   style={{
                     height: 6,
                     width: "100%",
-                    background: "var(--bg-3)",
+                    background: "var(--surface-raised)",
                     borderRadius: 3,
                     overflow: "hidden",
                   }}
@@ -1444,7 +1444,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                         100,
                         (phase.bytesUploadedTotal / Math.max(1, phase.totalBytes)) * 100
                       ).toFixed(1)}%`,
-                      background: "var(--accent)",
+                      background: "var(--brand)",
                       transition: "width 120ms linear",
                     }}
                   />
@@ -1455,7 +1455,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     display: "flex",
                     justifyContent: "space-between",
                     fontSize: 11,
-                    color: "var(--text-2)",
+                    color: "var(--ink-tertiary)",
                   }}
                 >
                   <span>
@@ -1469,7 +1469,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                     %
                   </span>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: "var(--ink-disabled)", lineHeight: 1.4 }}>
                   Large files take a while — feel free to grab a coffee. Don&apos;t close this tab.
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
@@ -1484,20 +1484,20 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               <>
                 <div
                   className="mono cap"
-                  style={{ color: "var(--danger, #ff5252)", fontSize: 10 }}
+                  style={{ color: "var(--danger)", fontSize: 10 }}
                 >
                   Upload failed
                 </div>
                 <div
                   style={{
                     fontSize: 13,
-                    color: "var(--text-0)",
+                    color: "var(--ink-primary)",
                     wordBreak: "break-word",
                   }}
                 >
                   {phase.message}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                <div style={{ fontSize: 11, color: "var(--ink-disabled)", lineHeight: 1.4 }}>
                   Open the browser DevTools console for diagnostic logs prefixed with{" "}
                   <code className="mono">[upload]</code> / <code className="mono">[create]</code>.
                 </div>
@@ -1549,12 +1549,12 @@ function ModeCard({
         gap: 6,
         background: active
           ? `color-mix(in oklab, ${accent} 14%, transparent)`
-          : "var(--bg-inset)",
-        border: `0.5px solid ${active ? accent : "var(--line-2)"}`,
-        borderRadius: "var(--r-sm)",
+          : "var(--surface-void)",
+        border: `1px solid ${active ? accent : "var(--border-hairline)"}`,
+        borderRadius: "var(--r-panel)",
         cursor: "pointer",
         textAlign: "left",
-        color: "var(--text-0)",
+        color: "var(--ink-primary)",
         transition: "all 120ms",
       }}
     >
@@ -1562,7 +1562,7 @@ function ModeCard({
         <Icon name={icon} size={12} style={{ color: accent }} />
         <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
       </div>
-      <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.35 }}>
+      <span style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.35 }}>
         {subtitle}
       </span>
     </button>

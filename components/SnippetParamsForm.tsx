@@ -90,8 +90,8 @@ export default function SnippetParamsForm({
             display: "flex",
             gap: 8,
             padding: "12px 20px",
-            borderTop: "0.5px solid var(--line-1)",
-            background: "var(--bg-2)",
+            borderTop: "1px solid var(--border-hairline)",
+            background: "var(--surface-chrome)",
           }}
         >
           {onBack && (
@@ -100,10 +100,10 @@ export default function SnippetParamsForm({
               style={{
                 height: 32,
                 padding: "0 14px",
-                background: "var(--bg-3)",
-                color: "var(--text-1)",
-                border: "0.5px solid var(--line-2)",
-                borderRadius: "var(--r-sm)",
+                background: "var(--surface-raised)",
+                color: "var(--ink-secondary)",
+                border: "1px solid var(--border-hairline)",
+                borderRadius: "var(--r-panel)",
                 fontSize: 12,
                 fontWeight: 500,
                 cursor: "pointer",
@@ -122,10 +122,10 @@ export default function SnippetParamsForm({
               style={{
                 height: 32,
                 padding: "0 18px",
-                background: "var(--accent)",
-                color: "var(--accent-ink)",
+                background: "var(--brand)",
+                color: "var(--brand-ink)",
                 border: "none",
-                borderRadius: "var(--r-sm)",
+                borderRadius: "var(--r-panel)",
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: "pointer",
@@ -218,7 +218,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
       style={{
         fontSize: 11,
         fontWeight: 600,
-        color: "var(--text-1)",
+        color: "var(--ink-secondary)",
         letterSpacing: "0.01em",
         textTransform: "uppercase",
       }}
@@ -230,12 +230,12 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 const inputBaseStyle: React.CSSProperties = {
   width: "100%",
-  background: "var(--bg-inset)",
-  border: "0.5px solid var(--line-2)",
-  borderRadius: "var(--r-sm)",
+  background: "var(--surface-void)",
+  border: "1px solid var(--border-hairline)",
+  borderRadius: "var(--r-panel)",
   padding: "8px 10px",
   fontSize: 12,
-  color: "var(--text-0)",
+  color: "var(--ink-primary)",
   fontFamily: "inherit",
   outline: "none",
 };
@@ -294,7 +294,7 @@ function BooleanField({
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <FieldLabel>{label}</FieldLabel>
         {description && (
-          <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>{description}</span>
+          <span style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.4 }}>{description}</span>
         )}
       </div>
       <button
@@ -305,8 +305,8 @@ function BooleanField({
           width: 44,
           height: 24,
           borderRadius: 999,
-          background: value ? "var(--accent)" : "var(--bg-3)",
-          border: "0.5px solid var(--line-2)",
+          background: value ? "var(--brand)" : "var(--surface-raised)",
+          border: "1px solid var(--border-hairline)",
           position: "relative",
           cursor: "pointer",
           transition: "background 120ms ease",
@@ -322,7 +322,7 @@ function BooleanField({
             width: 18,
             height: 18,
             borderRadius: "50%",
-            background: value ? "var(--accent-ink)" : "var(--text-1)",
+            background: value ? "var(--brand-ink)" : "var(--ink-secondary)",
             transition: "left 120ms ease",
           }}
         />
@@ -350,9 +350,9 @@ function EnumField({
           display: "flex",
           gap: 2,
           padding: 2,
-          background: "var(--bg-inset)",
-          border: "0.5px solid var(--line-2)",
-          borderRadius: "var(--r-sm)",
+          background: "var(--surface-void)",
+          border: "1px solid var(--border-hairline)",
+          borderRadius: "var(--r-panel)",
         }}
       >
         {options.map((opt) => {
@@ -366,10 +366,10 @@ function EnumField({
                 flex: 1,
                 height: 26,
                 padding: "0 10px",
-                background: active ? "var(--accent)" : "transparent",
-                color: active ? "var(--accent-ink)" : "var(--text-1)",
+                background: active ? "var(--brand)" : "transparent",
+                color: active ? "var(--brand-ink)" : "var(--ink-secondary)",
                 border: "none",
-                borderRadius: "var(--r-sm)",
+                borderRadius: "var(--r-panel)",
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: "pointer",
@@ -461,9 +461,9 @@ function ArrayField({
               flexDirection: "column",
               gap: 6,
               padding: 10,
-              background: "var(--bg-inset)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-sm)",
+              background: "var(--surface-void)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
             }}
           >
             <div
@@ -474,7 +474,7 @@ function ArrayField({
                 marginBottom: 2,
               }}
             >
-              <span style={{ fontSize: 10, color: "var(--text-2)", fontWeight: 600 }}>
+              <span style={{ fontSize: 10, color: "var(--ink-tertiary)", fontWeight: 600 }}>
                 {isPrimitive ? `Row ${i + 1}` : `Item ${i + 1}`}
               </span>
               <button
@@ -484,7 +484,7 @@ function ArrayField({
                 style={{
                   background: "transparent",
                   border: "none",
-                  color: "var(--text-2)",
+                  color: "var(--ink-tertiary)",
                   cursor: value.length <= min ? "not-allowed" : "pointer",
                   fontSize: 11,
                   display: "flex",
@@ -518,10 +518,10 @@ function ArrayField({
           alignSelf: "flex-start",
           height: 28,
           padding: "0 12px",
-          background: "var(--bg-3)",
-          color: "var(--text-1)",
-          border: "0.5px dashed var(--line-2)",
-          borderRadius: "var(--r-sm)",
+          background: "var(--surface-raised)",
+          color: "var(--ink-secondary)",
+          border: "1px dashed var(--border-hairline)",
+          borderRadius: "var(--r-panel)",
           fontSize: 11,
           fontWeight: 600,
           cursor: value.length >= max ? "not-allowed" : "pointer",
@@ -574,7 +574,7 @@ function ImagesField({
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <FieldLabel>{param.label}</FieldLabel>
       {param.description && (
-        <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4 }}>{param.description}</span>
+        <span style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.4 }}>{param.description}</span>
       )}
       {value.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -585,10 +585,10 @@ function ImagesField({
                 position: "relative",
                 width: 72,
                 height: 72,
-                borderRadius: "var(--r-sm)",
+                borderRadius: "var(--r-panel)",
                 overflow: "hidden",
-                border: "0.5px solid var(--line-2)",
-                background: "var(--bg-inset)",
+                border: "1px solid var(--border-hairline)",
+                background: "var(--surface-void)",
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -654,10 +654,10 @@ function ImagesField({
           alignSelf: "flex-start",
           height: 28,
           padding: "0 12px",
-          background: "var(--bg-3)",
-          color: "var(--text-1)",
-          border: "0.5px dashed var(--line-2)",
-          borderRadius: "var(--r-sm)",
+          background: "var(--surface-raised)",
+          color: "var(--ink-secondary)",
+          border: "1px dashed var(--border-hairline)",
+          borderRadius: "var(--r-panel)",
           fontSize: 11,
           fontWeight: 600,
           cursor: value.length >= max ? "not-allowed" : "pointer",

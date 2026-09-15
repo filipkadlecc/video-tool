@@ -486,11 +486,11 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           display: "flex",
           alignItems: "center",
           gap: 8,
-          borderBottom: "0.5px solid var(--line-1)",
+          borderBottom: "1px solid var(--border-hairline)",
         }}
       >
-        <Icon name="chat" size={13} style={{ color: "var(--text-2)" }} />
-        <span className="mono cap" style={{ color: "var(--text-1)" }}>
+        <Icon name="chat" size={13} style={{ color: "var(--ink-tertiary)" }} />
+        <span className="mono cap" style={{ color: "var(--ink-secondary)" }}>
           Chat
         </span>
         <div style={{ flex: 1 }} />
@@ -501,11 +501,11 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             title="Animation style — affects how the AI composes scenes"
             style={{
               fontSize: 10,
-              fontFamily: "var(--mono)",
+              fontFamily: "var(--font-mono)",
               padding: "3px 6px",
-              background: "var(--bg-3)",
-              color: "var(--text-1)",
-              border: "0.5px solid var(--line-2)",
+              background: "var(--surface-raised)",
+              color: "var(--ink-secondary)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 3,
               cursor: "pointer",
             }}
@@ -523,11 +523,11 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             title="How scenes transition — affects the AI's scene handoffs"
             style={{
               fontSize: 10,
-              fontFamily: "var(--mono)",
+              fontFamily: "var(--font-mono)",
               padding: "3px 6px",
-              background: "var(--bg-3)",
-              color: "var(--text-1)",
-              border: "0.5px solid var(--line-2)",
+              background: "var(--surface-raised)",
+              color: "var(--ink-secondary)",
+              border: "1px solid var(--border-hairline)",
               borderRadius: 3,
               cursor: "pointer",
             }}
@@ -545,9 +545,9 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             style={{
               fontSize: 10,
               padding: "3px 6px",
-              background: useSfx ? "var(--accent-soft)" : "var(--bg-3)",
-              color: useSfx ? "var(--accent)" : "var(--text-2)",
-              border: `0.5px solid ${useSfx ? "var(--accent-line)" : "var(--line-2)"}`,
+              background: useSfx ? "var(--brand-tint-bg)" : "var(--surface-raised)",
+              color: useSfx ? "var(--brand)" : "var(--ink-tertiary)",
+              border: `1px solid ${useSfx ? "var(--brand-tint-line)" : "var(--border-hairline)"}`,
               borderRadius: 3,
               cursor: "pointer",
             }}
@@ -555,7 +555,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             sfx: {useSfx ? "on" : "off"}
           </button>
         )}
-        <span className="mono nums" style={{ fontSize: 10, color: "var(--text-3)" }}>
+        <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
           {chatHistory.length} msgs
         </span>
       </div>
@@ -574,8 +574,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 width: 18,
                 height: 18,
                 borderRadius: 4,
-                background: "var(--accent)",
-                color: "var(--accent-ink)",
+                background: "var(--brand)",
+                color: "var(--brand-ink)",
                 display: "grid",
                 placeItems: "center",
                 fontSize: 9,
@@ -584,13 +584,13 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             >
               <Icon name="sparkle" size={10} />
             </div>
-            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)" }}>System</span>
+            <span style={{ fontSize: 11, fontWeight: 500, color: "var(--ink-secondary)" }}>System</span>
           </div>
           <div
             style={{
               fontSize: 12.5,
               lineHeight: 1.55,
-              color: "var(--text-0)",
+              color: "var(--ink-primary)",
               paddingLeft: 24,
               whiteSpace: "pre-wrap",
             }}
@@ -609,8 +609,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                     width: 18,
                     height: 18,
                     borderRadius: 4,
-                    background: isUser ? "var(--bg-4)" : "var(--accent)",
-                    color: isUser ? "var(--text-0)" : "var(--accent-ink)",
+                    background: isUser ? "var(--surface-hover)" : "var(--brand)",
+                    color: isUser ? "var(--ink-primary)" : "var(--brand-ink)",
                     display: "grid",
                     placeItems: "center",
                     fontSize: 9,
@@ -619,7 +619,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 >
                   {isUser ? "Y" : <Icon name="sparkle" size={10} />}
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)" }}>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--ink-secondary)" }}>
                   {isUser ? "You" : "Studio"}
                 </span>
               </div>
@@ -627,7 +627,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 style={{
                   fontSize: 12.5,
                   lineHeight: 1.55,
-                  color: "var(--text-0)",
+                  color: "var(--ink-primary)",
                   paddingLeft: 24,
                   whiteSpace: "pre-wrap",
                 }}
@@ -647,7 +647,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
               marginTop: 4,
               paddingLeft: 24,
               fontSize: 12,
-              color: "var(--text-2)",
+              color: "var(--ink-tertiary)",
             }}
           >
             <span
@@ -655,7 +655,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 width: 4,
                 height: 4,
                 borderRadius: "50%",
-                background: "var(--accent)",
+                background: "var(--brand)",
                 animation: "vt-dot-fade 1.4s ease-in-out infinite",
               }}
             />
@@ -664,7 +664,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 width: 4,
                 height: 4,
                 borderRadius: "50%",
-                background: "var(--accent)",
+                background: "var(--brand)",
                 animation: "vt-dot-fade 1.4s ease-in-out .2s infinite",
               }}
             />
@@ -673,7 +673,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 width: 4,
                 height: 4,
                 borderRadius: "50%",
-                background: "var(--accent)",
+                background: "var(--brand)",
                 animation: "vt-dot-fade 1.4s ease-in-out .4s infinite",
               }}
             />
@@ -696,7 +696,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
               paddingLeft: 24,
               fontSize: 12,
               lineHeight: 1.5,
-              color: "var(--text-2)",
+              color: "var(--ink-tertiary)",
               whiteSpace: "pre-wrap",
             }}
           >
@@ -708,7 +708,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
       </div>
 
       {/* Input */}
-      <div style={{ padding: 10, borderTop: "0.5px solid var(--line-1)" }}>
+      <div style={{ padding: 10, borderTop: "1px solid var(--border-hairline)" }}>
         {/* SVG attachment chips */}
         {attachedSvgs.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
@@ -721,10 +721,10 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                   gap: 4,
                   padding: "2px 6px",
                   fontSize: 10,
-                  background: "var(--accent-soft)",
-                  border: "0.5px solid var(--accent-line)",
+                  background: "var(--brand-tint-bg)",
+                  border: "1px solid var(--brand-tint-line)",
                   borderRadius: 3,
-                  color: "var(--accent)",
+                  color: "var(--brand)",
                 }}
               >
                 <Icon name="image" size={10} />
@@ -734,7 +734,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                   style={{
                     background: "none",
                     border: "none",
-                    color: "var(--accent)",
+                    color: "var(--brand)",
                     cursor: "pointer",
                     padding: 0,
                     display: "grid",
@@ -754,9 +754,9 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             flexDirection: "column",
             gap: 6,
             padding: 8,
-            background: "var(--bg-inset)",
-            border: "0.5px solid var(--line-2)",
-            borderRadius: "var(--r-sm)",
+            background: "var(--surface-void)",
+            border: "1px solid var(--border-hairline)",
+            borderRadius: "var(--r-panel)",
           }}
         >
           <textarea
@@ -771,7 +771,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
               background: "transparent",
               border: "none",
               outline: "none",
-              color: "var(--text-0)",
+              color: "var(--ink-primary)",
               fontSize: 12.5,
               fontFamily: "inherit",
               resize: "none",
@@ -792,28 +792,28 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                     width: 240,
                     maxHeight: 200,
                     overflowY: "auto",
-                    background: "var(--bg-3)",
-                    border: "0.5px solid var(--line-2)",
-                    borderRadius: "var(--r-sm)",
-                    boxShadow: "var(--sh-float)",
+                    background: "var(--surface-raised)",
+                    border: "1px solid var(--border-hairline)",
+                    borderRadius: "var(--r-panel)",
+                    boxShadow: "var(--shadow-float)",
                     zIndex: 50,
                   }}
                 >
                   <div
                     style={{
                       padding: "6px 10px",
-                      borderBottom: "0.5px solid var(--line-1)",
+                      borderBottom: "1px solid var(--border-hairline)",
                       fontSize: 10,
-                      color: "var(--text-2)",
+                      color: "var(--ink-tertiary)",
                       fontWeight: 500,
                     }}
                   >
                     Select SVG to animate
                   </div>
                   {svgLoading ? (
-                    <div style={{ padding: 10, fontSize: 11, color: "var(--text-2)" }}>Loading...</div>
+                    <div style={{ padding: 10, fontSize: 11, color: "var(--ink-tertiary)" }}>Loading...</div>
                   ) : svgOptions.length === 0 ? (
-                    <div style={{ padding: 10, fontSize: 11, color: "var(--text-2)" }}>No SVG files in assets</div>
+                    <div style={{ padding: 10, fontSize: 11, color: "var(--ink-tertiary)" }}>No SVG files in assets</div>
                   ) : (
                     <div style={{ padding: 4 }}>
                       {svgOptions.map((opt) => (
@@ -825,17 +825,17 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                             textAlign: "left",
                             padding: "6px 8px",
                             fontSize: 11,
-                            color: "var(--text-0)",
+                            color: "var(--ink-primary)",
                             background: "transparent",
                             border: "none",
                             borderRadius: 4,
                             cursor: "pointer",
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                         >
                           <div style={{ fontWeight: 500 }}>{opt.name}</div>
-                          <div className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                          <div className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
                             {opt.path}
                           </div>
                         </button>
@@ -846,7 +846,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
               )}
             </div>
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>
+            <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)", marginRight: 4 }}>
               <Kbd>&#9166;</Kbd>
             </span>
             <Button variant="primary" size="sm" onClick={handleSend} disabled={!input.trim() || isGenerating} icon="send">
@@ -870,8 +870,8 @@ function MessageContent({ content }: { content: string }) {
         if (part.startsWith("```")) {
           return (
             <details key={i} style={{ margin: "4px 0" }}>
-              <summary style={{ color: "var(--accent)", cursor: "pointer", fontSize: 10 }}>Code block</summary>
-              <pre className="mono" style={{ marginTop: 4, fontSize: 10, color: "var(--text-2)", overflowX: "auto" }}>
+              <summary style={{ color: "var(--brand)", cursor: "pointer", fontSize: 10 }}>Code block</summary>
+              <pre className="mono" style={{ marginTop: 4, fontSize: 10, color: "var(--ink-tertiary)", overflowX: "auto" }}>
                 {part}
               </pre>
             </details>

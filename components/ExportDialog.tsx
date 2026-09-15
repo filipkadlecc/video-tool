@@ -340,14 +340,14 @@ export default function ExportDialog({
                   marginTop: 6,
                   minWidth: 220,
                   padding: 5,
-                  background: "var(--bg-3)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
-                  boxShadow: "var(--sh-float)",
+                  background: "var(--surface-raised)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
+                  boxShadow: "var(--shadow-float)",
                   zIndex: 10,
                 }}
               >
-                <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
+                <div className="mono cap" style={{ padding: "6px 8px", color: "var(--ink-disabled)" }}>
                   Built-in
                 </div>
                 {visiblePresets.map((p) => (
@@ -363,24 +363,24 @@ export default function ExportDialog({
                       fontSize: 12,
                       background: "transparent",
                       border: "none",
-                      color: "var(--text-0)",
+                      color: "var(--ink-primary)",
                       borderRadius: 4,
                       cursor: "pointer",
                       textAlign: "left",
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <span style={{ flex: 1 }}>{p.name}</span>
-                    <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                    <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
                       {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : p.codec === "prores-xq" ? "XQ" : "QT-RLE"}
                     </span>
                   </button>
                 ))}
                 {userPresets.length > 0 && (
                   <>
-                    <div style={{ height: 1, background: "var(--line-1)", margin: "4px 0" }} />
-                    <div className="mono cap" style={{ padding: "6px 8px", color: "var(--text-3)" }}>
+                    <div style={{ height: 1, background: "var(--border-hairline)", margin: "4px 0" }} />
+                    <div className="mono cap" style={{ padding: "6px 8px", color: "var(--ink-disabled)" }}>
                       Custom
                     </div>
                     {userPresets.map((p, i) => (
@@ -399,16 +399,16 @@ export default function ExportDialog({
                             fontSize: 12,
                             background: "transparent",
                             border: "none",
-                            color: "var(--text-0)",
+                            color: "var(--ink-primary)",
                             borderRadius: 4,
                             cursor: "pointer",
                             textAlign: "left",
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-4)")}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-hover)")}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                         >
                           <span style={{ flex: 1 }}>{p.name}</span>
-                          <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>
+                          <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
                             {p.codec === "h264" ? "H.264" : p.codec === "prores" ? "ProRes" : p.codec === "prores-xq" ? "XQ" : "QT-RLE"}
                           </span>
                         </button>
@@ -450,12 +450,12 @@ export default function ExportDialog({
               key={s.label}
               style={{
                 padding: 12,
-                background: "var(--bg-inset)",
-                border: "0.5px solid var(--line-2)",
-                borderRadius: "var(--r-sm)",
+                background: "var(--surface-void)",
+                border: "1px solid var(--border-hairline)",
+                borderRadius: "var(--r-panel)",
               }}
             >
-              <div className="mono cap" style={{ color: "var(--text-2)", marginBottom: 4 }}>
+              <div className="mono cap" style={{ color: "var(--ink-tertiary)", marginBottom: 4 }}>
                 {s.label}
               </div>
               <div className="mono nums" style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.2 }}>
@@ -467,7 +467,7 @@ export default function ExportDialog({
 
         <div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div className="mono cap" style={{ color: "var(--text-1)" }}>
+            <div className="mono cap" style={{ color: "var(--ink-secondary)" }}>
               Codec
             </div>
             <button
@@ -480,7 +480,7 @@ export default function ExportDialog({
                 fontSize: 10,
                 background: "transparent",
                 border: "none",
-                color: "var(--text-3)",
+                color: "var(--ink-disabled)",
                 cursor: "pointer",
                 padding: "2px 4px",
               }}
@@ -506,16 +506,16 @@ export default function ExportDialog({
                 style={{
                   padding: 8,
                   fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--bg-inset)",
+                  color: "var(--ink-tertiary)",
+                  background: "var(--surface-void)",
                   borderRadius: 4,
-                  border: "0.5px solid var(--line-2)",
+                  border: "1px solid var(--border-hairline)",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                 }}
               >
-                <Icon name="info" size={12} style={{ color: "var(--text-3)" }} />
+                <Icon name="info" size={12} style={{ color: "var(--ink-disabled)" }} />
                 H.264 — .mp4, no transparency. Best for YouTube, social, and most playback.
               </div>
             )}
@@ -524,16 +524,16 @@ export default function ExportDialog({
                 style={{
                   padding: 8,
                   fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--amber-soft)",
+                  color: "var(--ink-tertiary)",
+                  background: "var(--warning-tint-bg)",
                   borderRadius: 4,
-                  border: "0.5px solid color-mix(in oklab, var(--amber) 30%, transparent)",
+                  border: "1px solid color-mix(in oklab, var(--warning) 30%, transparent)",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                 }}
               >
-                <Icon name="info" size={12} style={{ color: "var(--amber)" }} />
+                <Icon name="info" size={12} style={{ color: "var(--warning)" }} />
                 ProRes 4444 — .mov with alpha channel. Good for compositing.
               </div>
             )}
@@ -542,16 +542,16 @@ export default function ExportDialog({
                 style={{
                   padding: 8,
                   fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--accent-soft)",
+                  color: "var(--ink-tertiary)",
+                  background: "var(--brand-tint-bg)",
                   borderRadius: 4,
-                  border: "0.5px solid var(--accent-line)",
+                  border: "1px solid var(--brand-tint-line)",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                 }}
               >
-                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                <Icon name="info" size={12} style={{ color: "var(--brand)" }} />
                 QuickTime Animation (RLE) — .mov with ARGB alpha channel. Drop into OBS as a Media Source. Large files.
               </div>
             )}
@@ -560,16 +560,16 @@ export default function ExportDialog({
                 style={{
                   padding: 8,
                   fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--accent-soft)",
+                  color: "var(--ink-tertiary)",
+                  background: "var(--brand-tint-bg)",
                   borderRadius: 4,
-                  border: "0.5px solid var(--accent-line)",
+                  border: "1px solid var(--brand-tint-line)",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                 }}
               >
-                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                <Icon name="info" size={12} style={{ color: "var(--brand)" }} />
                 HEVC with alpha — .mov, transparent, Apple&apos;s native format. Best for CapCut Mac, Final Cut, Motion. Small file size. macOS only.
               </div>
             )}
@@ -578,16 +578,16 @@ export default function ExportDialog({
                 style={{
                   padding: 8,
                   fontSize: 11,
-                  color: "var(--text-2)",
-                  background: "var(--accent-soft)",
+                  color: "var(--ink-tertiary)",
+                  background: "var(--brand-tint-bg)",
                   borderRadius: 4,
-                  border: "0.5px solid var(--accent-line)",
+                  border: "1px solid var(--brand-tint-line)",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                 }}
               >
-                <Icon name="info" size={12} style={{ color: "var(--accent)" }} />
+                <Icon name="info" size={12} style={{ color: "var(--brand)" }} />
                 ProRes 4444 XQ — highest quality, 10-bit 4:4:4, alpha channel. Best for color grading. Large files.
               </div>
             )}
@@ -597,7 +597,7 @@ export default function ExportDialog({
         {/* Look (LUT) — color grade, h264 export only */}
         {codec === "h264" && (
           <div>
-            <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+            <div className="mono cap" style={{ color: "var(--ink-secondary)", marginBottom: 8 }}>
               Look (LUT)
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -610,10 +610,10 @@ export default function ExportDialog({
                   height: 32,
                   padding: "0 8px",
                   fontSize: 12,
-                  background: "var(--bg-3)",
-                  color: "var(--text-0)",
-                  border: "0.5px solid var(--line-2)",
-                  borderRadius: "var(--r-sm)",
+                  background: "var(--surface-raised)",
+                  color: "var(--ink-primary)",
+                  border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
                   cursor: "pointer",
                 }}
               >
@@ -659,16 +659,16 @@ export default function ExportDialog({
                 marginTop: 6,
                 padding: 8,
                 fontSize: 11,
-                color: "var(--text-2)",
-                background: "var(--bg-inset)",
+                color: "var(--ink-tertiary)",
+                background: "var(--surface-void)",
                 borderRadius: 4,
-                border: "0.5px solid var(--line-2)",
+                border: "1px solid var(--border-hairline)",
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
               }}
             >
-              <Icon name="info" size={12} style={{ color: "var(--text-3)" }} />
+              <Icon name="info" size={12} style={{ color: "var(--ink-disabled)" }} />
               {lutId === "none"
                 ? "No color grade. Pick a look (or upload a .cube) to bake a LUT into the exported .mp4."
                 : "Baked into the exported file on render — the editor preview stays ungraded."}
@@ -678,7 +678,7 @@ export default function ExportDialog({
 
         {/* File name */}
         <div>
-          <div className="mono cap" style={{ color: "var(--text-1)", marginBottom: 8 }}>
+          <div className="mono cap" style={{ color: "var(--ink-secondary)", marginBottom: 8 }}>
             File name
           </div>
           <Input
@@ -693,7 +693,7 @@ export default function ExportDialog({
         {(status === "idle" || status === "error") && (
           <>
             {status === "error" && (
-              <div style={{ fontSize: 12, color: "var(--red)" }}>{error}</div>
+              <div style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>
             )}
             <Button variant="primary" size="lg" full icon="download" onClick={handleExport} disabled={!code.trim()}>
               Export
@@ -704,25 +704,25 @@ export default function ExportDialog({
         {(status === "queued" || status === "rendering") && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span className="mono cap" style={{ color: "var(--text-1)" }}>
+              <span className="mono cap" style={{ color: "var(--ink-secondary)" }}>
                 {status === "queued" ? "Queued..." : "Rendering"}
               </span>
-              <span className="mono nums" style={{ fontSize: 12, color: "var(--accent)" }}>
+              <span className="mono nums" style={{ fontSize: 12, color: "var(--brand)" }}>
                 {Math.min(100, Math.round(progress))}%
               </span>
             </div>
-            <div style={{ height: 6, background: "var(--bg-inset)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: 6, background: "var(--surface-void)", borderRadius: 3, overflow: "hidden" }}>
               <div
                 style={{
                   width: `${Math.min(100, progress)}%`,
                   height: "100%",
-                  background: "linear-gradient(90deg, var(--accent), oklch(0.92 0.22 124))",
+                  background: "linear-gradient(90deg, var(--brand), oklch(0.92 0.22 124))",
                   transition: "width 100ms linear",
                   boxShadow: "0 0 12px oklch(0.88 0.22 124 / 0.5)",
                 }}
               />
             </div>
-            <div className="mono nums" style={{ fontSize: 11, color: "var(--text-3)" }}>
+            <div className="mono nums" style={{ fontSize: 11, color: "var(--ink-disabled)" }}>
               frame {Math.round((progress / 100) * durationInFrames)} / {durationInFrames}
             </div>
           </div>
@@ -735,13 +735,13 @@ export default function ExportDialog({
               flexDirection: "column",
               gap: 10,
               padding: 12,
-              background: "var(--bg-inset)",
-              border: "0.5px solid var(--accent-line)",
-              borderRadius: "var(--r-sm)",
+              background: "var(--surface-void)",
+              border: "1px solid var(--brand-tint-line)",
+              borderRadius: "var(--r-panel)",
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600 }}>Export is still rendering</div>
-            <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>
               It keeps running in the background and downloads automatically when it&apos;s done.
               You can reopen Export any time to check progress — the render never stops.
             </div>
@@ -763,9 +763,9 @@ export default function ExportDialog({
               alignItems: "center",
               gap: 8,
               paddingTop: 10,
-              borderTop: "0.5px solid var(--line-1)",
+              borderTop: "1px solid var(--border-hairline)",
               fontSize: 11,
-              color: "var(--text-3)",
+              color: "var(--ink-disabled)",
             }}
           >
             <Icon name="info" size={12} />
@@ -788,9 +788,9 @@ export default function ExportDialog({
                 alignItems: "center",
                 gap: 10,
                 padding: 12,
-                background: "var(--accent-soft)",
-                border: "0.5px solid var(--accent-line)",
-                borderRadius: "var(--r-sm)",
+                background: "var(--brand-tint-bg)",
+                border: "1px solid var(--brand-tint-line)",
+                borderRadius: "var(--r-panel)",
               }}
             >
               <div
@@ -798,16 +798,16 @@ export default function ExportDialog({
                   width: 28,
                   height: 28,
                   borderRadius: 14,
-                  background: "var(--accent)",
+                  background: "var(--brand)",
                   display: "grid",
                   placeItems: "center",
                 }}
               >
-                <Icon name="check" size={14} style={{ color: "var(--accent-ink)" }} />
+                <Icon name="check" size={14} style={{ color: "var(--brand-ink)" }} />
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Render complete</div>
-                <div className="mono nums" style={{ fontSize: 11, color: "var(--text-2)" }}>
+                <div className="mono nums" style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>
                   {fileName}.{ext}
                 </div>
               </div>

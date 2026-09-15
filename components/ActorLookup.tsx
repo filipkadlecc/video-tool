@@ -115,9 +115,9 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
         flexDirection: "column",
         gap: 8,
         padding: 12,
-        background: "var(--bg-inset)",
-        border: "0.5px solid var(--line-2)",
-        borderRadius: "var(--r-sm)",
+        background: "var(--surface-void)",
+        border: "1px solid var(--border-hairline)",
+        borderRadius: "var(--r-panel)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -126,7 +126,7 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--text-1)",
+            color: "var(--ink-secondary)",
             letterSpacing: "0.01em",
             textTransform: "uppercase",
           }}
@@ -135,13 +135,13 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
         </span>
         {/* The field has always searched; the heading said "fill", which read as
             paste-a-link-here and hid it. */}
-        <span style={{ fontSize: 10, color: "var(--text-3)", textTransform: "none", letterSpacing: 0 }}>
+        <span style={{ fontSize: 10, color: "var(--ink-disabled)", textTransform: "none", letterSpacing: 0 }}>
           by name, or paste a link
         </span>
       </div>
 
       <div style={{ position: "relative" }}>
-        <div style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }}>
+        <div style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "var(--ink-disabled)" }}>
           <Icon name={loading || resolving ? "dots" : "search"} size={13} />
         </div>
         <input
@@ -157,12 +157,12 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
           style={{
             width: "100%",
             boxSizing: "border-box",
-            background: "var(--bg-2)",
-            border: "0.5px solid var(--line-2)",
-            borderRadius: "var(--r-sm)",
+            background: "var(--surface-chrome)",
+            border: "1px solid var(--border-hairline)",
+            borderRadius: "var(--r-panel)",
             padding: "8px 10px 8px 28px",
             fontSize: 12,
-            color: "var(--text-0)",
+            color: "var(--ink-primary)",
             fontFamily: "inherit",
             outline: "none",
           }}
@@ -179,9 +179,9 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
               zIndex: 20,
               maxHeight: 244,
               overflowY: "auto",
-              background: "var(--bg-2)",
-              border: "0.5px solid var(--line-2)",
-              borderRadius: "var(--r-sm)",
+              background: "var(--surface-chrome)",
+              border: "1px solid var(--border-hairline)",
+              borderRadius: "var(--r-panel)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
               padding: 4,
               display: "flex",
@@ -202,12 +202,12 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
                   padding: "7px 8px",
                   background: "transparent",
                   border: "none",
-                  borderRadius: "var(--r-sm)",
+                  borderRadius: "var(--r-panel)",
                   cursor: resolving ? "wait" : "pointer",
                   textAlign: "left",
                   width: "100%",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-3)")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-raised)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 <div
@@ -217,8 +217,8 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
                     borderRadius: 7,
                     flexShrink: 0,
                     overflow: "hidden",
-                    background: "var(--bg-inset)",
-                    border: "0.5px solid var(--line-2)",
+                    background: "var(--surface-void)",
+                    border: "1px solid var(--border-hairline)",
                   }}
                 >
                   {c.iconUrl && (
@@ -231,7 +231,7 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "var(--text-0)",
+                      color: "var(--ink-primary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -243,7 +243,7 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
                     style={{
                       fontSize: 11,
                       fontFamily: "ui-monospace, monospace",
-                      color: "var(--text-2)",
+                      color: "var(--ink-tertiary)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -258,11 +258,11 @@ export default function ActorLookup({ onPick }: ActorLookupProps) {
         )}
       </div>
 
-      {error && <span style={{ fontSize: 11, color: "var(--danger, #e5484d)", lineHeight: 1.4 }}>{error}</span>}
+      {error && <span style={{ fontSize: 11, color: "var(--danger)", lineHeight: 1.4 }}>{error}</span>}
       {loaded && !error && (
-        <span style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.4, display: "flex", alignItems: "center", gap: 5 }}>
+        <span style={{ fontSize: 11, color: "var(--ink-tertiary)", lineHeight: 1.4, display: "flex", alignItems: "center", gap: 5 }}>
           <Icon name="check" size={12} />
-          Loaded <strong style={{ color: "var(--text-1)", fontWeight: 600 }}>{loaded}</strong> — fields below are filled and editable.
+          Loaded <strong style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>{loaded}</strong> — fields below are filled and editable.
         </span>
       )}
     </div>

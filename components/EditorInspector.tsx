@@ -16,10 +16,10 @@ import { presetsFor } from "@/lib/editor-effects";
  */
 
 const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, marginBottom: 6 };
-const label: React.CSSProperties = { fontSize: 10, color: "var(--text-2)", width: 92, flexShrink: 0 };
+const label: React.CSSProperties = { fontSize: 10, color: "var(--ink-tertiary)", width: 92, flexShrink: 0 };
 const input: React.CSSProperties = {
-  background: "var(--bg-3)", border: "0.5px solid var(--line-2)", borderRadius: 3,
-  color: "var(--text-0)", fontSize: 11, padding: "3px 6px", width: "100%", minWidth: 0,
+  background: "var(--surface-raised)", border: "1px solid var(--border-hairline)", borderRadius: 3,
+  color: "var(--ink-primary)", fontSize: 11, padding: "3px 6px", width: "100%", minWidth: 0,
 };
 
 /** Thin wrapper so every field in this panel scrubs and types the same way. */
@@ -53,7 +53,7 @@ function NumberField({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ fontSize: 9, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+      <div style={{ fontSize: 9, color: "var(--ink-disabled)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
         {title}
       </div>
       {children}
@@ -78,7 +78,7 @@ export default function EditorInspector({
 
   if (!found) {
     return (
-      <div style={{ padding: 10, fontSize: 11, color: "var(--text-3)" }}>
+      <div style={{ padding: 10, fontSize: 11, color: "var(--ink-disabled)" }}>
         {selectedIds.size > 1
           ? `${selectedIds.size} items selected`
           : "Select something on the canvas or timeline"}
@@ -95,7 +95,7 @@ export default function EditorInspector({
 
   return (
     <div style={{ padding: 10, overflowY: "auto", height: "100%" }}>
-      <div className="mono cap" style={{ fontSize: 9, color: "var(--text-3)", marginBottom: 8 }}>
+      <div className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)", marginBottom: 8 }}>
         {item.type} · {item.durationInFrames}f @ {item.from}
       </div>
 
@@ -204,7 +204,7 @@ export default function EditorInspector({
                 onClick={() => onChange(updateItem<TextItem>(doc, item.id, { style: { ...(item as TextItem).style, align: al } }))}
                 style={{
                   ...input, cursor: "pointer",
-                  color: ((item as TextItem).style.align ?? "left") === al ? "var(--accent)" : "var(--text-1)",
+                  color: ((item as TextItem).style.align ?? "left") === al ? "var(--brand)" : "var(--ink-secondary)",
                 }}
               >
                 {al === "left" ? "Left" : al === "center" ? "Center" : "Right"}
@@ -225,7 +225,7 @@ export default function EditorInspector({
 
       {hasSource(item) && (
         <>
-          <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 4, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <div style={{ fontSize: 9, color: "var(--ink-disabled)", marginTop: 4, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Sound
           </div>
           <div style={row}>
@@ -257,7 +257,7 @@ export default function EditorInspector({
               onCommit={(n, o) => onChange(updateItem<AudioItem>(doc, item.id, { playbackRate: Math.max(0.25, Math.min(5, n)) }), o)}
             />
           </div>
-          <div style={{ fontSize: 9, color: "var(--text-3)", marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "var(--ink-disabled)", marginBottom: 8 }}>
             Source {((item as VideoItem).sourceIn ?? 0).toFixed(2)}s – {((item as VideoItem).sourceOut ?? 0).toFixed(2)}s
           </div>
         </>
@@ -265,7 +265,7 @@ export default function EditorInspector({
 
       {item.type === "captions" && (
         <>
-          <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 8 }}>
+          <div style={{ fontSize: 10, color: "var(--ink-disabled)", marginBottom: 8 }}>
             {(item as CaptionsItem).tokens.length} words transcribed
           </div>
           <div style={row}>
@@ -445,7 +445,7 @@ function GradeSection({
 
   return (
     <>
-      <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 4, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+      <div style={{ fontSize: 9, color: "var(--ink-disabled)", marginTop: 4, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>
         Colour
       </div>
       <div style={row}>
@@ -463,12 +463,12 @@ function GradeSection({
         </select>
       </div>
       {busy && (
-        <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 6 }}>
+        <div style={{ fontSize: 10, color: "var(--ink-disabled)", marginBottom: 6 }}>
           Grading this clip — the footage is re-encoded once, then cached.
         </div>
       )}
       {error && (
-        <div style={{ fontSize: 10, color: "var(--red)", marginBottom: 6 }}>{error}</div>
+        <div style={{ fontSize: 10, color: "var(--danger)", marginBottom: 6 }}>{error}</div>
       )}
     </>
   );

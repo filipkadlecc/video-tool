@@ -22,7 +22,7 @@ export default function TypeBadge({ type }: { type: string }) {
         color: meta.color,
         background: meta.colorSoft,
         borderRadius: 3,
-        border: `0.5px solid ${meta.color}`,
+        border: `1px solid ${meta.color}`,
         borderColor: "color-mix(in oklab, currentColor 25%, transparent)",
       }}
     >

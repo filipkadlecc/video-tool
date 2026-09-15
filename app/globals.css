@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* ============================================================
+   RESERVED — do not touch.
+   "Inter" here is a single SemiBold-24pt file that generated SCENE previews
+   alias against. Widening or renaming this family changes how scenes render.
+   The app's own UI face is "Inter UI" below.
+   ============================================================ */
 @font-face {
   font-family: "Inter";
   src: url("/assets/fonts/Inter_24pt-SemiBold.ttf") format("truetype");
@@ -7,10 +13,7 @@
   font-style: normal;
 }
 
-/* The UI face. Deliberately NOT called "Inter": the family above is a single
-   SemiBold file that scene previews alias against, so widening "Inter" here
-   would change how generated scenes render. This one is the variable Inter and
-   is used only for the app's own chrome. */
+/* The UI face — variable Inter, app chrome only. */
 @font-face {
   font-family: "Inter UI";
   src: url("/fonts/Inter-Variable.woff2") format("woff2");
@@ -19,11 +22,22 @@
   font-display: swap;
 }
 
+/* GT Walsheim. Regular 400 is the only cut licensed for chrome (display >=32px).
+   The heavier cuts stay registered because SCENES use them — do not remove. */
 @font-face {
   font-family: "GT Walsheim";
-  src: url("/fonts/GT-Walsheim-Regular.ttf") format("truetype");
+  src: url("/fonts/GT-Walsheim-Regular.woff2") format("woff2"),
+       url("/fonts/GT-Walsheim-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "GT Walsheim";
+  src: url("/fonts/GT-Walsheim-Regular-Oblique.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
 }
 @font-face {
   font-family: "GT Walsheim";
@@ -44,123 +58,198 @@
   font-style: normal;
 }
 
+/* ============================================================
+   M5 design tokens. This is the complete set — nothing outside it
+   may appear in the UI.
+   ============================================================ */
 :root {
-  /* Base — cool near-black with a very slight blue shift */
-  --bg-0: #07070A;
-  --bg-1: #0D0D12;
-  --bg-2: #141419;
-  --bg-3: #1B1B22;
-  --bg-4: #23232B;
-  --bg-inset: #08080B;
+  /* ---- Surfaces: three levels, plus states ----
+     raised is for things you TYPE INTO or that FLOAT. A panel does not get
+     raised for being important — it gets a label. */
+  --surface-void:   #0A0A0B;  /* preview surround, page ground, dialog footers, timeline bed, inset wells */
+  --surface-chrome: #141516;  /* toolbar, side rails, panels, timeline chrome, cards */
+  --surface-raised: #1D1E20;  /* fields, menus, dialogs, popovers, clips, section headers */
+  --surface-hover:  #262729;  /* hover on a raised element; selected segment in a segmented control */
+  --surface-active: #3A3C3E;  /* pressed state on a raised element */
 
-  /* Hairlines */
-  --line-1: rgba(255,255,255,0.06);
-  --line-2: rgba(255,255,255,0.10);
-  --line-3: rgba(255,255,255,0.18);
+  /* ---- Borders: always 1px, never 0.5px ---- */
+  --border-hairline: #2B2C2E; /* dividers WITHIN a surface level; row separators; default field border */
+  --border-edge:     #3A3C3E; /* boundaries BETWEEN surface levels; panel/dialog outlines; interactive fields */
 
-  /* Text */
-  --text-0: #F4F3F0;
-  --text-1: rgba(244,243,240,0.72);
-  --text-2: rgba(244,243,240,0.48);
-  --text-3: rgba(244,243,240,0.32);
+  /* ---- Ink ---- */
+  --ink-primary:   #F4F4F5;   /* 15.8:1 — values, titles, active labels */
+  --ink-secondary: #A3A6A8;   /*  8.1:1 — row labels, body copy, inactive tabs */
+  --ink-tertiary:  #838688;   /*  5.2:1 — section labels, meta, counts, units, hints */
+  --ink-disabled:  #565859;   /*  2.6:1 — DISABLED ONLY. Never carries live information */
+  --ink-faint:     #3A3C3E;   /* inert icon slots (a reset on an already-default value) */
 
-  /* Accents */
-  --accent: oklch(0.88 0.22 124);
-  --accent-ink: #0B0B0E;
-  --accent-soft: oklch(0.88 0.22 124 / 0.14);
-  --accent-line: oklch(0.88 0.22 124 / 0.4);
+  /* ---- Brand: exactly ONE filled primary button per screen ---- */
+  --brand:            #F86606;
+  --brand-hover:      #DC5C05;
+  --brand-press:      #B04A04;
+  --brand-ink:        #0A0A0B;                 /* text on a brand fill */
+  --brand-tint-bg:    rgba(248, 102, 6, 0.14);
+  --brand-tint-line:  rgba(248, 102, 6, 0.38);
 
-  --magenta: oklch(0.72 0.26 340);
-  --magenta-soft: oklch(0.72 0.26 340 / 0.14);
+  /* ---- Live: ONLY the playhead, the playing state, render progress, a success tick.
+     If it isn't happening right now, it isn't green. An ON toggle is WHITE. ---- */
+  --live:      #34D06B;
+  --live-wash: rgba(52, 208, 107, 0.16);
 
-  --cyan: oklch(0.82 0.14 210);
-  --cyan-soft: oklch(0.82 0.14 210 / 0.14);
+  /* ---- Semantic ---- */
+  --danger:            #F2647E;
+  --danger-tint-bg:    rgba(242, 100, 126, 0.14);
+  --danger-tint-line:  rgba(242, 100, 126, 0.45);
+  --danger-tint-hover: rgba(242, 100, 126, 0.22);
+  --warning:           #E9A93A;
+  --warning-tint-bg:   rgba(233, 169, 58, 0.14);
+  --warning-tint-line: rgba(233, 169, 58, 0.40);
 
-  --amber: oklch(0.82 0.16 75);
-  --amber-soft: oklch(0.82 0.16 75 / 0.14);
+  /* ---- Type families ----
+     NOTE: --font-ui is "Inter UI", not "Inter". See the reserved block above. */
+  --font-ui:      "Inter UI", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-display: "GT Walsheim", "Inter UI", -apple-system, system-ui, sans-serif;
+  --font-mono:    ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --red: oklch(0.68 0.22 25);
-  --red-soft: oklch(0.68 0.22 25 / 0.14);
+  /* ---- Type scale: 7 UI steps + 3 mono data steps ---- */
+  --t-display-size: 32px; --t-display-leading: 1.1;  --t-display-weight: 400;
+  --t-title-size:   20px; --t-title-leading:   1.3;  --t-title-weight:   600;
+  --t-heading-size: 16px; --t-heading-leading: 1.3;  --t-heading-weight: 600;
+  --t-body-size:    14px; --t-body-leading:    1.5;  --t-body-weight:    400;
+  --t-control-size: 13px; --t-control-leading: 1;    --t-control-weight: 500;
+  --t-caption-size: 12px; --t-caption-leading: 1.4;  --t-caption-weight: 400;
+  --t-section-size: 11px; --t-section-leading: 1.2;  --t-section-weight: 600;
+  --t-data-l-size:  14px;
+  --t-data-m-size:  13px;
+  --t-data-s-size:  11px;
 
-  /* Type */
-  --ui: "Inter UI", -apple-system, "Segoe UI", system-ui, sans-serif;
-  --mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+  /* ---- Spacing: 4pt grid, 8 steps. 6, 20 and every odd value are gone. ---- */
+  --sp-2:  2px;   /* hairline gaps, icon-button clusters, segmented inner gap */
+  --sp-4:  4px;   /* inside a control; between paired X/Y fields */
+  --sp-8:  8px;   /* between controls; small control horizontal padding */
+  --sp-12: 12px;  /* field rows; panel body padding; medium control padding */
+  --sp-16: 16px;  /* panel padding; card gap; large control padding */
+  --sp-24: 24px;  /* between panel groups */
+  --sp-32: 32px;  /* dialog padding */
+  --sp-48: 48px;  /* screen gutters */
 
-  /* Radii */
-  --r-xs: 4px;
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
+  /* ---- Radius ---- */
+  --r-frame:   2px;   /* video frame, thumbnail inner */
+  --r-item:    3px;   /* menu item, clip, segmented inner segment */
+  --r-control: 4px;   /* DEFAULT — buttons, fields, icon buttons */
+  --r-panel:   6px;   /* panel, card, toast, popover */
+  --r-dialog: 10px;
+  --r-pill:  999px;   /* status only — never wraps an action */
 
-  /* Shadows */
-  --sh-panel: 0 1px 0 rgba(255,255,255,0.04) inset, 0 20px 60px rgba(0,0,0,0.5), 0 4px 20px rgba(0,0,0,0.35);
-  --sh-float: 0 1px 0 rgba(255,255,255,0.05) inset, 0 30px 80px rgba(0,0,0,0.6), 0 8px 24px rgba(0,0,0,0.4);
-  --sh-card: 0 1px 0 rgba(255,255,255,0.03) inset, 0 2px 12px rgba(0,0,0,0.35);
+  /* ---- Control heights: four, no others ---- */
+  --h-dense:  24px;  /* timeline chrome, inspector rows, inline actions */
+  --h-chrome: 28px;  /* chrome default — toolbar buttons, icon buttons, panel actions */
+  --h-form:   32px;  /* forms, search fields, toolbar primary */
+  --h-dialog: 40px;  /* dialog footer buttons, home-screen primary */
 
-  /* Legacy aliases for Tailwind compat */
-  --background: var(--bg-1);
-  --foreground: var(--text-0);
-  --surface: var(--bg-2);
-  --surface-hover: var(--bg-4);
-  --border: var(--line-2);
-  --muted: var(--text-2);
+  /* ---- Shadow: exactly one, on FLOATING things only.
+     Dialogs, menus, popovers and toasts. Panels, cards and clips never. ---- */
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.55);
+
+  /* ---- Focus: neutral, not orange. An orange ring appears constantly and
+     would dilute orange the way green got diluted. ---- */
+  --focus-ring: 0 0 0 2px rgba(244, 244, 245, 0.55);
+
+  /* ---- Motion: three durations, one easing. Nothing scales. Nothing bounces. ---- */
+  --dur-state:  120ms;  /* hover, press, focus — state on the spot */
+  --dur-enter:  180ms;  /* menu, tooltip, toast, dialog arriving */
+  --dur-layout: 260ms;  /* panel open/close, layout shift (rare) */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
 }
 
+/* Tailwind is installed but barely used here (layout.tsx uses bg-background /
+   text-foreground and nothing else). Kept minimal and deliberately NOT
+   self-referential: `--font-mono: var(--font-mono)` inside @theme resolves
+   against the theme's own name and cycles. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-surface: var(--surface);
+  --color-background: var(--surface-void);
+  --color-foreground: var(--ink-primary);
+  --color-surface: var(--surface-chrome);
   --color-surface-hover: var(--surface-hover);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --color-muted: var(--muted);
-  --font-sans: var(--ui);
-  --font-mono: var(--mono);
+  --color-border: var(--border-hairline);
+  --color-accent: var(--brand);
+  --color-muted: var(--ink-tertiary);
+  --font-sans: "Inter UI", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-/* Reset + base */
+/* ---- Reset + base ---- */
 * { box-sizing: border-box; }
 
 body {
-  background: var(--bg-1);
-  color: var(--text-0);
-  font-family: var(--ui);
+  background: var(--surface-void);
+  color: var(--ink-primary);
+  font-family: var(--font-ui);
+  font-size: var(--t-body-size);
+  line-height: var(--t-body-leading);
   font-feature-settings: "ss01", "cv11";
 }
 
 button { font-family: inherit; }
 input, textarea { font-family: inherit; color: inherit; }
-::selection { background: var(--accent); color: var(--accent-ink); }
+::selection { background: rgba(244, 244, 245, 0.22); color: var(--ink-primary); }
 
-/* Scrollbars */
+/* ---- Type steps.
+   Classes rather than bare vars because ~900 inline style objects would
+   otherwise each restate size + weight + leading. ---- */
+.t-display { font-family: var(--font-display); font-size: var(--t-display-size); line-height: var(--t-display-leading); font-weight: var(--t-display-weight); letter-spacing: -0.01em; }
+.t-title   { font-size: var(--t-title-size);   line-height: var(--t-title-leading);   font-weight: var(--t-title-weight); }
+.t-heading { font-size: var(--t-heading-size); line-height: var(--t-heading-leading); font-weight: var(--t-heading-weight); }
+.t-body    { font-size: var(--t-body-size);    line-height: var(--t-body-leading);    font-weight: var(--t-body-weight); }
+.t-control { font-size: var(--t-control-size); line-height: var(--t-control-leading); font-weight: var(--t-control-weight); }
+.t-caption { font-size: var(--t-caption-size); line-height: var(--t-caption-leading); font-weight: var(--t-caption-weight); }
+.t-section { font-size: var(--t-section-size); line-height: var(--t-section-leading); font-weight: var(--t-section-weight); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.t-data-l, .t-data-m, .t-data-s {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.t-data-l { font-size: var(--t-data-l-size); }
+.t-data-m { font-size: var(--t-data-m-size); }
+.t-data-s { font-size: var(--t-data-s-size); }
+
+/* ---- Utilities (pre-existing names, retuned to the new system) ---- */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.nums { font-variant-numeric: tabular-nums; }
+.cap  { font-size: var(--t-section-size); font-weight: var(--t-section-weight); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.vt-ph {
+  background-image: repeating-linear-gradient(135deg, rgba(244,244,245,0.04) 0 8px, rgba(244,244,245,0) 8px 16px);
+  background-color: var(--surface-raised);
+}
+
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- Scrollbars ---- */
 .vt-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .vt-scroll::-webkit-scrollbar-track { background: transparent; }
-.vt-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-.vt-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+.vt-scroll::-webkit-scrollbar-thumb { background: var(--border-hairline); border-radius: 4px; }
+.vt-scroll::-webkit-scrollbar-thumb:hover { background: var(--border-edge); }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.08) transparent;
+  scrollbar-color: var(--border-hairline) transparent;
 }
 
-/* Utilities */
-.mono { font-family: var(--mono); font-feature-settings: "ss01"; letter-spacing: -0.01em; }
-.nums { font-variant-numeric: tabular-nums; }
-.cap { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; font-weight: 600; }
-.vt-ph {
-  background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.04) 0 8px, rgba(255,255,255,0) 8px 16px);
-  background-color: var(--bg-3);
-}
-.focus-ring:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* Keyframes */
+/* ---- Keyframes ---- */
 @keyframes vt-spin { to { transform: rotate(360deg); } }
 @keyframes vt-pulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
 @keyframes vt-shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+/* Skeletons shimmer .35 -> .7 -> .35 over 1.4s. The word "Loading" appears nowhere. */
+@keyframes vt-skeleton { 0%, 100% { opacity: .35; } 50% { opacity: .7; } }
 @keyframes vt-dot-fade {
   0%, 80%, 100% { opacity: 0.3; }
   40% { opacity: 1; }
@@ -179,36 +268,31 @@ input, textarea { font-family: inherit; color: inherit; }
   0% { transform: translateX(-100%); }
   100% { transform: translateX(400%); }
 }
+/* The fading brand edge on a newly added effect section. */
+@keyframes vt-effect-added {
+  0% { box-shadow: inset 2px 0 0 0 var(--brand); }
+  100% { box-shadow: inset 2px 0 0 0 rgba(248, 102, 6, 0); }
+}
 
-/* Resizable panels */
+/* ---- Resizable panels ---- */
 .resize-handle {
   position: relative;
-  background: var(--line-1);
-  transition: background 120ms ease;
+  background: var(--border-hairline);
+  transition: background var(--dur-state) var(--ease);
   flex-shrink: 0;
 }
-.resize-handle-horizontal {
-  height: 1px;
-  cursor: row-resize;
-}
-.resize-handle-vertical {
-  width: 1px;
-  cursor: col-resize;
-}
-.resize-handle::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-.resize-handle-horizontal::after {
-  top: -3px;
-  bottom: -3px;
-}
-.resize-handle-vertical::after {
-  left: -3px;
-  right: -3px;
-}
+.resize-handle-horizontal { height: 1px; cursor: row-resize; }
+.resize-handle-vertical { width: 1px; cursor: col-resize; }
+.resize-handle::after { content: ""; position: absolute; inset: 0; }
+.resize-handle-horizontal::after { top: -3px; bottom: -3px; }
+.resize-handle-vertical::after { left: -3px; right: -3px; }
 .resize-handle:hover,
-.resize-handle:active {
-  background: var(--accent);
+.resize-handle:active { background: var(--ink-disabled); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
