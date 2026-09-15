@@ -32,6 +32,7 @@ import { useDocHistory } from "@/hooks/useDocHistory";
 import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { PlayerRef } from "@remotion/player";
 import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
@@ -145,6 +146,22 @@ export default function ProjectEditor() {
   // projects keep the old single-purpose panels.
   const [bottomTab, setBottomTab] = useState<"footage" | "assets" | "snippets" | "effects" | "code">("footage");
   const [rightTab, setRightTab] = useState<"chat" | "properties">("chat");
+
+  /**
+   * Cut (timeline-first) vs Direct (chat-first), the Premiere-style workspaces.
+   *
+   * Remembered PER PROJECT — a footage cut and a prompted animation want
+   * different rooms, and the kind you made decides where it opens.
+   *
+   * Switching must NOT move the document: playhead, selection, zoom, scroll and
+   * undo history all carry across untouched. That is why the switch resizes the
+   * existing panels imperatively instead of rendering a different tree —
+   * nothing unmounts, so nothing has state to lose.
+   */
+  const [workspace, setWorkspace] = useState<"cut" | "direct">("cut");
+  const workspaceKey = `vt:workspace:${projectId}`;
+  const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const mediaPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
   const chatRef = useRef<ChatPanelHandle>(null);
   // Bounds automatic error-retry so a persistently-broken generation can't loop
@@ -491,6 +508,13 @@ export default function ProjectEditor() {
             if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); }
           }
         }
+      } else if (e.altKey && (e.key === "1" || e.key === "\u00a1")) {
+        // Alt+1 / Alt+2. macOS gives the alt glyph for the digit, so accept both.
+        e.preventDefault();
+        setWorkspace("cut");
+      } else if (e.altKey && (e.key === "2" || e.key === "\u2122")) {
+        e.preventDefault();
+        setWorkspace("direct");
       } else if (mod && e.key === "z" && e.shiftKey) {
         const active = document.activeElement;
         const inMonaco = active?.closest(".monaco-editor");
@@ -816,6 +840,30 @@ export default function ProjectEditor() {
           key: () => null,
           length: 0,
         } as Storage);
+  // Restore the last workspace for THIS project.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(workspaceKey);
+      if (saved === "cut" || saved === "direct") setWorkspace(saved);
+    } catch { /* private window — the default is fine */ }
+  }, [workspaceKey]);
+
+  // Apply the workspace's geometry. Panels are resized in place.
+  useEffect(() => {
+    try { window.localStorage.setItem(workspaceKey, workspace); } catch { /* ignore */ }
+    if (workspace === "direct") {
+      // Chat-first: a wide chat column, the media browsers out of the way.
+      rightPanelRef.current?.resize("452px");
+      mediaPanelRef.current?.resize("152px");
+      setRightTab("chat");
+    } else {
+      // Timeline-first: the inspector at the width the row grid needs.
+      rightPanelRef.current?.resize("360px");
+      mediaPanelRef.current?.resize("30%");
+      setRightTab("properties");
+    }
+  }, [workspace, workspaceKey]);
+
   const horizontalLayout = useDefaultLayout({
     id: `studio-h-${layoutKind}`,
     panelIds: ["main", "chat"],
@@ -880,13 +928,37 @@ export default function ProjectEditor() {
         <div style={{ width: 1, height: 20, background: "var(--border-hairline)", marginLeft: 4 }} />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</div>
-          <div className="mono nums" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
-            {resLabel} &middot; {project.settings.fps}fps &middot;{" "}
-            {project.settings.orientation === "horizontal" ? "16:9" : project.settings.orientation === "vertical" ? "9:16" : "1:1"}
-          </div>
+          {/* Frame pill — state, not an action, so it is a pill and never a button. */}
+          <span
+            className="t-data-s"
+            style={{
+              display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
+              background: "var(--surface-raised)", borderRadius: "var(--r-pill)",
+              color: "var(--ink-tertiary)", whiteSpace: "nowrap",
+            }}
+          >
+            {resLabel} · {project.settings.fps}fps
+          </span>
         </div>
         <TypeBadge type={project.animationType} />
         <div style={{ flex: 1 }} />
+
+        {/* Cut / Direct. Named for the job, not the furniture. The document does
+            not move when you switch — only the room does. */}
+        {docView && (
+          <>
+            <Segmented
+              value={workspace}
+              onChange={(v) => setWorkspace(v as "cut" | "direct")}
+              options={[
+                { value: "cut", label: "Cut", shortcut: "\u2325 1" },
+                { value: "direct", label: "Direct", shortcut: "\u2325 2" },
+              ]}
+            />
+            <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
+          </>
+        )}
+
         {/* Undo / Redo — 2px gap, circular arrows, disabled when there is
             nothing to go back (or forward) to.
 
@@ -1227,7 +1299,7 @@ export default function ProjectEditor() {
                 </>
               )}
               <Separator className="resize-handle resize-handle-horizontal" />
-              <Panel id="code" defaultSize={hasTimeline ? "20%" : "35%"} minSize="10%">
+              <Panel id="code" panelRef={mediaPanelRef} defaultSize={hasTimeline ? "20%" : "35%"} minSize="10%">
                 <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                   {docView ? (
                     <>
@@ -1297,7 +1369,7 @@ export default function ProjectEditor() {
             </Group>
           </Panel>
           <Separator className="resize-handle resize-handle-vertical" />
-          <Panel id="chat" defaultSize="28%" minSize="18%" maxSize="50%">
+          <Panel id="chat" panelRef={rightPanelRef} defaultSize="360px" minSize="18%" maxSize="50%">
             <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
               {docView && (
                 <div style={{ padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
