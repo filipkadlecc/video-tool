@@ -28,6 +28,7 @@ import {
 } from "@/lib/editor-keys";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import GradeSection from "@/components/inspector/GradeSection";
+import AddEffectPopover from "@/components/inspector/AddEffectPopover";
 
 /**
  * The inspector, as a STACK OF EFFECT SECTIONS.
@@ -385,6 +386,9 @@ export default function EditorInspector({
   const playheadFrame = usePlayheadFrame();
   const [category, setCategory] = useState<Category>("video");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [addOpen, setAddOpen] = useState(false);
+  /** The effect just added, for its fading brand edge. */
+  const [justAdded, setJustAdded] = useState<string | null>(null);
 
   const ids = [...selectedIds];
   const found = ids.length === 1 ? findItem(doc, ids[0]) : null;
@@ -622,6 +626,7 @@ export default function EditorInspector({
                 subtitle={!fx.enabled
                   ? <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>bypassed</span>
                   : <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>{frameCount(fx.durationInFrames)}</span>}
+                added={justAdded === fx.id}
                 onReset={() => writeEffects(effects.filter((e) => e.id !== fx.id))}
                 canReset
               >
@@ -660,18 +665,9 @@ export default function EditorInspector({
 
           {/* ── add effect ── */}
           <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-            <Menu
-              items={(["animateIn", "animateOut"] as const)
-                .filter((k) => !effects.some((e) => e.kind === k))
-                .map((k) => ({
-                  label: k === "animateIn" ? "Arrives" : "Leaves",
-                  icon: k === "animateIn" ? "markIn" : "markOut",
-                  onSelect: () => {
-                    writeEffects(setEffectPreset({ ...item, effects }, k, "rise", 12));
-                  },
-                }))}
-            >
+            <div style={{ position: "relative" }}>
               <button
+                onClick={() => setAddOpen((v) => !v)}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   height: 28, width: "100%",
@@ -684,7 +680,23 @@ export default function EditorInspector({
               >
                 <Icon name="plus" size={13} /> Add effect
               </button>
-            </Menu>
+              {addOpen && (
+                <div style={{ position: "absolute", right: 0, bottom: 32, zIndex: 40 }}>
+                  <AddEffectPopover
+                    itemType={item.type}
+                    existing={effects.map((e) => e.kind)}
+                    onClose={() => setAddOpen(false)}
+                    onPick={({ kind, preset }) => {
+                      setAddOpen(false);
+                      const next = setEffectPreset({ ...item, effects }, kind, preset, 12);
+                      const added = next.find((e) => e.kind === kind);
+                      if (added) setJustAdded(added.id);
+                      writeEffects(next);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
             <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
               Effects apply top to bottom. Switching one off keeps its values.
             </div>
