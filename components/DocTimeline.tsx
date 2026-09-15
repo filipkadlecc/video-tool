@@ -6,6 +6,7 @@ import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import { timecode, needsHours } from "@/lib/timecode";
+import { CHANNELS_BY_ID, type ChannelId } from "@/lib/editor-keys";
 import Tooltip from "@/components/ui/Tooltip";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
@@ -562,6 +563,27 @@ export default function DocTimeline({
     return out;
   }, [pxPerFrame, total]);
 
+  /**
+   * The selected clip's animated channels, as timeline lanes.
+   *
+   * This is the third view onto the keyframe model — the diamonds say a
+   * property is animated, the inspector strip says where its keys are within
+   * the clip, and these put them on the same ruler as everything else, so you
+   * can see a key land against a cut.
+   */
+  const keyLanes = useMemo(() => {
+    if (selectedIds.size !== 1) return null;
+    const id = [...selectedIds][0];
+    const found = findItem(doc, id);
+    if (!found?.item.keys) return null;
+    const channels = (Object.keys(found.item.keys) as ChannelId[])
+      .filter((c) => (found.item.keys?.[c]?.length ?? 0) > 0);
+    if (channels.length === 0) return null;
+    return { trackId: found.track.id, item: found.item, channels };
+  }, [doc, selectedIds]);
+
+  const LANE_H = 28;
+
   /** A track's height, from what is on it. */
   const trackHeight = useCallback((t: Track) =>
     t.items.length > 0 && t.items.every((i) => i.type === "audio") ? TRACK_H_AUDIO : TRACK_H_VIDEO,
@@ -577,10 +599,16 @@ export default function DocTimeline({
   const laneTops = useMemo(() => {
     const out: number[] = [];
     let y = 0;
-    for (const t of doc.tracks) { out.push(y); y += trackHeight(t); }
+    for (const t of doc.tracks) {
+      out.push(y);
+      y += trackHeight(t);
+      // Property lanes push everything below them down; leaving them out of
+      // this is the same class of bug as dividing by a fixed track height.
+      if (keyLanes && keyLanes.trackId === t.id) y += keyLanes.channels.length * LANE_H;
+    }
     out.push(y);
     return out;
-  }, [doc.tracks, trackHeight]);
+  }, [doc.tracks, trackHeight, keyLanes]);
 
   const laneAt = useCallback((y: number) => {
     for (let i = 0; i < laneTops.length - 1; i++) {
@@ -598,8 +626,8 @@ export default function DocTimeline({
   };
 
   const renderTrack = (track: Track, laneIndex: number) => (
+    <React.Fragment key={track.id}>
     <div
-      key={track.id}
       style={{
         display: "flex", height: trackHeight(track), borderBottom: "1px solid var(--border-hairline)",
         background: hoverTrack === laneIndex && dragState?.mode === "move" ? "var(--surface-raised)" : undefined,
@@ -800,6 +828,51 @@ export default function DocTimeline({
         })}
       </div>
     </div>
+
+    {/* Property lanes for the selected clip — the keyframe model's third view,
+        on the same ruler as the cuts. */}
+    {keyLanes && keyLanes.trackId === track.id && keyLanes.channels.map((ch) => {
+      const keys = keyLanes.item.keys![ch] ?? [];
+      const info = CHANNELS_BY_ID[ch];
+      return (
+        <div key={ch} style={{ display: "flex", height: LANE_H, borderBottom: "1px solid var(--border-hairline)" }}>
+          <div
+            style={{
+              width: LABEL_W, flexShrink: 0, display: "flex", alignItems: "center",
+              paddingLeft: 26, borderRight: "1px solid var(--border-hairline)",
+              background: "var(--surface-chrome)",
+            }}
+          >
+            <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{info?.label ?? ch}</span>
+          </div>
+          <div style={{ position: "relative", width: contentW, background: "rgba(244,244,245,0.02)" }}>
+            {keys.length > 1 && (
+              <div
+                style={{
+                  position: "absolute", top: "50%", height: 1,
+                  left: (keyLanes.item.from + keys[0].frame) * pxPerFrame,
+                  width: Math.max(0, (keys[keys.length - 1].frame - keys[0].frame) * pxPerFrame),
+                  background: "var(--surface-active)",
+                }}
+              />
+            )}
+            {keys.map((k) => (
+              <span
+                key={k.frame}
+                title={`${info?.label ?? ch} · ${k.value}`}
+                style={{
+                  position: "absolute", top: "50%", marginTop: -4.5, marginLeft: -4.5,
+                  left: (keyLanes.item.from + k.frame) * pxPerFrame,
+                  width: 9, height: 9, transform: "rotate(45deg)",
+                  background: "var(--ink-primary)",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    })}
+    </React.Fragment>
   );
 
   // `shortcut` strings here must match the shortcuts sheet exactly — same
