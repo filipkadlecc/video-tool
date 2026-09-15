@@ -27,6 +27,7 @@ import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import TypeBadge from "@/components/ui/TypeBadge";
 import Segmented from "@/components/ui/Segmented";
+import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
 import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
@@ -144,7 +145,7 @@ export default function ProjectEditor() {
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   // Which tab each panel is showing while the visual editor is open. Code-first
   // projects keep the old single-purpose panels.
-  const [bottomTab, setBottomTab] = useState<"footage" | "assets" | "snippets" | "effects" | "code">("footage");
+  const [bottomTab, setBottomTab] = useState<"footage" | "assets" | "snippets" | "effects">("footage");
   const [rightTab, setRightTab] = useState<"chat" | "properties">("chat");
 
   /**
@@ -161,7 +162,8 @@ export default function ProjectEditor() {
   const [workspace, setWorkspace] = useState<"cut" | "direct">("cut");
   const workspaceKey = `vt:workspace:${projectId}`;
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const mediaPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
+  const railPanelRef = useRef<PanelImperativeHandle | null>(null);
   const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
   const chatRef = useRef<ChatPanelHandle>(null);
   // Bounds automatic error-retry so a persistently-broken generation can't loop
@@ -851,29 +853,45 @@ export default function ProjectEditor() {
   // Apply the workspace's geometry. Panels are resized in place.
   useEffect(() => {
     try { window.localStorage.setItem(workspaceKey, workspace); } catch { /* ignore */ }
-    if (workspace === "direct") {
-      // Chat-first: a wide chat column, the media browsers out of the way.
-      rightPanelRef.current?.resize("452px");
-      mediaPanelRef.current?.resize("152px");
-      setRightTab("chat");
-    } else {
-      // Timeline-first: the inspector at the width the row grid needs.
-      rightPanelRef.current?.resize("360px");
-      mediaPanelRef.current?.resize("30%");
-      setRightTab("properties");
-    }
+    // Applied on the next frame: the Group restores its own saved layout on
+    // mount, and whichever runs last wins. These are the spec's widths, so
+    // they should.
+    // Two frames, not one: on first mount the Group is still applying its own
+    // restored layout during the first, and whichever runs last wins.
+    let inner = 0;
+    const raf = requestAnimationFrame(() => { inner = requestAnimationFrame(() => {
+      if (workspace === "direct") {
+        // Chat-first: a wide chat column and the timeline down to a strip, so
+        // an AI edit's result is visible in the same glance as the sentence
+        // describing it.
+        rightPanelRef.current?.resize("452px");
+        timelinePanelRef.current?.resize("152px");
+      } else {
+        // Timeline-first: the inspector at 360px — the narrowest width that
+        // holds the property row grid — and the timeline at full height.
+        // Order matters: sizing the right panel steals width back from its
+        // neighbours, so the rail goes last or it ends up 24px short.
+        rightPanelRef.current?.resize("360px");
+        timelinePanelRef.current?.resize("296px");
+        railPanelRef.current?.resize("248px");
+      }
+    }); });
+    setRightTab(workspace === "direct" ? "chat" : "properties");
+    return () => { cancelAnimationFrame(raf); cancelAnimationFrame(inner); };
   }, [workspace, workspaceKey]);
 
   const horizontalLayout = useDefaultLayout({
-    id: `studio-h-${layoutKind}`,
-    panelIds: ["main", "chat"],
+    // v3: the stage row is now rail | preview | right, and the timeline moved
+    // out to full width beneath it.
+    id: `studio-h3-${layoutKind}`,
+    panelIds: ["rail", "preview", "chat"],
     storage,
   });
   const verticalLayout = useDefaultLayout({
-    // v2: taller editable timeline — bumping the id resets saved layouts once so
-    // the new default heights apply.
-    id: `studio-v2-${layoutKind}`,
-    panelIds: layoutKind === "video" ? ["preview", "timeline", "code"] : ["preview", "code"],
+    // v3: the outer group is now vertical — stage over timeline (over the
+    // legacy code panel, when there is no document).
+    id: `studio-v3-${layoutKind}`,
+    panelIds: layoutKind === "video" ? ["stage", "timeline"] : ["stage", "code"],
     storage,
   });
 
@@ -1221,18 +1239,78 @@ export default function ProjectEditor() {
       {/* Studio layout: resizable panels */}
       <div style={{ flex: 1, minHeight: 0, background: "var(--border-hairline)" }}>
         <Group
-          orientation="horizontal"
-          defaultLayout={horizontalLayout.defaultLayout}
-          onLayoutChanged={horizontalLayout.onLayoutChanged}
+          orientation="vertical"
+          defaultLayout={verticalLayout.defaultLayout}
+          onLayoutChanged={verticalLayout.onLayoutChanged}
           style={{ height: "100%" }}
         >
-          <Panel id="main" defaultSize="72%" minSize="30%">
+          <Panel id="stage" defaultSize="70%" minSize="30%">
             <Group
-              orientation="vertical"
-              defaultLayout={verticalLayout.defaultLayout}
-              onLayoutChanged={verticalLayout.onLayoutChanged}
+              orientation="horizontal"
+              defaultLayout={horizontalLayout.defaultLayout}
+              onLayoutChanged={horizontalLayout.onLayoutChanged}
               style={{ height: "100%" }}
             >
+              {/* Media rail — Cut only. Direct is chat-first: you ask for the
+                  change rather than going and finding the file yourself. */}
+              {docView && workspace === "cut" && (
+                <>
+                  <Panel id="rail" panelRef={railPanelRef} defaultSize="248px" minSize="180px" maxSize="30%">
+                    <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                    <>
+                      {/* Underline tabs, because these are PLACES. Code is not
+                          here — it is a toolbar toggle, and having both was two
+                          doors to one room. Effects moves into the inspector
+                          when the effect stack lands. */}
+                      <div style={{ padding: "0 12px", flexShrink: 0 }}>
+                        <Tabs
+                          value={bottomTab}
+                          onChange={(v) => setBottomTab(v as typeof bottomTab)}
+                          options={[
+                            { value: "footage", label: "Footage" },
+                            { value: "assets", label: "Assets" },
+                            { value: "snippets", label: "Snippets" },
+                            { value: "effects", label: "Effects" },
+                          ]}
+                        />
+                      </div>
+                      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                        {bottomTab === "footage" && (
+                          <FootageBrowser
+                            projectId={projectId}
+                            doc={docView}
+                            onChange={commitDoc}
+                                  onSelect={(id: string) => setSelectedItemIds(new Set([id]))}
+                          />
+                        )}
+                        {bottomTab === "assets" && (
+                          <AssetBrowser
+                            inline
+                            open={false}
+                            onClose={() => {}}
+                            onCopyPath={() => {}}
+                            onInsert={(path, type) => insertAsset(path, type)}
+                          />
+                        )}
+                        {bottomTab === "snippets" && (
+                          <SnippetBrowser
+                            inline
+                            open={false}
+                            onClose={() => {}}
+                            hasExistingCode={false}
+                            onUseSnippet={handleUseSnippet}
+                          />
+                        )}
+                        {bottomTab === "effects" && (
+                          <EffectsPanel doc={docView} selectedIds={selectedItemIds} onChange={commitDoc} />
+                        )}
+                      </div>
+                    </>
+                    </div>
+                  </Panel>
+                  <Separator className="resize-handle resize-handle-vertical" />
+                </>
+              )}
               <Panel id="preview" defaultSize={hasTimeline ? "50%" : "65%"} minSize="15%">
                 <div style={{ background: "#000", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden", position: "relative" }}>
                   {/*
@@ -1274,101 +1352,7 @@ export default function ProjectEditor() {
                   )}
                 </div>
               </Panel>
-              {hasTimeline && (
-                <>
-                  <Separator className="resize-handle resize-handle-horizontal" />
-                  <Panel id="timeline" defaultSize="30%" minSize="12%">
-                    <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                      {docView && (
-                      <DocTimeline
-                        doc={docView}
-                        onChange={commitDoc}
-                          onSeek={seekTo}
-                        onScrubStart={handleScrubStart}
-                        onTogglePlay={togglePlay}
-                        mediaFiles={docMedia}
-                        mediaDurations={docMediaDurations}
-                        projectId={projectId}
-                        selectedIds={selectedItemIds}
-                        onSelectionChange={setSelectedItemIds}
-                        onPromptAnimation={() => setPromptAnimOpen(true)}
-                      />
-                      )}
-                    </div>
-                  </Panel>
-                </>
-              )}
-              <Separator className="resize-handle resize-handle-horizontal" />
-              <Panel id="code" panelRef={mediaPanelRef} defaultSize={hasTimeline ? "20%" : "35%"} minSize="10%">
-                <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                  {docView ? (
-                    <>
-                      <div style={{ padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
-                        <Segmented
-                          value={bottomTab}
-                          onChange={(v) => setBottomTab(v as typeof bottomTab)}
-                          options={[
-                            { value: "footage", label: "Footage" },
-                            { value: "assets", label: "Assets" },
-                            { value: "snippets", label: "Snippets" },
-                            { value: "effects", label: "Effects" },
-                            { value: "code", label: "Code" },
-                          ]}
-                        />
-                      </div>
-                      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                        {bottomTab === "footage" && (
-                          <FootageBrowser
-                            projectId={projectId}
-                            doc={docView}
-                            onChange={commitDoc}
-                                  onSelect={(id: string) => setSelectedItemIds(new Set([id]))}
-                          />
-                        )}
-                        {bottomTab === "assets" && (
-                          <AssetBrowser
-                            inline
-                            open={false}
-                            onClose={() => {}}
-                            onCopyPath={() => {}}
-                            onInsert={(path, type) => insertAsset(path, type)}
-                          />
-                        )}
-                        {bottomTab === "snippets" && (
-                          <SnippetBrowser
-                            inline
-                            open={false}
-                            onClose={() => {}}
-                            hasExistingCode={false}
-                            onUseSnippet={handleUseSnippet}
-                          />
-                        )}
-                        {bottomTab === "effects" && (
-                          <EffectsPanel doc={docView} selectedIds={selectedItemIds} onChange={commitDoc} />
-                        )}
-                        {bottomTab === "code" && (
-                          <CodeEditor
-                            code={code}
-                            onChange={handleCodeChange}
-                            language="typescript"
-                            filename="Scene.tsx"
-                          />
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                  <CodeEditor
-                    code={code}
-                    onChange={handleCodeChange}
-                    language={isTerminalProject ? "vhs" : "typescript"}
-                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
-                  />
-                  )}
-                </div>
-              </Panel>
-            </Group>
-          </Panel>
-          <Separator className="resize-handle resize-handle-vertical" />
+              <Separator className="resize-handle resize-handle-vertical" />
           <Panel id="chat" panelRef={rightPanelRef} defaultSize="360px" minSize="18%" maxSize="50%">
             <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
               {docView && (
@@ -1434,6 +1418,49 @@ export default function ProjectEditor() {
               )}
             </div>
           </Panel>
+            </Group>
+          </Panel>
+              {hasTimeline && (
+                <>
+                  <Separator className="resize-handle resize-handle-horizontal" />
+                  <Panel id="timeline" panelRef={timelinePanelRef} defaultSize="296px" minSize="120px">
+                    <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                      {docView && (
+                      <DocTimeline
+                        doc={docView}
+                        onChange={commitDoc}
+                          onSeek={seekTo}
+                        onScrubStart={handleScrubStart}
+                        onTogglePlay={togglePlay}
+                        mediaFiles={docMedia}
+                        mediaDurations={docMediaDurations}
+                        projectId={projectId}
+                        selectedIds={selectedItemIds}
+                        onSelectionChange={setSelectedItemIds}
+                        onPromptAnimation={() => setPromptAnimOpen(true)}
+                      />
+                      )}
+                    </div>
+                  </Panel>
+                </>
+              )}
+          {/* A legacy project has no document, so its code IS the edit surface.
+              It keeps the full-width bottom panel it has always had. */}
+          {!docView && (
+            <>
+              <Separator className="resize-handle resize-handle-horizontal" />
+              <Panel id="code" defaultSize="35%" minSize="10%">
+                <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+                  <CodeEditor
+                    code={code}
+                    onChange={handleCodeChange}
+                    language={isTerminalProject ? "vhs" : "typescript"}
+                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
+                  />
+                </div>
+              </Panel>
+            </>
+          )}
         </Group>
       </div>
 
