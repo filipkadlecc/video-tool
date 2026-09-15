@@ -104,6 +104,19 @@ export default function EditorPreview({
             </AbsoluteFill>
           )}
         />
+        {/* Rule-of-thirds, under the interaction layer so it never eats a click.
+            Barely there on purpose — a guide you notice is a guide in the way. */}
+        {box.w > 0 && (
+          <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 2 }}>
+            {[33.333, 66.667].map((pc) => (
+              <React.Fragment key={pc}>
+                <div style={{ position: "absolute", left: `${pc}%`, top: 0, bottom: 0, width: 1, background: "rgba(244,244,245,0.05)" }} />
+                <div style={{ position: "absolute", top: `${pc}%`, left: 0, right: 0, height: 1, background: "rgba(244,244,245,0.05)" }} />
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+
         {canEdit && box.w > 0 && (
           <EditorCanvas
             doc={doc}
@@ -115,6 +128,19 @@ export default function EditorPreview({
             boxH={box.h}
           />
         )}
+        {box.w > 0 && (
+          <div
+            className="t-data-s"
+            style={{
+              position: "absolute", right: 8, bottom: 8, zIndex: 4, pointerEvents: "none",
+              padding: "2px 6px", borderRadius: "var(--r-item)",
+              background: "rgba(10,10,11,0.7)", color: "var(--ink-tertiary)",
+            }}
+          >
+            {width} × {height} · {Math.round((box.w / width) * 100)}%
+          </div>
+        )}
+
         </div>
       </div>
 

@@ -220,11 +220,24 @@ export default function EditorCanvas({
             }}
             style={{
               position: "absolute", ...box, cursor: item.type === "text" ? "text" : "move",
-              outline: selected ? "1.5px solid var(--brand)" : "1px dashed rgba(255,255,255,0.25)",
+              outline: selected ? "1px solid rgba(244,244,245,0.85)" : "1px dashed rgba(244,244,245,0.18)",
               outlineOffset: 0,
-              background: "transparent",
+              background: selected ? "rgba(244,244,245,0.03)" : "transparent",
             }}
           >
+            {selected && !editing && (
+              <span
+                className="t-data-s"
+                style={{
+                  position: "absolute", left: 0, top: -18, height: 18,
+                  display: "inline-flex", alignItems: "center", padding: "0 5px",
+                  background: "var(--ink-primary)", color: "var(--surface-void)",
+                  borderRadius: "2px 2px 0 0", whiteSpace: "nowrap", pointerEvents: "none",
+                }}
+              >
+                {item.type === "text" ? ((item as TextItem).text.slice(0, 18) || "Text") : item.type}
+              </span>
+            )}
             {editing?.id === item.id && (
               <textarea
                 autoFocus
@@ -269,10 +282,10 @@ export default function EditorCanvas({
                 onPointerDown={(e) => begin(e, item, h.id)}
                 style={{
                   position: "absolute",
-                  left: `calc(${h.x * 100}% - 4px)`,
-                  top: `calc(${h.y * 100}% - 4px)`,
-                  width: 8, height: 8, borderRadius: 2,
-                  background: "var(--brand)", border: "1px solid #fff",
+                  left: `calc(${h.x * 100}% - 3px)`,
+                  top: `calc(${h.y * 100}% - 3px)`,
+                  width: 6, height: 6, borderRadius: 1,
+                  background: "var(--ink-primary)", border: "none",
                   cursor: h.cursor,
                 }}
               />
