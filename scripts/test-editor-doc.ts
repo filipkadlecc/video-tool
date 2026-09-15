@@ -13,6 +13,11 @@ import path from "path";
 import { compositionSpans, docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments, windowedSceneItem } from "../lib/editor-import";
 import { planCuts, DEFAULT_THRESHOLDS } from "../lib/cut-plan";
 import type { Transcript } from "../lib/transcribe";
+import {
+  valueAt, keyAt, setKey, removeKey, shiftKeys, keysAreValid, resolvedLayout,
+  ANIMATABLE_CHANNELS, CHANNELS_BY_ID, channelsFor, DEFAULT_EASE,
+  type EaseId, type Keyframe,
+} from "../lib/editor-keys";
 import { ANIMATION_PRESETS, animationFrames, composeEffects, itemEffects, presetStyle, presetsFor, reorderEffects, setEffectEnabled, setEffectPreset, visibleCharacters, wordProgress } from "../lib/editor-effects";
 import { scrubValue } from "../components/ui/ScrubNumber";
 import { timecode } from "../components/EditorPlayerControls";
@@ -25,7 +30,7 @@ import {
   hasRoomAt, resizeLayout, snapBox, splitItem, trackWithRoomAt, trimItem, updateItem,
   fitSceneItem, retimeSceneCode, sceneFit,
   type Asset, type CaptionToken, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
-  migrateDoc, EDITOR_DOC_VERSION,
+  migrateDoc, EDITOR_DOC_VERSION, setItemKey, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
   type EditorItem,
 } from "../lib/editor-doc";
 
@@ -407,6 +412,162 @@ head("duplicate and clone");
   const copy = cloneItem(items[0], 500);
   a(copy.id !== items[0].id && copy.from === 500, "clone takes a new id and position");
   a(duplicateItem(doc, "missing") === doc, "duplicating nothing is a no-op");
+}
+
+head("keyframes: sampling between keys");
+{
+  const keys: Keyframe[] = [{ frame: 0, value: 0 }, { frame: 10, value: 100 }];
+  a(valueAt(keys, -5, 999) === 0, "before the first key it holds the first value");
+  a(valueAt(keys, 15, 999) === 100, "after the last it holds the last");
+  a(valueAt(keys, 0, 999) === 0, "exactly on a key returns it");
+  a(valueAt(undefined, 5, 42) === 42, "an absent channel falls back to its scalar");
+  a(valueAt([], 5, 42) === 42, "and so does an empty one");
+  a(valueAt([{ frame: 3, value: 7 }], 99, 0) === 7, "a single key is constant everywhere");
+
+  const lin: Keyframe[] = [{ frame: 0, value: 0, ease: "linear" }, { frame: 10, value: 100 }];
+  a(valueAt(lin, 5, 0) === 50, "linear midway is the mean");
+
+  const held: Keyframe[] = [{ frame: 0, value: 0, hold: true }, { frame: 10, value: 100 }];
+  a(valueAt(held, 9, 0) === 0, "a hold key steps rather than ramps");
+  a(valueAt(held, 10, 0) === 100, "and releases exactly at the next key");
+
+  a(DEFAULT_EASE === "out", "the default curve is ease-out, not linear");
+  a(channelsFor("audio").length === 0, "audio has no visual channels");
+  a(channelsFor("text").length === ANIMATABLE_CHANNELS.length, "a text clip has them all");
+  a(!ANIMATABLE_CHANNELS.some((c) => /blur/i.test(c.id)), "there is no blur channel — the channel set IS the ban");
+  a(!ANIMATABLE_CHANNELS.some((c) => c.id === "width" as never || c.id === "height" as never),
+    "and width/height are not animatable — scale is a transform, not a relayout");
+}
+
+head("keyframes: no curve can make a value illegal");
+{
+  const eases: EaseId[] = ["linear", "in", "out", "inOut"];
+  for (const ease of eases) {
+    const k: Keyframe[] = [{ frame: 0, value: 0, ease }, { frame: 10, value: 1 }];
+    for (let f = 0; f <= 10; f++) {
+      const v = valueAt(k, f, 0);
+      a(v >= 0 && v <= 1, `${ease} stays between its two keys (@${f})`);
+    }
+  }
+  // Clamping is the safety net that lets the curve set stay open.
+  const wild: Keyframe[] = [{ frame: 0, value: -5 }, { frame: 10, value: 5 }];
+  for (let f = 0; f <= 10; f++) {
+    const o = valueAt(wild, f, 1, CHANNELS_BY_ID.opacity);
+    a(o >= 0 && o <= 1, `opacity is clamped to 0..1 (@${f})`);
+    const sc = valueAt(wild, f, 1, CHANNELS_BY_ID.scale);
+    a(sc >= 0, `scale can never go negative (@${f})`);
+  }
+}
+
+head("keyframes: writing keys keeps a channel sorted and unique");
+{
+  let k = setKey(undefined, 10, 1);
+  k = setKey(k, 0, 0);
+  k = setKey(k, 5, 0.5);
+  a(k.map((x) => x.frame).join(",") === "0,5,10", "an out-of-order insert sorts");
+  a(keysAreValid(k), "and the result is valid");
+
+  const replaced = setKey(k, 5, 0.9);
+  a(replaced.length === 3, "writing at an existing frame replaces rather than duplicating");
+  a(keyAt(replaced, 5)?.value === 0.9, "with the new value");
+
+  a(removeKey(replaced, 5).length === 2, "removeKey drops one");
+  a(!keysAreValid([{ frame: 5, value: 0 }, { frame: 5, value: 1 }]), "duplicate frames are invalid");
+  a(!keysAreValid([{ frame: 1.5, value: 0 }]), "fractional frames are invalid");
+  a(keysAreValid([{ frame: -20, value: 0 }, { frame: 0, value: 1 }]), "but NEGATIVE frames are legal");
+  a(shiftKeys(k, -3)[0].frame === -3, "shifting can take a key negative");
+  a(shiftKeys(k, 0) === k, "a zero shift is a no-op");
+}
+
+head("keyframes travel with the clip: move, trim, split, duplicate");
+{
+  const mk = () => {
+    const d = addTrack(emptyDoc(SIZE), "V1");
+    const tid = d.tracks[d.tracks.length - 1].id;
+    // NB: emptyDoc already has a track, so the one we just added is the LAST.
+    let doc = addItem(d, tid, {
+      id: "k1", type: "solid", from: 100, durationInFrames: 100,
+      layout: { x: 0, y: 0, width: 100, height: 100 }, color: "#fff",
+    } as EditorItem);
+    doc = setItemKey(doc, "k1", "opacity", 0, 0);
+    doc = setItemKey(doc, "k1", "opacity", 50, 1);
+    return doc;
+  };
+
+  // Moving changes `from`; item-local time does not move.
+  const moved = moveItem(mk(), "k1", 40);
+  a(JSON.stringify(findItem(moved, "k1")!.item.keys) === JSON.stringify(findItem(mk(), "k1")!.item.keys),
+    "moving a clip leaves every key number untouched");
+
+  // Right trim is reversible — keys past the new end are KEPT.
+  const shorter = trimItem(mk(), "k1", "right", -40, SIZE.fps);
+  const back = trimItem(shorter, "k1", "right", 40, SIZE.fps);
+  a(JSON.stringify(findItem(back, "k1")!.item.keys) === JSON.stringify(findItem(mk(), "k1")!.item.keys),
+    "trimming the right edge in and back out round-trips the keys");
+
+  // Left trim: every surviving composition frame resolves to the SAME value.
+  const orig = mk();
+  const lt = trimItem(orig, "k1", "left", 20, SIZE.fps);
+  const li = findItem(lt, "k1")!.item;
+  let sameEverywhere = true;
+  for (let f = li.from; f < li.from + li.durationInFrames; f++) {
+    const a1 = itemLayoutAt(findItem(orig, "k1")!.item, f).opacity;
+    const a2 = itemLayoutAt(li, f).opacity;
+    if (Math.abs(a1 - a2) > 1e-9) { sameEverywhere = false; break; }
+  }
+  a(sameEverywhere, "left-trimming keeps every surviving frame looking identical");
+
+  // Split: evaluating through head+tail equals evaluating through the original.
+  const o2 = mk();
+  const sp = splitItem(o2, "k1", 150, SIZE.fps);
+  const parts = sp.tracks[sp.tracks.length - 1].items;
+  a(parts.length === 2, "the split produced two clips");
+  let matches = true;
+  const before = findItem(o2, "k1")!.item;
+  for (let f = 100; f < 200; f++) {
+    const part = parts.find((p) => f >= p.from && f < p.from + p.durationInFrames)!;
+    if (Math.abs(itemLayoutAt(part, f).opacity - itemLayoutAt(before, f).opacity) > 1e-9) { matches = false; break; }
+  }
+  a(matches, "and every frame through the pair matches the original — no jump at the cut");
+  a(parts[1].keys!.opacity!.some((k) => k.frame < 0), "the tail keeps its keys even though they went negative");
+  a(isValidDoc(sp), "a document with negative keys is still valid");
+
+  // Duplicating copies the keys, and the copies are independent.
+  const dup = duplicateItem(mk(), "k1");
+  const copies = dup.tracks[dup.tracks.length - 1].items;
+  a(copies.length === 2 && JSON.stringify(copies[0].keys) === JSON.stringify(copies[1].keys), "a duplicate carries the keys");
+  const edited = setItemKey(dup, copies[1].id, "opacity", 10, 0.5);
+  a(findItem(edited, copies[0].id)!.item.keys!.opacity!.length === 2, "and editing one copy does not touch the other");
+}
+
+head("keyframes: a diamond on and off never moves a pixel");
+{
+  const d = addTrack(emptyDoc(SIZE), "V1");
+  const tid = d.tracks[d.tracks.length - 1].id;
+  const doc = addItem(d, tid, {
+    id: "s1", type: "solid", from: 0, durationInFrames: 50,
+    layout: { x: 40, y: 0, width: 100, height: 100, opacity: 0.4 }, color: "#fff",
+  } as EditorItem);
+
+  const on = enableChannel(doc, "s1", "opacity", 10);
+  a(findItem(on, "s1")!.item.keys?.opacity?.length === 1, "turning the diamond on writes one key");
+  a(itemLayoutAt(findItem(on, "s1")!.item, 10).opacity === 0.4, "and nothing moves");
+
+  const keyed = setItemKey(on, "s1", "opacity", 30, 1);
+  const off = disableChannel(keyed, "s1", "opacity", 20);
+  const atTwenty = valueAt(findItem(keyed, "s1")!.item.keys!.opacity, 20, 0.4, CHANNELS_BY_ID.opacity);
+  a(findItem(off, "s1")!.item.keys === undefined, "turning it off clears the channel");
+  a(Math.abs(itemLayoutAt(findItem(off, "s1")!.item, 20).opacity - atTwenty) < 1e-9,
+    "and bakes the value at the playhead, so nothing moves");
+
+  const cleared = removeItemKey(on, "s1", "opacity", 10);
+  a(findItem(cleared, "s1")!.item.keys === undefined, "removing the last key clears the channel");
+  a(itemLayoutAt(findItem(cleared, "s1")!.item, 0).opacity === 0.4, "restoring the value it held");
+
+  // A v1 item with no keys at all resolves to its own scalars.
+  const plain = resolvedLayout({ layout: { x: 1, y: 2, width: 3, height: 4 } }, 0);
+  a(plain.scale === 1 && plain.anchorX === 0.5 && plain.anchorY === 0.5 && plain.opacity === 1,
+    "a v1 layout resolves to scale 1, centre anchor, full opacity");
 }
 
 head("the effect stack: bypassing keeps the values");

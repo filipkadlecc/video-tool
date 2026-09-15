@@ -25,6 +25,8 @@
 
 import type { AnimationSpec, Effect } from "./editor-effects";
 import { itemEffects } from "./editor-effects";
+import type { Keyframes, Keyframe } from "./editor-keys";
+import { shiftAllChannels, keyframesAreValid, setKey, removeKey, valueAt, resolvedLayout, CHANNELS_BY_ID, type ChannelId } from "./editor-keys";
 
 export const EDITOR_DOC_VERSION = 2;
 
@@ -71,6 +73,15 @@ export interface ItemLayout {
   /** 0..1 */
   opacity?: number;
   cornerRadius?: number;
+  /**
+   * Uniform multiplier about the anchor. 1 = the layout box as authored.
+   * A TRANSFORM, not a resize — animating width/height would re-lay out text
+   * every frame; `transform: scale()` is composited.
+   */
+  scale?: number;
+  /** Transform origin, 0..1 of the item's own box. Defaults to the centre. */
+  anchorX?: number;
+  anchorY?: number;
 }
 
 export type AssetKind = "video" | "audio" | "image" | "gif";
@@ -112,6 +123,14 @@ interface ItemBase {
    * top to bottom, and order is observable because transforms do not commute.
    */
   effects?: Effect[];
+  /**
+   * Animated properties, keyed on ITEM-RELATIVE frames.
+   *
+   * Item-relative because `useCurrentFrame()` inside a <Sequence> is already
+   * item-relative, so the renderer does no offset arithmetic — the same reason
+   * caption tokens are stored that way.
+   */
+  keys?: Keyframes;
 }
 
 /** Fields shared by anything with a soundtrack or a source file to trim. */
@@ -427,6 +446,9 @@ export function isValidDoc(doc: EditorDoc): boolean {
     const sorted = [...track.items].sort((a, b) => a.from - b.from);
     for (let i = 0; i < sorted.length; i++) {
       if (sorted[i].from < 0 || sorted[i].durationInFrames < 1) return false;
+      // Keyframes: sorted, unique, finite integers. Deliberately NOT
+      // `frame >= 0` — a split shifts a tail's keys negative on purpose.
+      if (!keyframesAreValid(sorted[i].keys)) return false;
       const next = sorted[i + 1];
       if (next && sorted[i].from + sorted[i].durationInFrames > next.from) return false;
     }
@@ -613,8 +635,15 @@ export function trimItem(
       if (sceneFit(i) === "retime") return fitSceneItem(next as SceneItem, fps);
       return { ...next, sourceOffsetFrames: Math.max(0, (i.sourceOffsetFrames ?? 0) + applied) };
     }
-    if (!hasSource(i)) return next;
-    return { ...next, sourceIn: (i.sourceIn ?? 0) + applied / fps };
+    // Keys are item-relative, so dragging the left edge cuts into the motion
+    // exactly as it cuts into the footage. Same one-line rule as sourceIn.
+    //
+    // The two-layer story worth keeping straight: PRESETS are anchored to the
+    // clip's EDGES (an entrance plays at the start however you trim), while
+    // KEYFRAMES are anchored to the clip's CONTENT.
+    const shifted = { ...next, keys: shiftAllChannels(i.keys, -applied) };
+    if (!hasSource(i)) return shifted;
+    return { ...shifted, sourceIn: (i.sourceIn ?? 0) + applied / fps };
   });
 }
 
@@ -632,6 +661,12 @@ export function splitItem(doc: EditorDoc, itemId: string, atFrame: number, fps: 
     id: makeId(item.type),
     from: item.from + local,
     durationInFrames: item.durationInFrames - local,
+    // The tail's keys shift back by the cut point — the mirror of the
+    // sourceOffsetFrames rule below. Keys that land before frame 0 are KEPT,
+    // not dropped: the evaluator holds the first value below the first key, so
+    // the tail correctly holds the state the head ended in. Dropping them would
+    // snap the tail back to its static value and make every split jump.
+    keys: shiftAllChannels(item.keys, -local),
   };
   if (hasSource(item)) {
     const cutSec = (item.sourceIn ?? 0) + local / fps;
@@ -648,6 +683,95 @@ export function splitItem(doc: EditorDoc, itemId: string, atFrame: number, fps: 
     ...t,
     items: t.items.flatMap((i) => (i.id === itemId ? [head, tail] : [i])),
   }));
+}
+
+/**
+ * Keyframe operations.
+ *
+ * The corollaries that make the inspector fall out for free:
+ *   - turning a diamond ON writes the current static value as the first key,
+ *     so nothing moves;
+ *   - turning it OFF bakes the value at the playhead back into the scalar, so
+ *     nothing moves;
+ *   - removing the LAST key restores the scalar from that key, so nothing
+ *     moves.
+ *
+ * `localFrame` is always item-relative — composition frame minus `item.from`.
+ */
+
+/** The static ItemLayout field a channel falls back to. 1:1 by construction. */
+function channelFallback(l: ItemLayout, ch: ChannelId): number {
+  switch (ch) {
+    case "x": return l.x;
+    case "y": return l.y;
+    case "scale": return l.scale ?? 1;
+    case "rotation": return l.rotation ?? 0;
+    case "anchorX": return l.anchorX ?? 0.5;
+    case "anchorY": return l.anchorY ?? 0.5;
+    case "opacity": return l.opacity ?? 1;
+  }
+}
+
+function withKeys(item: EditorItem, ch: ChannelId, next: Keyframe[] | undefined): EditorItem {
+  const keys = { ...(item.keys ?? {}) };
+  if (!next || next.length === 0) delete keys[ch];
+  else keys[ch] = next;
+  const empty = Object.keys(keys).length === 0;
+  const out = { ...item, keys: empty ? undefined : keys } as EditorItem;
+  if (empty) delete (out as { keys?: unknown }).keys;
+  return out;
+}
+
+export function setItemKey(
+  doc: EditorDoc, itemId: string, ch: ChannelId, localFrame: number, value: number,
+): EditorDoc {
+  return replaceItem(doc, itemId, (i) =>
+    withKeys(i, ch, setKey(i.keys?.[ch], localFrame, value)));
+}
+
+export function removeItemKey(
+  doc: EditorDoc, itemId: string, ch: ChannelId, localFrame: number,
+): EditorDoc {
+  return replaceItem(doc, itemId, (i) => {
+    const cur = i.keys?.[ch];
+    if (!cur) return i;
+    const next = removeKey(cur, localFrame);
+    if (next.length > 0) return withKeys(i, ch, next);
+    // That was the last key — bake its value back into the scalar so the item
+    // stays exactly where the animation left it.
+    const dying = cur.find((k) => k.frame === Math.round(localFrame)) ?? cur[0];
+    const cleared = withKeys(i, ch, undefined);
+    return { ...cleared, layout: { ...cleared.layout, [ch]: dying.value } } as EditorItem;
+  });
+}
+
+/** Diamond on: the current value becomes the first key. Nothing moves. */
+export function enableChannel(
+  doc: EditorDoc, itemId: string, ch: ChannelId, localFrame: number,
+): EditorDoc {
+  return replaceItem(doc, itemId, (i) => {
+    if (i.keys?.[ch]?.length) return i;
+    const now = channelFallback(i.layout, ch);
+    return withKeys(i, ch, setKey(undefined, localFrame, now));
+  });
+}
+
+/** Diamond off: bake the value at the playhead into the scalar. Nothing moves. */
+export function disableChannel(
+  doc: EditorDoc, itemId: string, ch: ChannelId, localFrame: number,
+): EditorDoc {
+  return replaceItem(doc, itemId, (i) => {
+    const cur = i.keys?.[ch];
+    if (!cur || cur.length === 0) return i;
+    const baked = valueAt(cur, localFrame, channelFallback(i.layout, ch), CHANNELS_BY_ID[ch]);
+    const cleared = withKeys(i, ch, undefined);
+    return { ...cleared, layout: { ...cleared.layout, [ch]: baked } } as EditorItem;
+  });
+}
+
+/** The item's layout at a COMPOSITION frame — the three views' shared read. */
+export function itemLayoutAt(item: EditorItem, compositionFrame: number) {
+  return resolvedLayout(item, compositionFrame - item.from);
 }
 
 export function setLayout(doc: EditorDoc, itemId: string, patch: Partial<ItemLayout>): EditorDoc {
