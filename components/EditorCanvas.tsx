@@ -2,9 +2,10 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  itemsAtFrame, resizeLayout, setLayout, snapBox, updateItem,
+  itemLayoutAt, itemsAtFrame, resizeLayout, setItemKey, setLayout, snapBox, updateItem,
   type EditorDoc, type EditorItem, type ItemLayout, type ResizeHandle, type TextItem,
 } from "@/lib/editor-doc";
+import { isAnimated } from "@/lib/editor-keys";
 
 /**
  * Direct manipulation over the preview: click to select, drag to move, handles
@@ -73,10 +74,13 @@ export default function EditorCanvas({
     onSelectionChange(e.shiftKey || e.metaKey || e.ctrlKey
       ? new Set([...selectedIds, item.id])
       : new Set([item.id]));
-    latest.current = { layout: item.layout, itemId: item.id };
-    setPreview(item.layout);
-    setDrag({ itemId: item.id, handle, startX: e.clientX, startY: e.clientY, origin: item.layout, scale });
-  }, [scale, selectedIds, onSelectionChange, editing]);
+    // Start from where the item ACTUALLY is at this frame. On a keyframed clip
+    // the static layout is dormant, so dragging from it would jump.
+    const at = itemLayoutAt(item, currentFrame);
+    latest.current = { layout: at, itemId: item.id };
+    setPreview(at);
+    setDrag({ itemId: item.id, handle, startX: e.clientX, startY: e.clientY, origin: at, scale });
+  }, [scale, selectedIds, onSelectionChange, editing, currentFrame]);
 
   useEffect(() => {
     if (!drag) return;
@@ -117,7 +121,36 @@ export default function EditorCanvas({
       setDrag(null);
       setPreview(null);
       setGuides({ x: null, y: null });
-      if (layout && itemId) onChange(setLayout(doc, itemId, layout));
+      if (!layout || !itemId) return;
+
+      const item = doc.tracks.flatMap((t) => t.items).find((i) => i.id === itemId);
+      if (!item) return;
+
+      /*
+       * Where the drag lands depends on whether the property is animated.
+       *
+       * If x or y has keys, its static scalar is DORMANT — writing there would
+       * look like the drag did nothing. So a move on an animated channel writes
+       * a KEY at the playhead instead, which is what you meant by dragging.
+       *
+       * Width and height are never keyable (scale is the animated property, and
+       * animating width would re-lay out text every frame), so they always go
+       * to the layout.
+       */
+      const localFrame = currentFrame - item.from;
+      let next = doc;
+      const patch: Partial<ItemLayout> = {};
+      for (const k of ["x", "y", "width", "height"] as const) {
+        const v = layout[k];
+        if (v === undefined) continue;
+        if ((k === "x" || k === "y") && isAnimated(item, k)) {
+          next = setItemKey(next, itemId, k, localFrame, v);
+        } else {
+          patch[k] = v;
+        }
+      }
+      if (Object.keys(patch).length > 0) next = setLayout(next, itemId, patch);
+      onChange(next);
     }
 
     window.addEventListener("pointermove", onMove);
@@ -126,7 +159,7 @@ export default function EditorCanvas({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [drag, doc, onChange]);
+  }, [drag, doc, onChange, currentFrame]);
 
   // The Player's controls sit under this overlay and would otherwise claim the
   // gesture; swallow the events it reacts to while a drag is in progress.
@@ -142,16 +175,27 @@ export default function EditorCanvas({
     };
   }, [drag]);
 
-  const toScreen = (l: ItemLayout) => ({
-    left: l.x * scale,
-    top: l.y * scale,
-    width: l.width * scale,
-    height: l.height * scale,
-    // The selection box has to sit on the item as RENDERED, so it turns with it.
-    // Un-rotated handles on rotated content are unusable — you can't tell which
-    // corner you're grabbing.
-    transform: l.rotation ? `rotate(${l.rotation}deg)` : undefined,
-  });
+  const toScreen = (l: ItemLayout) => {
+    // The selection box has to sit on the item as RENDERED, so it turns AND
+    // scales with it. Un-rotated handles on rotated content are unusable — you
+    // can't tell which corner you're grabbing — and a box that ignores scale
+    // detaches from a keyframed clip entirely.
+    //
+    // Note left/top are applied before the transform, so a drag delta is 1:1
+    // with the cursor regardless of the item's scale; there is nothing to
+    // divide by here.
+    const sc = l.scale ?? 1;
+    const t = [sc !== 1 ? `scale(${sc})` : null, l.rotation ? `rotate(${l.rotation}deg)` : null]
+      .filter(Boolean).join(" ");
+    return {
+      left: l.x * scale,
+      top: l.y * scale,
+      width: l.width * scale,
+      height: l.height * scale,
+      transform: t || undefined,
+      transformOrigin: `${(l.anchorX ?? 0.5) * 100}% ${(l.anchorY ?? 0.5) * 100}%`,
+    };
+  };
 
   return (
     <div
@@ -161,7 +205,7 @@ export default function EditorCanvas({
     >
       {visible.map((item) => {
         const selected = selectedIds.has(item.id);
-        const layout = drag?.itemId === item.id && preview ? preview : item.layout;
+        const layout = drag?.itemId === item.id && preview ? preview : itemLayoutAt(item, currentFrame);
         const box = toScreen(layout);
         return (
           <div

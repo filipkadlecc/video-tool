@@ -540,6 +540,37 @@ head("keyframes travel with the clip: move, trim, split, duplicate");
   a(findItem(edited, copies[0].id)!.item.keys!.opacity!.length === 2, "and editing one copy does not touch the other");
 }
 
+head("an animated channel ignores its scalar — which is why the canvas keys");
+{
+  const d = addTrack(emptyDoc(SIZE), "V1");
+  const tid = d.tracks[d.tracks.length - 1].id;
+  let doc = addItem(d, tid, {
+    id: "c1", type: "solid", from: 0, durationInFrames: 60,
+    layout: { x: 10, y: 10, width: 100, height: 100 }, color: "#fff",
+  } as EditorItem);
+  doc = setItemKey(doc, "c1", "x", 0, 200);
+  doc = setItemKey(doc, "c1", "x", 30, 400);
+
+  // The bug the canvas had: writing the static scalar on an animated channel
+  // changes nothing on screen, so a drag looked like it did nothing at all.
+  const viaScalar = setLayout(doc, "c1", { x: 999 });
+  a(itemLayoutAt(findItem(viaScalar, "c1")!.item, 0).x === 200,
+    "setLayout on an animated channel does NOT move the render");
+
+  // Writing a KEY at the playhead is what a drag must do instead.
+  const viaKey = setItemKey(doc, "c1", "x", 15, 999);
+  a(itemLayoutAt(findItem(viaKey, "c1")!.item, 15).x === 999,
+    "but a key at the playhead does move it");
+
+  // y is untouched, so its scalar still governs — the two channels are
+  // independent, which is what lets a drag key one and set the other.
+  a(itemLayoutAt(findItem(viaKey, "c1")!.item, 15).y === 10,
+    "an un-animated channel on the same item still reads its scalar");
+  const mixed = setLayout(viaKey, "c1", { y: 77 });
+  a(itemLayoutAt(findItem(mixed, "c1")!.item, 15).y === 77, "and still responds to setLayout");
+  a(itemLayoutAt(findItem(mixed, "c1")!.item, 15).x === 999, "without disturbing the animated one");
+}
+
 head("keyframes: a diamond on and off never moves a pixel");
 {
   const d = addTrack(emptyDoc(SIZE), "V1");
