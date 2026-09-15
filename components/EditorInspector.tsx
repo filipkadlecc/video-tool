@@ -19,6 +19,13 @@ import {
   setEffectPreset, type AnimationPreset, type Effect,
 } from "@/lib/editor-effects";
 import { timecode, needsHours, frameCount } from "@/lib/timecode";
+import {
+  setItemKey, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
+} from "@/lib/editor-doc";
+import {
+  isAnimated, keyAt, valueAt, CHANNELS_BY_ID, channelsFor, type ChannelId,
+} from "@/lib/editor-keys";
+import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import GradeSection from "@/components/inspector/GradeSection";
 
 /**
@@ -44,6 +51,71 @@ import GradeSection from "@/components/inspector/GradeSection";
 
 /* ───────────────────────── row primitives ───────────────────────── */
 
+/**
+ * The keyframe diamond — an 8x8 square rotated 45 degrees.
+ *
+ *   filled            this property is animated
+ *   outline           animatable, not yet animated
+ *   (no slot at all)  not animatable — a blend mode gets no diamond rather
+ *                     than a dead one
+ *
+ * When the playhead sits exactly on a key the slot gets a faint rounded
+ * background, so "there is a key here" is readable without counting pixels.
+ *
+ * A row can own several channels (Position is x AND y); one diamond keys them
+ * together, which is what makes the row the unit you think in.
+ */
+function Diamond({
+  doc, item, channels, localFrame, onChange,
+}: {
+  doc: EditorDoc;
+  item: EditorItem;
+  channels: ChannelId[];
+  localFrame: number;
+  onChange: (next: EditorDoc) => void;
+}) {
+  const animated = channels.some((c) => isAnimated(item, c));
+  const onAKey = animated && channels.every((c) => keyAt(item.keys?.[c], localFrame));
+
+  const click = () => {
+    let next = doc;
+    if (!animated) {
+      // Key every channel in the row at its CURRENT value, so nothing moves.
+      for (const c of channels) next = enableChannel(next, item.id, c, localFrame);
+    } else if (onAKey) {
+      for (const c of channels) next = removeItemKey(next, item.id, c, localFrame);
+    } else {
+      // Add a key at the interpolated value — visually a no-op, which is the
+      // point: you are marking this moment, not changing it.
+      for (const c of channels) {
+        const cur = valueAt(item.keys?.[c], localFrame, itemLayoutAt(item, item.from + localFrame)[c as "opacity"] ?? 0, CHANNELS_BY_ID[c]);
+        next = setItemKey(next, item.id, c, localFrame, cur);
+      }
+    }
+    onChange(next);
+  };
+
+  return (
+    <button
+      onClick={click}
+      title={animated ? (onAKey ? "Remove this keyframe" : "Add a keyframe here") : "Animate this property"}
+      style={{
+        width: 20, height: 20, display: "grid", placeItems: "center", padding: 0,
+        background: onAKey ? "rgba(244,244,245,0.1)" : "transparent",
+        border: "none", borderRadius: "var(--r-control)", cursor: "pointer",
+      }}
+    >
+      <span
+        style={{
+          width: 8, height: 8, transform: "rotate(45deg)",
+          background: animated ? "var(--ink-primary)" : "transparent",
+          border: animated ? "none" : "1.5px solid var(--ink-disabled)",
+        }}
+      />
+    </button>
+  );
+}
+
 const ROW_GRID: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "72px minmax(0,1fr) 20px 20px",
@@ -52,11 +124,13 @@ const ROW_GRID: React.CSSProperties = {
 };
 
 function Row({
-  label, children, animated, onReset, isDefault = true, linked,
+  label, children, animated, onReset, isDefault = true, linked, diamond,
 }: {
   label: React.ReactNode;
   children: React.ReactNode;
-  /** Reserved for the keyframe diamond once the model has keys. */
+  /** The row's keyframe diamond. Omit for a property that cannot be animated. */
+  diamond?: React.ReactNode;
+  /** Drives the label colour — an animated property reads ink-primary. */
   animated?: boolean;
   onReset?: () => void;
   isDefault?: boolean;
@@ -76,8 +150,7 @@ function Row({
         {label}
       </span>
       <div style={{ minWidth: 0 }}>{children}</div>
-      {/* keyframe slot — empty until the model has keys */}
-      <span />
+      <span style={{ display: "grid", placeItems: "center" }}>{diamond}</span>
       <span style={{ display: "grid", placeItems: "center" }}>
         {onReset && (
           <button
@@ -233,6 +306,8 @@ export default function EditorInspector({
   onChange: (next: EditorDoc, opts?: { transient?: boolean }) => void;
   onEditSnippet?: (itemId: string) => void;
 }) {
+  // Subscribes: once a property is animated, its VALUE depends on the playhead.
+  const playheadFrame = usePlayheadFrame();
   const [category, setCategory] = useState<Category>("video");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
@@ -271,6 +346,26 @@ export default function EditorInspector({
   const patchLayout = (p: Parameters<typeof setLayout>[2], opts?: { transient?: boolean }) =>
     onChange(setLayout(doc, item.id, p), opts);
 
+  const localFrame = playheadFrame - item.from;
+  const canAnimate = channelsFor(item.type).length > 0;
+  const dia = (channels: ChannelId[]) =>
+    canAnimate ? <Diamond doc={doc} item={item} channels={channels} localFrame={localFrame} onChange={onChange} /> : undefined;
+
+  /**
+   * Reset a row.
+   *
+   * If the row is ANIMATED, stop animating it first — otherwise reset would
+   * write the dormant scalar while the keys keep driving the render, and the
+   * button would appear to do nothing.
+   */
+  const resetRow = (channels: ChannelId[], patch: Parameters<typeof setLayout>[2]) => {
+    let next = doc;
+    for (const c of channels) {
+      if (isAnimated(item, c)) next = disableChannel(next, item.id, c, localFrame);
+    }
+    onChange(setLayout(next, item.id, patch));
+  };
+
   const effects = itemEffects(item);
   const writeEffects = (next: Effect[]) =>
     onChange(updateItem(doc, item.id, { effects: next } as Partial<EditorItem>));
@@ -307,7 +402,13 @@ export default function EditorInspector({
             onReset={() => patchLayout({ rotation: 0 })}
             canReset={Boolean(l.rotation)}
           >
-            <Row label="Position" onReset={() => patchLayout({ x: 0, y: 0 })} isDefault={l.x === 0 && l.y === 0}>
+            <Row
+              label="Position"
+              diamond={dia(["x", "y"])}
+              animated={isAnimated(item, "x") || isAnimated(item, "y")}
+              onReset={() => resetRow(["x", "y"], { x: 0, y: 0 })}
+              isDefault={l.x === 0 && l.y === 0 && !isAnimated(item, "x") && !isAnimated(item, "y")}
+            >
               <Vector
                 x={l.x} y={l.y}
                 onX={(n, o) => patchLayout({ x: n }, o)}
@@ -323,6 +424,8 @@ export default function EditorInspector({
             </Row>
             <Row
               label="Scale"
+              diamond={dia(["scale"])}
+              animated={isAnimated(item, "scale")}
               onReset={() => {
                 const width = doc.size.width;
                 const height = Math.max(8, Math.round(width * (l.height / l.width)));
@@ -361,7 +464,13 @@ export default function EditorInspector({
                 <ReadOnly dim>{l.height}</ReadOnly>
               </div>
             </Row>
-            <Row label="Rotation" onReset={() => patchLayout({ rotation: 0 })} isDefault={!l.rotation}>
+            <Row
+              label="Rotation"
+              diamond={dia(["rotation"])}
+              animated={isAnimated(item, "rotation")}
+              onReset={() => resetRow(["rotation"], { rotation: 0 })}
+              isDefault={!l.rotation && !isAnimated(item, "rotation")}
+            >
               <Scalar
                 value={l.rotation ?? 0} min={-180} max={180} suffix="°"
                 onChange={(n, o) => patchLayout({ rotation: n }, o)}
@@ -376,7 +485,13 @@ export default function EditorInspector({
             onReset={() => patchLayout({ opacity: 1, cornerRadius: 0 })}
             canReset={(l.opacity ?? 1) !== 1 || Boolean(l.cornerRadius)}
           >
-            <Row label="Opacity" onReset={() => patchLayout({ opacity: 1 })} isDefault={(l.opacity ?? 1) === 1}>
+            <Row
+              label="Opacity"
+              diamond={dia(["opacity"])}
+              animated={isAnimated(item, "opacity")}
+              onReset={() => resetRow(["opacity"], { opacity: 1 })}
+              isDefault={(l.opacity ?? 1) === 1 && !isAnimated(item, "opacity")}
+            >
               <Scalar
                 value={Math.round((l.opacity ?? 1) * 100)} min={0} max={100} suffix="%"
                 onChange={(n, o) => patchLayout({ opacity: n / 100 }, o)}
