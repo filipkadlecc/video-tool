@@ -106,7 +106,9 @@ const registerVHSLanguage: BeforeMount = (monaco) => {
 interface CodeEditorProps {
   code: string;
   onChange: (code: string) => void;
-  language?: "typescript" | "plaintext" | "vhs";
+  language?: "typescript" | "plaintext" | "vhs" | "json";
+  /** A document view is a readout, not an edit surface. */
+  readOnly?: boolean;
   filename?: string;
 }
 
@@ -115,8 +117,9 @@ export default function CodeEditor({
   onChange,
   language = "typescript",
   filename,
+  readOnly,
 }: CodeEditorProps) {
-  const tabName = filename ?? (language === "plaintext" ? "tape.tape" : "Scene.tsx");
+  const tabName = filename ?? (language === "plaintext" ? "tape.tape" : language === "json" ? "scene.json" : "Scene.tsx");
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Tabs */}
@@ -169,6 +172,7 @@ export default function CodeEditor({
           value={code}
           onChange={(val) => onChange(val || "")}
           options={{
+            readOnly,
             minimap: { enabled: false },
             fontSize: 13,
             lineNumbers: "on",

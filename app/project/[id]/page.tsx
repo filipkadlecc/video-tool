@@ -1477,12 +1477,33 @@ export default function ProjectEditor() {
               <Separator className="resize-handle resize-handle-horizontal" />
               <Panel id="code" defaultSize="35%" minSize="10%">
                 <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                  <CodeEditor
-                    code={code}
-                    onChange={handleCodeChange}
-                    language={isTerminalProject ? "vhs" : "typescript"}
-                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
-                  />
+                  {doc ? (
+                    /*
+                     * Code view on a doc-born project used to show the legacy
+                     * TSX field — which such a project never has, so it was a
+                     * blank editor. The composition IS the document, so that is
+                     * what it shows: scene.json, read-only.
+                     *
+                     * Read-only on purpose. Round-tripping edited JSON back
+                     * into the document is a real feature with real failure
+                     * modes; a readout that is honest about being a readout is
+                     * better than an edit surface that silently discards work.
+                     */
+                    <CodeEditor
+                      code={JSON.stringify(doc, null, 2)}
+                      onChange={() => {}}
+                      language="json"
+                      filename="scene.json"
+                      readOnly
+                    />
+                  ) : (
+                    <CodeEditor
+                      code={code}
+                      onChange={handleCodeChange}
+                      language={isTerminalProject ? "vhs" : "typescript"}
+                      filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
+                    />
+                  )}
                 </div>
               </Panel>
             </>
