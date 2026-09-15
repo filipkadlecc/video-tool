@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import FeedbackButton from "@/components/FeedbackButton";
 import { ToastProvider } from "@/components/ui/Toast";
+import { DialogProvider } from "@/components/ui/Dialogs";
 
 export const metadata: Metadata = {
   title: "Video Tool",
@@ -19,8 +20,10 @@ export default function RootLayout({
         {/* Toasts replace the native alert()s and the "Loading" strings. The host
             is mounted once here so any screen can raise one. */}
         <ToastProvider>
-          {children}
-          <FeedbackButton />
+          <DialogProvider>
+            {children}
+            <FeedbackButton />
+          </DialogProvider>
         </ToastProvider>
       </body>
     </html>

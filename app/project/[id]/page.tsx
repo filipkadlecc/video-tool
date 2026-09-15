@@ -33,6 +33,7 @@ import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSc
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PlayerRef } from "@remotion/player";
+import { useToast } from "@/components/ui/Toast";
 
 const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
   ssr: false,
@@ -127,6 +128,7 @@ export default function ProjectEditor() {
   const codeHistory = useCodeHistory();
   // The editor document. When present it is the source of truth for the video
   // and this project opens in the visual editor instead of the code editor.
+  const toast = useToast();
   const [doc, setDoc] = useState<EditorDoc | undefined>(undefined);
   const docHistory = useDocHistory();
   const [docMedia, setDocMedia] = useState<{ name: string; path: string; type: string }[]>([]);
@@ -723,7 +725,10 @@ export default function ProjectEditor() {
     if (!doc) return;
     const isImage = type === "image" || type === "svg";
     if (!isImage) {
-      window.alert(`${path.split("/").pop()} isn't an image — only images can be placed on a track.`);
+      toast.warning(
+        `${path.split("/").pop()} isn't an image`,
+        "Only images can be placed on a track. Video and audio go in via Footage.",
+      );
       return;
     }
     const frames = doc.size.fps * 3;
@@ -1062,15 +1067,17 @@ export default function ProjectEditor() {
               });
               if (imported) {
                 commitDoc(imported);
+                const n = imported.tracks[0].items.length;
                 const odd = suspiciousSegments(code, size.fps);
                 if (odd.length > 0) {
-                  window.setTimeout(() => window.alert(
-                    `Imported ${imported.tracks[0].items.length} clips.\n\n` +
-                    `Heads up — ${odd.length === 1 ? "one topic has" : `${odd.length} topics have`} almost no footage, ` +
-                    `so ${odd.length === 1 ? "it is" : "they are"} nearly invisible in the finished video:\n` +
-                    odd.map((o) => `  • ${o.label} — ${o.seconds.toFixed(2)}s`).join("\n") +
-                    `\n\nThat came from the generated edit, not the import. Trim the clip out or drag its edge to fix it.`,
-                  ), 300);
+                  // A caveat you can proceed past, so amber and dismissible —
+                  // not a dialog, and not on a timer you have to wait out.
+                  toast.warning(
+                    `Imported ${n} ${n === 1 ? "clip" : "clips"} — ${odd.length === 1 ? "one topic is" : `${odd.length} topics are`} nearly invisible`,
+                    `${odd.map((o) => `${o.label} ${o.seconds.toFixed(2)}s`).join(" · ")}. That came from the generated edit, not the import — trim the clip out or drag its edge.`,
+                  );
+                } else {
+                  toast.success(`Imported ${n} ${n === 1 ? "clip" : "clips"}`);
                 }
                 return;
               }

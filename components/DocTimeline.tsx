@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
+import { useToast } from "@/components/ui/Toast";
 import ShortcutsModal from "@/components/ShortcutsModal";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
@@ -97,6 +98,7 @@ export default function DocTimeline({
   const [snapOn, setSnapOn] = useState(true);
   const [containerWidth, setContainerWidth] = useState(900);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const toast = useToast();
   const [captionsBusy, setCaptionsBusy] = useState<string | null>(null);
   // The same file list serves two jobs: dropping a clip on a track, and turning
   // a clip's speech into subtitles. Captions used to be reachable only as a
@@ -423,7 +425,12 @@ export default function DocTimeline({
       onSelectionChange(new Set([item.id]));
       setPickerOpen(false);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Transcription failed");
+      // What happened, what it cost, what to do next.
+      toast.error(
+        "Couldn't transcribe that clip",
+        e instanceof Error ? e.message : "No subtitles were added.",
+        [{ label: "Try again", onClick: () => { void addCaptions(file); } }],
+      );
     } finally {
       setCaptionsBusy(null);
     }
@@ -484,7 +491,10 @@ export default function DocTimeline({
         next = addItem({ ...next, assets: [...next.assets, asset] }, trackId, item);
         cursor += frames;
       } catch (e) {
-        window.alert(`${file.name}: ${e instanceof Error ? e.message : "Upload failed"}`);
+        toast.error(
+          `Couldn't import ${file.name}`,
+          e instanceof Error ? e.message : "It wasn't added to the timeline.",
+        );
       }
     }
     setUploading(null);

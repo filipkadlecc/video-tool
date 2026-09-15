@@ -13,6 +13,8 @@ import Modal from "@/components/ui/Modal";
 import type { ProjectMeta, AnimationType, Collection } from "@/lib/types";
 import { ANIMATION_TYPES, getAnimationTypeMeta, normalizeAnimationType } from "@/lib/animation-types";
 import { version as APP_VERSION } from "../package.json";
+import { useDialogs } from "@/components/ui/Dialogs";
+import { useToast } from "@/components/ui/Toast";
 
 /**
  * The whole workspace: the type picker, one type's projects, and a collection.
@@ -29,6 +31,8 @@ export default function Workspace({
   collectionId?: string | null;
 }) {
   const router = useRouter();
+  const dialogs = useDialogs();
+  const toast = useToast();
   const [projects, setProjects] = useState<ProjectMeta[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const selectedType = type;
@@ -79,20 +83,27 @@ export default function Workspace({
 
   // Prompts for a name and creates a collection; returns it (or null if cancelled).
   async function createCollection(): Promise<Collection | null> {
-    const name = window.prompt("Collection name");
-    if (!name || !name.trim()) return null;
+    const name = await dialogs.prompt({
+      title: "New collection",
+      label: "Name",
+      placeholder: "e.g. Store promos",
+      confirmLabel: "Create",
+    });
+    if (!name) return null;
     try {
       const res = await fetch("/api/collections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim() }),
       });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const col: Collection = await res.json();
       setCollections((prev) => [col, ...prev]);
       return col;
     } catch (err) {
       console.error("Failed to create collection:", err);
+      toast.error("Couldn't create that collection", "Nothing was changed.",
+        [{ label: "Retry", onClick: () => { void createCollection(); } }]);
       return null;
     }
   }
@@ -118,24 +129,41 @@ export default function Workspace({
   }
 
   async function renameCollection(col: Collection) {
-    const name = window.prompt("Rename collection", col.name);
-    if (!name || !name.trim()) return;
+    const name = await dialogs.prompt({
+      title: `Rename "${col.name}"`,
+      label: "Name",
+      value: col.name,
+      confirmLabel: "Rename",
+      consequence: (() => {
+        const n = projects.filter((p) => p.collectionId === col.id).length;
+        return `${n} ${n === 1 ? "project keeps" : "projects keep"} their assignment.`;
+      })(),
+    });
+    if (!name || name === col.name) return;
     try {
       const res = await fetch(`/api/collections/${col.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim() }),
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const updated: Collection = await res.json();
       setCollections((prev) => prev.map((c) => (c.id === col.id ? updated : c)));
     } catch (err) {
       console.error("Failed to rename collection:", err);
+      toast.error("Couldn't rename that collection", "It kept its old name.",
+        [{ label: "Retry", onClick: () => { void renameCollection(col); } }]);
     }
   }
 
   async function deleteCollectionFlow(col: Collection) {
-    if (!window.confirm(`Delete collection "${col.name}"? Its projects are kept, just ungrouped.`)) return;
+    const ok = await dialogs.confirm({
+      title: `Delete "${col.name}"?`,
+      body: "This can't be undone. The projects in it are kept — they just stop being grouped.",
+      confirmLabel: "Delete collection",
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await fetch(`/api/collections/${col.id}`, { method: "DELETE" });
       setCollections((prev) => prev.filter((c) => c.id !== col.id));
