@@ -5,6 +5,7 @@ import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
+import { timecode, needsHours } from "@/lib/timecode";
 import Tooltip from "@/components/ui/Tooltip";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
@@ -25,8 +26,18 @@ import {
  */
 
 const LABEL_W = 104;
-const RULER_H = 22;
-const TRACK_H = 44;
+const RULER_H = 26;
+/**
+ * Track heights. The spec gives video 52 and audio 44.
+ *
+ * A Track in this model has no `kind` — it is just a list of items — so the
+ * kind is inferred from what is on it. An audio-only track is the short one;
+ * anything else gets the tall one, because a filmstrip needs the room.
+ */
+const TRACK_H_VIDEO = 52;
+const TRACK_H_AUDIO = 44;
+/** Clips sit 6px inside their lane, top and bottom. */
+const CLIP_INSET = 6;
 const SNAP_PX = 8;
 const MAX_PX_PER_FRAME = 16;
 
@@ -202,8 +213,8 @@ export default function DocTimeline({
       // Which lane is the pointer over? Lanes are a fixed height, stacked.
       if (s.mode === "move" && tracksRef.current) {
         const r = tracksRef.current.getBoundingClientRect();
-        const idx = Math.floor((e.clientY - r.top) / TRACK_H);
-        const valid = idx >= 0 && idx < doc.tracks.length ? idx : null;
+        const idx = laneAt(e.clientY - r.top);
+        const valid = idx !== null && idx < doc.tracks.length ? idx : null;
         hoverRef.current = valid;
         setHoverTrack(valid);
       }
@@ -535,12 +546,48 @@ export default function DocTimeline({
   }, [doc, projectId, peaks, relPath]);
 
   // ── rendering ─────────────────────────────────────────────────────────────
+  /**
+   * Ruler ticks every 50 frames — 2s at 25fps — per the spec.
+   *
+   * Multiplied up when zoomed out, or a long project draws thousands of ticks
+   * into a few hundred pixels and the labels become a grey smear.
+   */
+  const hoursNeeded = needsHours(total, fps);
+
   const ticks = useMemo(() => {
-    const step = Math.max(1, Math.round(fps / Math.max(0.25, pxPerFrame * fps / 90)));
+    let step = 50;
+    while (step * pxPerFrame < 60) step *= 2;
     const out: number[] = [];
     for (let f = 0; f <= total; f += step) out.push(f);
     return out;
-  }, [fps, pxPerFrame, total]);
+  }, [pxPerFrame, total]);
+
+  /** A track's height, from what is on it. */
+  const trackHeight = useCallback((t: Track) =>
+    t.items.length > 0 && t.items.every((i) => i.type === "audio") ? TRACK_H_AUDIO : TRACK_H_VIDEO,
+  []);
+
+  /**
+   * Cumulative lane offsets, for hit-testing a drag.
+   *
+   * This used to be `floor(y / TRACK_H)`, which only works while every lane is
+   * the same height. With per-kind heights that divide silently drops clips on
+   * the wrong track, so the offsets are computed instead.
+   */
+  const laneTops = useMemo(() => {
+    const out: number[] = [];
+    let y = 0;
+    for (const t of doc.tracks) { out.push(y); y += trackHeight(t); }
+    out.push(y);
+    return out;
+  }, [doc.tracks, trackHeight]);
+
+  const laneAt = useCallback((y: number) => {
+    for (let i = 0; i < laneTops.length - 1; i++) {
+      if (y >= laneTops[i] && y < laneTops[i + 1]) return i;
+    }
+    return null;
+  }, [laneTops]);
 
   const previewGeom = (item: EditorItem) => {
     if (!dragState || dragState.itemId !== item.id) return { from: item.from, dur: item.durationInFrames };
@@ -554,7 +601,7 @@ export default function DocTimeline({
     <div
       key={track.id}
       style={{
-        display: "flex", height: TRACK_H, borderBottom: "1px solid var(--border-hairline)",
+        display: "flex", height: trackHeight(track), borderBottom: "1px solid var(--border-hairline)",
         background: hoverTrack === laneIndex && dragState?.mode === "move" ? "var(--surface-raised)" : undefined,
       }}
     >
@@ -687,7 +734,7 @@ export default function DocTimeline({
               }}
               style={{
                 position: "absolute", left: g.from * pxPerFrame, width: clipW,
-                top: 4, height: TRACK_H - 9, borderRadius: 3, cursor: "grab",
+                top: CLIP_INSET, height: trackHeight(track) - CLIP_INSET * 2, borderRadius: "var(--r-item)", cursor: "grab",
                 background: ITEM_COLORS[item.type] ?? "var(--brand)",
                 opacity: track.hidden ? 0.35 : 0.9,
                 outline: selected ? "2px solid var(--ink-primary)" : "none",
@@ -710,21 +757,31 @@ export default function DocTimeline({
                 />
               )}
               {wave && (
-                <svg
+                /*
+                 * Bars, not an outline. Two mirrored polylines read as a shape
+                 * with a hole in it at clip size; discrete bars read as level.
+                 *
+                 * Amplitude is capped to the lane's inner box so a loud passage
+                 * crops flat instead of bleeding past the clip's rounded edge.
+                 */
+                <div
                   aria-hidden
-                  viewBox={`0 0 ${wave.length} 100`}
-                  preserveAspectRatio="none"
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.55 }}
+                  style={{
+                    position: "absolute", inset: 0, display: "flex", alignItems: "center",
+                    gap: 2, padding: "0 2px", opacity: 0.55, pointerEvents: "none",
+                  }}
                 >
-                  <polyline
-                    points={wave.map((v, i) => `${i},${50 - v * 48}`).join(" ")}
-                    fill="none" stroke="rgba(0,0,0,0.8)" strokeWidth={1}
-                  />
-                  <polyline
-                    points={wave.map((v, i) => `${i},${50 + v * 48}`).join(" ")}
-                    fill="none" stroke="rgba(0,0,0,0.8)" strokeWidth={1}
-                  />
-                </svg>
+                  {wave.map((v, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        flex: "1 1 2px", maxWidth: 3, borderRadius: 1,
+                        height: `${Math.min(100, Math.max(12, v * 100))}%`,
+                        background: "rgba(0,0,0,0.75)",
+                      }}
+                    />
+                  ))}
+                </div>
               )}
               <Icon name={ITEM_ICONS[item.type] ?? "layers"} size={10} style={{ color: "rgba(0,0,0,0.6)", flexShrink: 0, position: "relative" }} />
               <span className="mono" style={{ fontSize: 9, color: "rgba(0,0,0,0.75)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative", textShadow: "0 1px 2px rgba(255,255,255,0.4)" }}>
@@ -883,7 +940,7 @@ export default function DocTimeline({
           >
             {ticks.map((f) => (
               <div key={f} style={{ position: "absolute", left: f * pxPerFrame, top: 0, bottom: 0, borderLeft: "1px solid var(--border-hairline)", paddingLeft: 3 }}>
-                <span className="mono nums" style={{ fontSize: 8, color: "var(--ink-disabled)" }}>{(f / fps).toFixed(1)}s</span>
+                <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>{timecode(f, fps, hoursNeeded)}</span>
               </div>
             ))}
           </div>
@@ -894,7 +951,17 @@ export default function DocTimeline({
         </div>
 
         {/* playhead + snap guide, spanning ruler and tracks */}
-        <div style={{ position: "absolute", left: LABEL_W + currentFrame * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--live)", pointerEvents: "none", zIndex: 5 }} />
+        {/* The playhead: 1px live line, with a 9x9 square head on the ruler.
+            The head is what you aim at when scrubbing — a bare 1px line is
+            almost impossible to grab. */}
+        <div style={{ position: "absolute", left: LABEL_W + currentFrame * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--live)", pointerEvents: "none", zIndex: 5 }}>
+          <span
+            style={{
+              position: "absolute", top: 0, left: -4, width: 9, height: 9,
+              background: "var(--live)", borderRadius: 1,
+            }}
+          />
+        </div>
         {snapLine != null && (
           <div style={{ position: "absolute", left: LABEL_W + snapLine * pxPerFrame, top: 0, bottom: 0, width: 1, background: "var(--ink-primary)", opacity: 0.5, pointerEvents: "none", zIndex: 4 }} />
         )}
