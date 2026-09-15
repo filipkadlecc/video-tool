@@ -208,7 +208,7 @@ function RecentCard({ project, onClick }: { project: ProjectMeta; onClick: () =>
   const dims = `${project.settings.width ?? ""}${project.settings.width ? "×" : ""}${project.settings.height ?? ""}`;
 
   return (
-    <ParallaxCard max={6} glare={0.1}>
+    <ParallaxCard max={2.5} glare={0.05}>
       <div
         onClick={onClick}
         className="focus-ring"
@@ -223,7 +223,7 @@ function RecentCard({ project, onClick }: { project: ProjectMeta; onClick: () =>
           cursor: "pointer",
         }}
       >
-        <Depth z={12} style={{ position: "relative", aspectRatio: "16 / 9", background: "var(--surface-void)" }}>
+        <Depth z={4} style={{ position: "relative", aspectRatio: "16 / 9", background: "var(--surface-void)" }}>
           {!thumbFailed && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -233,14 +233,14 @@ function RecentCard({ project, onClick }: { project: ProjectMeta; onClick: () =>
               style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
             />
           )}
-          <Depth z={16} style={{ position: "absolute", left: 10, bottom: 8 }}>
+          <Depth z={6} style={{ position: "absolute", left: 10, bottom: 8 }}>
             <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
               {durationLabel(project)}{dims ? ` · ${dims}` : ""}
             </span>
           </Depth>
         </Depth>
 
-        <Depth z={24} style={{ padding: "14px 16px" }}>
+        <Depth z={8} style={{ padding: "14px 16px" }}>
           <div className="t-heading" style={{ color: "var(--ink-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {project.name}
           </div>

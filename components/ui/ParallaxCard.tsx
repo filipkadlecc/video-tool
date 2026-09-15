@@ -13,6 +13,11 @@ import React, { useCallback, useRef } from "react";
  *   - `transition: none` while tracking; the ease-back only exists on leave.
  *   - NOTHING SCALES on hover. The design system forbids scale transforms,
  *     and this is the one place the reference implementations disagree.
+ *   - Tilt is for the THREE HERO CARDS ONLY. In a dense grid every neighbour
+ *     is a strict rectangle, so a tilted card's slanted edges read as broken
+ *     rather than tactile no matter how small the angle — the problem isn't
+ *     the amount, it's the kind. Grid cards pass max={0} and get the specular
+ *     highlight alone, which follows the cursor without bending anything.
  *   - Disabled entirely under prefers-reduced-motion.
  *
  * `perspective` belongs on the CONTAINER, not here — 1000px for the three hero
@@ -20,15 +25,15 @@ import React, { useCallback, useRef } from "react";
  * stops each card in a grid looking independently warped.
  */
 interface ParallaxCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Max tilt in degrees. Hero 6, grid 3. */
+  /** Max tilt in degrees. Hero 2.5, grid 1.5. */
   max?: number;
-  /** Specular strength. Hero .10, grid .06. */
+  /** Specular strength. Hero .05, grid .03. */
   glare?: number;
   children: React.ReactNode;
 }
 
 export default function ParallaxCard({
-  max = 6, glare = 0.1, children, style, ...rest
+  max = 2, glare = 0.04, children, style, ...rest
 }: ParallaxCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const glareRef = useRef<HTMLDivElement>(null);
@@ -43,8 +48,10 @@ export default function ParallaxCard({
     const r = el.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width;
     const py = (e.clientY - r.top) / r.height;
-    el.style.transition = "none";
-    el.style.transform = `rotateX(${(0.5 - py) * max}deg) rotateY(${(px - 0.5) * max}deg)`;
+    if (max > 0) {
+      el.style.transition = "none";
+      el.style.transform = `rotateX(${(0.5 - py) * max}deg) rotateY(${(px - 0.5) * max}deg)`;
+    }
     const g = glareRef.current;
     if (g) {
       g.style.opacity = "1";

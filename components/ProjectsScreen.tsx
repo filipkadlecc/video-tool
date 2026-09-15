@@ -5,7 +5,7 @@ import type { ProjectMeta, Collection } from "@/lib/types";
 import { docDuration } from "@/lib/editor-doc";
 import { relativeTime, shortDate } from "@/lib/format";
 import { timecode, needsHours } from "@/lib/timecode";
-import ParallaxCard, { Depth } from "@/components/ui/ParallaxCard";
+import ParallaxCard from "@/components/ui/ParallaxCard";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
@@ -255,7 +255,7 @@ function GridCard({ project, selected, onOpen, onToggle }: {
   const [hover, setHover] = useState(false);
 
   return (
-    <ParallaxCard max={3} glare={0.06}>
+    <ParallaxCard max={0} glare={0.03}>
       <div
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -264,14 +264,15 @@ function GridCard({ project, selected, onOpen, onToggle }: {
           onOpen();
         }}
         style={{
-          background: "var(--surface-chrome)",
-          border: `1px solid ${selected ? "var(--ink-primary)" : "var(--border-edge)"}`,
+          background: hover ? "var(--surface-raised)" : "var(--surface-chrome)",
+          border: `1px solid ${selected ? "var(--ink-primary)" : hover ? "var(--surface-active)" : "var(--border-edge)"}`,
           borderRadius: "var(--r-panel)",
           overflow: "hidden",
           cursor: "pointer",
+          transition: "background var(--dur-state) var(--ease), border-color var(--dur-state) var(--ease)",
         }}
       >
-        <Depth z={7} style={{ position: "relative", aspectRatio: "16 / 9", background: "var(--surface-void)" }}>
+        <div style={{ position: "relative", aspectRatio: "16 / 9", background: "var(--surface-void)" }}>
           {!thumbFailed && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -283,7 +284,7 @@ function GridCard({ project, selected, onOpen, onToggle }: {
           )}
 
           {(hover || selected) && (
-            <Depth z={12} style={{ position: "absolute", top: 8, left: 8 }}>
+            <div style={{ position: "absolute", top: 8, left: 8 }}>
               <button
                 aria-label={selected ? "Deselect" : "Select"}
                 onClick={(e) => { e.stopPropagation(); onToggle(true); }}
@@ -296,24 +297,24 @@ function GridCard({ project, selected, onOpen, onToggle }: {
               >
                 {selected && <Icon name="check" size={11} style={{ color: "var(--surface-void)" }} />}
               </button>
-            </Depth>
+            </div>
           )}
 
-          <Depth z={7} style={{ position: "absolute", left: 8, bottom: 6 }}>
+          <div style={{ position: "absolute", left: 8, bottom: 6 }}>
             <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>{durationLabel(project)}</span>
-          </Depth>
-        </Depth>
+          </div>
+        </div>
 
-        <Depth z={10} style={{ padding: "10px 12px" }}>
+        <div style={{ padding: "10px 12px" }}>
           <div className="t-control" style={{ color: "var(--ink-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {project.name}
           </div>
-          <Depth z={6}>
+          <div>
             <div className="t-caption" style={{ color: "var(--ink-tertiary)", marginTop: 4 }}>
               {relativeTime(project.updatedAt)}
             </div>
-          </Depth>
-        </Depth>
+          </div>
+        </div>
       </div>
     </ParallaxCard>
   );
