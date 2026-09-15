@@ -38,6 +38,7 @@ import type { PlayerRef } from "@remotion/player";
 import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
 import Tooltip from "@/components/ui/Tooltip";
+import ShortcutsModal from "@/components/ShortcutsModal";
 
 const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
   ssr: false,
@@ -115,6 +116,7 @@ export default function ProjectEditor() {
   const [promptAnimOpen, setPromptAnimOpen] = useState(false);
   const toolsRef = useRef<HTMLDivElement>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [bgRemovedFlash, setBgRemovedFlash] = useState(false);
   const [loading, setLoading] = useState(true);
   // Captured once on mount from ?action=, before we clean the URL via router.replace.
@@ -495,8 +497,23 @@ export default function ProjectEditor() {
   // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      // Don't steal keys from a field. Without this, Cmd+S and Cmd+E fired
+      // while you were typing in the chat box — Cmd+E in particular opened the
+      // export dialog mid-sentence.
+      const el = document.activeElement as HTMLElement | null;
+      const typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === "s") {
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      } else if (mod && e.altKey && (e.key === "c" || e.key === "ç")) {
+        // Code is a toolbar toggle, and this is its shortcut.
+        e.preventDefault();
+        if (doc) setShowCodeEditor((v) => !v);
+      } else if (typing && mod && (e.key === "s" || e.key === "e")) {
+        // Let the field have it.
+      } else if (mod && e.key === "s") {
         e.preventDefault();
         forceSave();
       } else if (mod && e.key === "e") {
@@ -1446,6 +1463,7 @@ export default function ProjectEditor() {
                         selectedIds={selectedItemIds}
                         onSelectionChange={setSelectedItemIds}
                         onPromptAnimation={() => setPromptAnimOpen(true)}
+                        onShowShortcuts={() => setShortcutsOpen(true)}
                       />
                       )}
                     </div>
@@ -1579,6 +1597,12 @@ export default function ProjectEditor() {
           />
         );
       })()}
+
+      <ShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        kind={doc ? "doc" : "code"}
+      />
 
       <GeneratingOverlay visible={isGenerating} />
     </div>

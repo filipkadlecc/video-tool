@@ -39,7 +39,7 @@ const GROUPS: Group[] = [
   {
     title: "Editing",
     rows: [
-      { label: "Split clip at playhead", keys: ["S"] },
+      { label: "Split clip at playhead", keys: ["S", "~or", "⌘K"] },
       { label: "Split where the cursor is", keys: ["Alt", "~+ click a clip"], only: "code" },
       { label: "Delete clip + close gap", keys: ["Delete"] },
       { label: "Copy / paste at playhead", keys: ["⌘C", "⌘V"], only: "doc" },
@@ -55,7 +55,7 @@ const GROUPS: Group[] = [
       { label: "Select several clips", keys: ["Shift", "~or", "⌘", "~+ click"] },
       { label: "Deselect", keys: ["Esc"] },
       { label: "Zoom", keys: ["⌘", "~+ scroll"] },
-      { label: "Fit to window", keys: ["~the Fit button, above"] },
+      { label: "Fit to window", keys: ["F"] },
       { label: "Snap on / off", keys: ["~the SNAP button, above"] },
     ],
   },
@@ -75,6 +75,9 @@ const GROUPS: Group[] = [
       { label: "Save now", keys: ["⌘S"] },
       { label: "Export", keys: ["⌘E"] },
       { label: "Undo / redo", keys: ["⌘Z", "⌘⇧Z"] },
+      { label: "Cut / Direct workspace", keys: ["⌥1", "⌥2"], only: "doc" },
+      { label: "Code view", keys: ["⌥⌘C"], only: "doc" },
+      { label: "This sheet", keys: ["⌘/"] },
     ],
   },
 ];

@@ -6,7 +6,6 @@ import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import Tooltip from "@/components/ui/Tooltip";
-import ShortcutsModal from "@/components/ShortcutsModal";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
 import {
@@ -70,6 +69,8 @@ interface Props {
    * project's settings and commits the result; the rail only asks for it.
    */
   onPromptAnimation?: () => void;
+  /** The shortcuts sheet is owned by the page, so Cmd+/ works without a timeline. */
+  onShowShortcuts: () => void;
 }
 
 const ITEM_COLORS: Record<string, string> = {
@@ -91,7 +92,7 @@ const ITEM_ICONS: Record<string, string> = {
 export default function DocTimeline({
   doc, onChange, onSeek, onScrubStart, onTogglePlay,
   mediaFiles, mediaDurations, projectId, selectedIds, onSelectionChange,
-  onPromptAnimation,
+  onPromptAnimation, onShowShortcuts,
 }: Props) {
   const [zoom, setZoom] = useState(1);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -111,7 +112,6 @@ export default function DocTimeline({
   const [clipboard, setClipboard] = useState<EditorItem | null>(null);
   /** Tool the pointer is over, so the rail can name it without a delay. */
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   /** Track lane the pointer is over mid-drag, so a clip can be dropped onto another. */
   const [hoverTrack, setHoverTrack] = useState<number | null>(null);
   const hoverRef = useRef<number | null>(null);
@@ -296,6 +296,7 @@ export default function DocTimeline({
       }
       if (e.altKey) return;
       if (e.key === " ") { e.preventDefault(); onTogglePlay?.(); }
+      else if (e.key === "f" || e.key === "F") { e.preventDefault(); setZoom(1); }
       else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteSelected(true); }
       else if (e.key === "s" || e.key === "S") { e.preventDefault(); splitAtPlayhead(); }
       else if (e.key === "Escape") deselect();
@@ -822,7 +823,7 @@ export default function DocTimeline({
         <div style={{ flex: 1 }} />
         <button onClick={() => setSnapOn((v) => !v)} style={{ ...toolBtn, color: snapOn ? "var(--ink-primary)" : "var(--ink-disabled)" }}>SNAP</button>
         <button onClick={() => setZoom(1)} style={toolBtn}>Fit</button>
-        <IconButton icon="help" size={22} title="Keyboard shortcuts" shortcut="⌘/" onClick={() => setShortcutsOpen(true)} />
+        <IconButton icon="help" size={22} title="Keyboard shortcuts" shortcut="⌘/" onClick={onShowShortcuts} />
         <span className="mono nums" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
           {Math.floor(currentFrame / fps / 60).toString().padStart(2, "0")}:
           {Math.floor((currentFrame / fps) % 60).toString().padStart(2, "0")}.
@@ -900,7 +901,6 @@ export default function DocTimeline({
         </div>
       </div>
 
-      <ShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} kind="doc" />
     </div>
   );
 }
