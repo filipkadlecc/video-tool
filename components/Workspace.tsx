@@ -1,18 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import ProjectCard from "@/components/ProjectCard";
 import NewProjectModal from "@/components/NewProjectModal";
 import StorageModal from "@/components/StorageModal";
-import TypeTile from "@/components/TypeTile";
-import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
-import Icon from "@/components/ui/Icon";
-import Modal from "@/components/ui/Modal";
+import AppHeader from "@/components/AppHeader";
+import Menu from "@/components/ui/Menu";
+import IconButton from "@/components/ui/IconButton";
+import HomeScreen from "@/components/HomeScreen";
+import ProjectsScreen from "@/components/ProjectsScreen";
 import type { ProjectMeta, AnimationType, Collection } from "@/lib/types";
-import { ANIMATION_TYPES, getAnimationTypeMeta, normalizeAnimationType } from "@/lib/animation-types";
-import { version as APP_VERSION } from "../package.json";
+import { getAnimationTypeMeta, normalizeAnimationType } from "@/lib/animation-types";
 import { useDialogs } from "@/components/ui/Dialogs";
 import { useToast } from "@/components/ui/Toast";
 
@@ -45,8 +44,8 @@ export default function Workspace({
   const setSelectedCollection = (c: Collection | null) =>
     router.push(c ? `/collection/${c.id}` : "/");
   const [modalOpen, setModalOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<ProjectMeta | null>(null);
   const [storageOpen, setStorageOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     fetchProjects();
@@ -63,13 +62,13 @@ export default function Workspace({
         e.preventDefault();
         setModalOpen(true);
       }
-      if (e.key === "Escape" && selectedType && !modalOpen && !deleteConfirm) {
+      if (e.key === "Escape" && selectedType && !modalOpen) {
         setSelectedType(null);
       }
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [selectedType, modalOpen, deleteConfirm]);
+  }, [selectedType, modalOpen]);
 
   async function fetchProjects() {
     try {
@@ -123,10 +122,6 @@ export default function Workspace({
     }
   }
 
-  async function assignNewCollection(projectId: string) {
-    const col = await createCollection();
-    if (col) assignToCollection(projectId, col.id);
-  }
 
   async function renameCollection(col: Collection) {
     const name = await dialogs.prompt({
@@ -174,26 +169,7 @@ export default function Workspace({
     }
   }
 
-  async function handleDuplicate(id: string) {
-    try {
-      const res = await fetch(`/api/projects/${id}/duplicate`, { method: "POST" });
-      if (!res.ok) return;
-      const newProject = await res.json();
-      router.push(`/project/${newProject.id}`);
-    } catch (err) {
-      console.error("Failed to duplicate project:", err);
-    }
-  }
 
-  async function handleDelete(id: string) {
-    try {
-      await fetch(`/api/projects/${id}`, { method: "DELETE" });
-      setProjects((prev) => prev.filter((p) => p.id !== id));
-      setDeleteConfirm(null);
-    } catch (err) {
-      console.error("Failed to delete project:", err);
-    }
-  }
 
   function handleCreated({
     projectId,
@@ -207,460 +183,181 @@ export default function Workspace({
     router.push(`/project/${projectId}${suffix}`);
   }
 
-  const countsByType = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const p of projects) {
-      const id = normalizeAnimationType(p.animationType);
-      counts[id] = (counts[id] ?? 0) + 1;
+
+
+  // ───── Bulk actions (the selection bar) ─────
+
+  async function deleteMany(ids: string[]) {
+    const names = ids.map((id) => projects.find((p) => p.id === id)?.name).filter(Boolean);
+    const ok = await dialogs.confirm({
+      title: ids.length === 1 ? `Delete "${names[0]}"?` : `Delete ${ids.length} projects?`,
+      body: "This can't be undone. Anything already exported stays on disk.",
+      confirmLabel: ids.length === 1 ? "Delete project" : `Delete ${ids.length} projects`,
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await Promise.all(ids.map((id) => fetch(`/api/projects/${id}`, { method: "DELETE" })));
+      setProjects((prev) => prev.filter((p) => !ids.includes(p.id)));
+      toast.success(`Deleted ${ids.length} ${ids.length === 1 ? "project" : "projects"}`);
+    } catch (err) {
+      console.error("Failed to delete projects:", err);
+      toast.error("Couldn't delete everything", "Some projects are still there.",
+        [{ label: "Retry", onClick: () => { void deleteMany(ids); } }]);
     }
-    return counts;
-  }, [projects]);
-
-  const countsByCollection = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const p of projects) {
-      if (p.collectionId) counts[p.collectionId] = (counts[p.collectionId] ?? 0) + 1;
-    }
-    return counts;
-  }, [projects]);
-
-  // ───── Opening screen: type picker ─────
-  // A selected collection takes precedence over the type picker, so clicking a
-  // collection card from the workspace (where selectedType is still null) opens
-  // the collection-detail screen below instead of re-rendering this picker.
-  if (selectedType === null && !selectedCollection) {
-    return (
-      <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
-        <header
-          style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "16px 28px",
-            borderBottom: "1px solid var(--border-hairline)",
-          }}
-        >
-          <Logo />
-          <div style={{ flex: 1 }} />
-          <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 10 }}>
-            {projects.length} {projects.length === 1 ? "project" : "projects"} · v{APP_VERSION}
-          </div>
-          <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
-            Storage
-          </Button>
-        </header>
-
-        <StorageModal
-          open={storageOpen}
-          onClose={() => setStorageOpen(false)}
-          onProjectsDeleted={() => fetchProjects()}
-        />
-
-        <div
-          style={{
-            maxWidth: 980,
-            margin: "0 auto",
-            padding: "64px 28px 40px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 32,
-          }}
-        >
-          <div>
-            <div className="mono cap" style={{ color: "var(--ink-tertiary)", marginBottom: 10 }}>
-              Workspace
-            </div>
-            <h1 style={{ margin: 0, fontSize: 36, letterSpacing: -0.8, fontWeight: 600 }}>
-              What are you making?
-            </h1>
-            <p style={{ margin: "10px 0 0", color: "var(--ink-secondary)", fontSize: 14, maxWidth: 560 }}>
-              Pick a style to see past projects or start a new one.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 14,
-            }}
-          >
-            {ANIMATION_TYPES.map((t) => (
-              <TypeTile
-                key={t.id}
-                type={t.id}
-                size="lg"
-                count={countsByType[t.id] ?? 0}
-                onClick={() => setSelectedType(t.id)}
-              />
-            ))}
-          </div>
-
-          {/* Collections — cross-type groups (e.g. all clips for one video) */}
-          <div>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
-              <div className="mono cap" style={{ color: "var(--ink-tertiary)" }}>
-                Collections
-              </div>
-              <div style={{ flex: 1 }} />
-              <Button variant="ghost" size="sm" icon="plus" onClick={createCollection}>
-                New collection
-              </Button>
-            </div>
-            {collections.length === 0 ? (
-              <p className="mono" style={{ fontSize: 11, color: "var(--ink-disabled)", margin: 0 }}>
-                Group projects from any type into one collection — handy when several clips make one video.
-              </p>
-            ) : (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                {collections.map((col) => (
-                  <button
-                    key={col.id}
-                    onClick={() => setSelectedCollection(col)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "14px 16px",
-                      background: "var(--surface-chrome)",
-                      border: "1px solid var(--border-hairline)",
-                      borderRadius: "var(--r-panel)",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      color: "var(--ink-primary)",
-                      transition: "border-color 120ms",
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--brand)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-hairline)")}
-                  >
-                    <Icon name="folder" size={16} style={{ color: "var(--brand)" }} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {col.name}
-                      </div>
-                      <div className="mono" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
-                        {countsByCollection[col.id] ?? 0} {(countsByCollection[col.id] ?? 0) === 1 ? "project" : "projects"}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
   }
 
-  // ───── Collection detail screen: cross-type projects in one collection ─────
-  if (selectedCollection) {
-    const inCollection = projects.filter((p) => p.collectionId === selectedCollection.id);
-    return (
-      <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
-        <header
-          style={{
-            position: "sticky",
-            top: 0,
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            padding: "16px 28px",
-            background: "color-mix(in oklab, var(--surface-void) 85%, transparent)",
-            backdropFilter: "blur(12px)",
-            borderBottom: "1px solid var(--border-hairline)",
-          }}
-        >
-          <Logo onClick={() => setSelectedCollection(null)} />
-          <button
-            onClick={() => setSelectedCollection(null)}
-            className="mono"
-            style={{
-              marginLeft: 18,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "6px 10px",
-              background: "transparent",
-              border: "1px solid var(--border-hairline)",
-              borderRadius: 4,
-              color: "var(--ink-secondary)",
-              fontSize: 11,
-              cursor: "pointer",
-            }}
-          >
-            <Icon name="chevronLeft" size={11} />
-            Workspace
-          </button>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 8 }}>
-              {inCollection.length} {inCollection.length === 1 ? "project" : "projects"}
-            </div>
-            <Button variant="ghost" size="sm" icon="copy" onClick={() => renameCollection(selectedCollection)}>
-              Rename
-            </Button>
-            <Button variant="ghost" size="sm" icon="trash" onClick={() => deleteCollectionFlow(selectedCollection)}>
-              Delete
-            </Button>
-          </div>
-        </header>
-
-        <div style={{ padding: "36px 28px 20px", borderBottom: "1px solid var(--border-hairline)" }}>
-          <div className="mono cap" style={{ color: "var(--brand)", marginBottom: 8 }}>
-            Collection
-          </div>
-          <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.8, fontWeight: 600 }}>
-            {selectedCollection.name}
-          </h1>
-          <p style={{ margin: "6px 0 0", color: "var(--ink-secondary)", fontSize: 14, maxWidth: 520 }}>
-            Projects of any type grouped under this collection.
-          </p>
-        </div>
-
-        {inCollection.length === 0 ? (
-          <div style={{ padding: "48px 28px", color: "var(--ink-tertiary)", fontSize: 13 }}>
-            No projects here yet. Open a project&apos;s menu (the folder icon on its card) to add it to{" "}
-            <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{selectedCollection.name}</span>.
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: 28,
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-              gap: 20,
-            }}
-          >
-            {inCollection.map((project) => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                collections={collections}
-                onClick={() => router.push(`/project/${project.id}`)}
-                onDelete={() => setDeleteConfirm(project)}
-                onDuplicate={() => handleDuplicate(project.id)}
-                onAssignCollection={(cid) => assignToCollection(project.id, cid)}
-                onCreateCollection={() => assignNewCollection(project.id)}
-              />
-            ))}
-          </div>
-        )}
-
-        <Modal open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} width={380}>
-          <div style={{ padding: 24 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Delete this project?</div>
-            <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
-              <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{deleteConfirm?.name}</span> will be
-              permanently removed. This cannot be undone.
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>
-                Cancel
-              </Button>
-              <Button variant="danger" onClick={() => deleteConfirm && handleDelete(deleteConfirm.id)}>
-                Delete
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      </div>
-    );
+  async function duplicateMany(ids: string[]) {
+    try {
+      const made = await Promise.all(
+        ids.map((id) => fetch(`/api/projects/${id}/duplicate`, { method: "POST" }).then((r) => r.json())),
+      );
+      fetchProjects();
+      if (made.length === 1 && made[0]?.id) router.push(`/project/${made[0].id}`);
+      else toast.success(`Duplicated ${made.length} projects`);
+    } catch (err) {
+      console.error("Failed to duplicate:", err);
+      toast.error("Couldn't duplicate that", "Nothing was changed.",
+        [{ label: "Retry", onClick: () => { void duplicateMany(ids); } }]);
+    }
   }
 
-  // ───── Per-type screen: filtered projects + new-project tile ─────
-  // Unreachable: the picker above returns whenever selectedType is null and no
-  // collection is selected, and the collection screen returns whenever one is.
-  // TypeScript can't narrow across that compound guard, so state it explicitly
-  // rather than assert with `!` — this is what broke `next build`.
-  if (selectedType === null) return null;
-  const meta = getAnimationTypeMeta(selectedType);
-  // Normalised so the merged Animation tile lists the 123 legacy "broll"
-  // projects alongside the rest — they are the same thing.
-  const filtered = projects.filter((p) => normalizeAnimationType(p.animationType) === selectedType);
+  async function assignMany(ids: string[], cid: string | null) {
+    try {
+      await Promise.all(ids.map((id) => assignToCollection(id, cid)));
+      const name = cid ? collections.find((c) => c.id === cid)?.name : null;
+      toast.success(name ? `Moved to ${name}` : "Removed from collection");
+    } catch {
+      toast.error("Couldn't assign those projects", "They kept their old collection.",
+        [{ label: "Retry", onClick: () => { void assignMany(ids, cid); } }]);
+    }
+  }
 
-  return (
-    <div style={{ minHeight: "100vh", background: "var(--surface-void)" }}>
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-          display: "flex",
-          alignItems: "center",
-          padding: "16px 28px",
-          background: "color-mix(in oklab, var(--surface-void) 85%, transparent)",
-          backdropFilter: "blur(12px)",
-          borderBottom: "1px solid var(--border-hairline)",
-        }}
-      >
-        <Logo onClick={() => setSelectedType(null)} />
-        <button
-          onClick={() => setSelectedType(null)}
-          className="mono"
-          style={{
-            marginLeft: 18,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 10px",
-            background: "transparent",
-            border: "1px solid var(--border-hairline)",
-            borderRadius: 4,
-            color: "var(--ink-secondary)",
-            fontSize: 11,
-            cursor: "pointer",
-          }}
-        >
-          <Icon name="chevronLeft" size={11} />
-          All types
-        </button>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="mono" style={{ fontSize: 11, color: "var(--ink-tertiary)", marginRight: 8 }}>
-            {filtered.length} {filtered.length === 1 ? "project" : "projects"} · v{APP_VERSION}
-          </div>
-          <Button variant="ghost" size="sm" icon="folder" onClick={() => setStorageOpen(true)}>
-            Storage
-          </Button>
-          <Button variant="primary" icon="plus" onClick={() => setModalOpen(true)}>
-            New {meta.label} project
-          </Button>
-        </div>
-      </header>
+  async function assignManyNew(ids: string[]) {
+    const col = await createCollection();
+    if (col) await assignMany(ids, col.id);
+  }
 
-      <div
-        style={{
-          padding: "36px 28px 20px",
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          borderBottom: "1px solid var(--border-hairline)",
-        }}
-      >
-        <div>
-          <div
-            className="mono cap"
-            style={{ color: meta.color, marginBottom: 8 }}
-          >
-            {meta.badgeLabel}
-          </div>
-          <h1 style={{ margin: 0, fontSize: 32, letterSpacing: -0.8, fontWeight: 600 }}>
-            {meta.label} projects
-          </h1>
-          <p style={{ margin: "6px 0 0", color: "var(--ink-secondary)", fontSize: 14, maxWidth: 520 }}>
-            {meta.subtitle}.
-          </p>
-        </div>
-      </div>
+  const matchesQuery = (p: ProjectMeta) =>
+    !query.trim() || p.name.toLowerCase().includes(query.trim().toLowerCase());
 
-      <div
-        style={{
-          padding: 28,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-          gap: 20,
-        }}
-      >
-        {/* Only the dashed tile shows on a fresh install, which says nothing about
-            how to start — and ⌘N was documented nowhere in the app. */}
-        {filtered.length === 0 && (
-          <div style={{ gridColumn: "1 / -1", fontSize: 13, color: "var(--ink-tertiary)", marginBottom: -4 }}>
-            No {meta.label.toLowerCase()} projects yet. Start one below, or press{" "}
-            <span className="mono" style={{ color: "var(--ink-secondary)" }}>⌘N</span>.
-          </div>
-        )}
-        {filtered.map((project) => (
-          <ProjectCard
-            key={project.id}
-            project={project}
-            collections={collections}
-            onClick={() => router.push(`/project/${project.id}`)}
-            onDelete={() => setDeleteConfirm(project)}
-            onDuplicate={() => handleDuplicate(project.id)}
-            onAssignCollection={(cid) => assignToCollection(project.id, cid)}
-            onCreateCollection={() => assignNewCollection(project.id)}
-          />
-        ))}
-
-        <button
-          onClick={() => setModalOpen(true)}
-          style={{
-            aspectRatio: "1 / 1.15",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            background: "transparent",
-            border: "1px dashed var(--border-hairline)",
-            borderRadius: "var(--r-panel)",
-            cursor: "pointer",
-            color: "var(--ink-tertiary)",
-            transition: "border-color 120ms, color 120ms",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = meta.color;
-            e.currentTarget.style.color = meta.color;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "var(--border-hairline)";
-            e.currentTarget.style.color = "var(--ink-tertiary)";
-          }}
-        >
-          <Icon name="plus" size={22} />
-          <span style={{ fontSize: 12 }}>New {meta.label} project</span>
-        </button>
-      </div>
-
+  const shell = (children: React.ReactNode, header: React.ReactNode) => (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--surface-void)" }}>
+      {header}
+      {children}
       <NewProjectModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        initialType={selectedType}
+        initialType={selectedType ?? "animation"}
         onCreated={handleCreated}
       />
-
       <StorageModal
         open={storageOpen}
         onClose={() => setStorageOpen(false)}
         onProjectsDeleted={() => fetchProjects()}
       />
-
-      <Modal open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} width={380}>
-        <div style={{ padding: 24 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              background: "var(--danger-tint-bg)",
-              display: "grid",
-              placeItems: "center",
-              color: "var(--danger)",
-              marginBottom: 14,
-            }}
-          >
-            <Icon name="trash" size={16} />
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Delete this project?</div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
-            <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{deleteConfirm?.name}</span> and its chat
-            history will be permanently removed. This cannot be undone.
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={() => deleteConfirm && handleDelete(deleteConfirm.id)}>
-              Delete
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
+  );
+
+  // ───── 4a — Home ─────
+  if (selectedType === null && !selectedCollection) {
+    return shell(
+      <HomeScreen
+        projects={projects.filter(matchesQuery)}
+        collections={collections}
+        onOpen={(id) => router.push(`/project/${id}`)}
+        onOpenAll={() => setSelectedType("animation")}
+        onOpenCollection={(c) => setSelectedCollection(c)}
+        onNewProject={() => setModalOpen(true)}
+        onImportFootage={() => setModalOpen(true)}
+        onNewCollection={() => { void createCollection(); }}
+        onBrowseCollections={() => setSelectedType("animation")}
+      />,
+      <AppHeader
+        search={{ value: query, onChange: setQuery }}
+        onSettings={() => setStorageOpen(true)}
+      />,
+    );
+  }
+
+  // ───── 4b — one collection ─────
+  if (selectedCollection) {
+    const inCollection = projects.filter((p) => p.collectionId === selectedCollection.id).filter(matchesQuery);
+    return shell(
+      <ProjectsScreen
+        title={selectedCollection.name}
+        projects={inCollection}
+        collections={collections}
+        activeCollectionId={selectedCollection.id}
+        unfiledCount={projects.filter((p) => !p.collectionId).length}
+        onOpen={(id) => router.push(`/project/${id}`)}
+        onSelectCollection={(c) => setSelectedCollection(c)}
+        onNewCollection={() => { void createCollection(); }}
+        onNewProject={() => setModalOpen(true)}
+        onAssign={assignMany}
+        onAssignNew={assignManyNew}
+        onDuplicate={duplicateMany}
+        onDelete={deleteMany}
+      />,
+      <AppHeader
+        back={{ label: "Home", onClick: () => setSelectedCollection(null) }}
+        search={{ value: query, onChange: setQuery, placeholder: `Search ${selectedCollection.name}` }}
+        onSettings={() => setStorageOpen(true)}
+        actions={
+          <>
+            <Menu
+              align="right"
+              items={[
+                { label: "Rename collection…", icon: "type", onSelect: () => { void renameCollection(selectedCollection); } },
+                { separator: true },
+                { label: "Delete collection…", icon: "trash", destructive: true, onSelect: () => { void deleteCollectionFlow(selectedCollection); } },
+              ]}
+            >
+              <IconButton icon="dots" title="Collection actions" />
+            </Menu>
+            <Button size="form" variant="primary" icon="plus" onClick={() => setModalOpen(true)}>
+              New project
+            </Button>
+          </>
+        }
+      />,
+    );
+  }
+
+  // ───── 4b — one type ─────
+  // Unreachable when null: the two branches above return first. TypeScript
+  // can't narrow across a compound guard, so state it rather than assert.
+  if (selectedType === null) return null;
+  const meta = getAnimationTypeMeta(selectedType);
+  const filtered = projects
+    .filter((p) => normalizeAnimationType(p.animationType) === selectedType)
+    .filter(matchesQuery);
+
+  return shell(
+    <ProjectsScreen
+      title={`All ${meta.label.toLowerCase()}`}
+      projects={filtered}
+      collections={collections}
+      activeCollectionId={null}
+      unfiledCount={filtered.filter((p) => !p.collectionId).length}
+      onOpen={(id) => router.push(`/project/${id}`)}
+      onSelectCollection={(c) => setSelectedCollection(c)}
+      onNewCollection={() => { void createCollection(); }}
+      onNewProject={() => setModalOpen(true)}
+      onAssign={assignMany}
+      onAssignNew={assignManyNew}
+      onDuplicate={duplicateMany}
+      onDelete={deleteMany}
+    />,
+    <AppHeader
+      back={{ label: "Home", onClick: () => setSelectedType(null) }}
+      search={{ value: query, onChange: setQuery, placeholder: `Search ${meta.label.toLowerCase()}` }}
+      onSettings={() => setStorageOpen(true)}
+      actions={
+        <Button size="form" variant="primary" icon="plus" onClick={() => setModalOpen(true)}>
+          New project
+        </Button>
+      }
+    />,
   );
 }
