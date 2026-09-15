@@ -389,7 +389,7 @@ export default function SnippetBrowser({
     <Modal
       open={open}
       onClose={onClose}
-      width={760}
+      width={700}
       title={inFormStep ? selectedSnippet!.name : "Brand snippets"}
       stepLabel={inFormStep ? "Customize parameters" : "Apify-branded scenes"}
     >

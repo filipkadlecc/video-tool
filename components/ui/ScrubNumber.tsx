@@ -137,7 +137,6 @@ export default function ScrubNumber({
       className="nums"
       role="spinbutton"
       aria-valuenow={value}
-      title="Drag to change · double-click to type · Shift for fine, Alt for coarse"
       style={{
         ...field,
         cursor: disabled ? "default" : "ew-resize",

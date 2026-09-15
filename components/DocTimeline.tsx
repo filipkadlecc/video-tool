@@ -5,6 +5,7 @@ import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
+import Tooltip from "@/components/ui/Tooltip";
 import ShortcutsModal from "@/components/ShortcutsModal";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
@@ -566,7 +567,7 @@ export default function DocTimeline({
           {track.name}
         </span>
         <button
-          title={track.hidden ? "Show track" : "Hide track"}
+          aria-label={track.hidden ? "Show track" : "Hide track"}
           onClick={() => commit({ ...doc, tracks: doc.tracks.map((t) => (t.id === track.id ? { ...t, hidden: !t.hidden } : t)) })}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
         >
@@ -577,7 +578,7 @@ export default function DocTimeline({
           />
         </button>
         <button
-          title={track.muted ? "Unmute track" : "Mute track"}
+          aria-label={track.muted ? "Unmute track" : "Mute track"}
           onClick={() => commit({ ...doc, tracks: doc.tracks.map((t) => (t.id === track.id ? { ...t, muted: !t.muted } : t)) })}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
         >
@@ -589,7 +590,7 @@ export default function DocTimeline({
         </button>
         {doc.tracks.length > 1 && (
           <button
-            title="Remove track"
+            aria-label="Remove track"
             onClick={() => commit(removeTrack(doc, track.id))}
             style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
           >
@@ -743,7 +744,9 @@ export default function DocTimeline({
     </div>
   );
 
-  const tools: { id: string; icon: string; label: string; onClick: () => void; disabled?: boolean }[] = [
+  // `shortcut` strings here must match the shortcuts sheet exactly — same
+  // strings by contract, so the sheet can never advertise something untrue.
+  const tools: { id: string; icon: string; label: string; shortcut?: string; onClick: () => void; disabled?: boolean }[] = [
     { id: "media", icon: "folder", label: "Add media", onClick: () => { setPickerMode("insert"); setPickerOpen((v) => (pickerMode === "insert" ? !v : true)); } },
     { id: "captions", icon: "subtitles", label: "Add subtitles from speech", onClick: () => { setPickerMode("captions"); setPickerOpen((v) => (pickerMode === "captions" ? !v : true)); } },
     ...(onPromptAnimation
@@ -752,14 +755,17 @@ export default function DocTimeline({
     { id: "text", icon: "type", label: "Add text", onClick: () => addLayer("text") },
     { id: "solid", icon: "square", label: "Add solid", onClick: () => addLayer("solid") },
     { id: "track", icon: "rows", label: "Add track", onClick: () => commit(addTrack(doc)) },
-    { id: "split", icon: "scissors", label: "Split at playhead", onClick: splitAtPlayhead, disabled: selectedIds.size !== 1 },
-    { id: "delete", icon: "trash", label: "Delete selected", onClick: () => deleteSelected(true), disabled: selectedIds.size === 0 },
+    { id: "split", icon: "scissors", label: "Split at playhead", shortcut: "S", onClick: splitAtPlayhead, disabled: selectedIds.size !== 1 },
+    { id: "delete", icon: "trash", label: "Delete selected", shortcut: "⌫", onClick: () => deleteSelected(true), disabled: selectedIds.size === 0 },
   ];
 
   const rail = (
     // Tools down the left, as in Premiere: icon only, named on hover. Keeping
     // them out of the timeline's own header means the header can be about the
     // timeline's state (snap, zoom, playhead) rather than a row of buttons.
+    //
+    // The naming uses the shared Tooltip; this used to be a fourth hand-rolled
+    // hover label, which is three too many.
     <div
       style={{
         width: 34, flexShrink: 0, display: "flex", flexDirection: "column",
@@ -770,7 +776,7 @@ export default function DocTimeline({
       onPointerLeave={() => setHoveredTool(null)}
     >
       {tools.map((t) => (
-        <div key={t.id} style={{ position: "relative" }}>
+        <Tooltip key={t.id} label={t.label} shortcut={t.shortcut} placement="bottom">
           <button
             onClick={t.onClick}
             disabled={t.disabled}
@@ -778,7 +784,7 @@ export default function DocTimeline({
             onPointerEnter={() => setHoveredTool(t.id)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, borderRadius: 4, padding: 0,
+              width: 26, height: 26, borderRadius: "var(--r-control)", padding: 0,
               background: hoveredTool === t.id && !t.disabled ? "var(--surface-hover)" : "transparent",
               border: "none", cursor: t.disabled ? "default" : "pointer",
             }}
@@ -789,21 +795,7 @@ export default function DocTimeline({
               style={{ color: t.disabled ? "var(--ink-disabled)" : "var(--ink-secondary)" }}
             />
           </button>
-          {hoveredTool === t.id && (
-            <span
-              className="mono"
-              style={{
-                position: "absolute", left: 32, top: 5, whiteSpace: "nowrap",
-                fontSize: 10, color: "var(--ink-primary)", background: "var(--surface-hover)",
-                border: "1px solid var(--border-hairline)", borderRadius: 3,
-                padding: "3px 7px", pointerEvents: "none", zIndex: 20,
-                boxShadow: "var(--shadow-float)",
-              }}
-            >
-              {t.label}
-            </span>
-          )}
-        </div>
+        </Tooltip>
       ))}
     </div>
   );
@@ -830,7 +822,7 @@ export default function DocTimeline({
         <div style={{ flex: 1 }} />
         <button onClick={() => setSnapOn((v) => !v)} style={{ ...toolBtn, color: snapOn ? "var(--ink-primary)" : "var(--ink-disabled)" }}>SNAP</button>
         <button onClick={() => setZoom(1)} style={toolBtn}>Fit</button>
-        <IconButton icon="help" size={22} title="Keyboard shortcuts" onClick={() => setShortcutsOpen(true)} />
+        <IconButton icon="help" size={22} title="Keyboard shortcuts" shortcut="⌘/" onClick={() => setShortcutsOpen(true)} />
         <span className="mono nums" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
           {Math.floor(currentFrame / fps / 60).toString().padStart(2, "0")}:
           {Math.floor((currentFrame / fps) % 60).toString().padStart(2, "0")}.
@@ -868,7 +860,6 @@ export default function DocTimeline({
                   <button
                     onClick={() => addCaptions(f)}
                     disabled={captionsBusy !== null}
-                    title="Transcribe this file and add its words as a subtitle layer"
                     style={{ ...toolBtn, color: "var(--ink-secondary)" }}
                   >
                     {captionsBusy === f.path ? "transcribing…" : pickerMode === "captions" ? "add subtitles" : "subtitles"}

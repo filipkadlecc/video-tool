@@ -62,7 +62,7 @@ export default function PromptAnimationDialog({
   }
 
   return (
-    <Modal open={open} onClose={busy ? () => {} : onClose} title="Prompt an animation" width={520}>
+    <Modal open={open} onClose={onClose} dismissible={!busy} title="Prompt an animation" width={520}>
       <div style={{ padding: "14px 20px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ fontSize: 12, color: "var(--ink-secondary)" }}>
           It lands on a new track at the playhead, in your brand's style. Everything

@@ -199,7 +199,7 @@ export default function AssetBrowser({ open, onClose, onCopyPath, inline, onInse
   return inline ? (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>{body}</div>
   ) : (
-    <Modal open={open} onClose={onClose} width={760} title="Asset library" stepLabel="Project files">
+    <Modal open={open} onClose={onClose} width={700} title="Asset library" subtitle="Project files">
       {body}
     </Modal>
   );

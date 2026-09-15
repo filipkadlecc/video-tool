@@ -3,6 +3,7 @@
 import React from "react";
 import type { PlayerRef } from "@remotion/player";
 import Icon from "@/components/ui/Icon";
+import Tooltip from "@/components/ui/Tooltip";
 
 /**
  * Transport bar for the editor's viewer.
@@ -109,16 +110,17 @@ export default function EditorPlayerControls({
 
         <div style={{ flex: 1 }} />
 
-        <Btn title="Go to start" onClick={() => onSeek?.(0)} icon="skipBack" />
-        <Btn title="Back one frame" onClick={() => step(-1)} icon="chevronLeft" />
+        <Btn title="Go to start" shortcut="Home" onClick={() => onSeek?.(0)} icon="skipBack" />
+        <Btn title="Back one frame" shortcut="←" onClick={() => step(-1)} icon="chevronLeft" />
         <Btn
           title={isPlaying ? "Pause (Space)" : "Play (Space)"}
+          shortcut="Space"
           onClick={() => onTogglePlay?.()}
           icon={isPlaying ? "pause" : "play"}
           emphasis
         />
-        <Btn title="Forward one frame" onClick={() => step(1)} icon="chevronRight" />
-        <Btn title="Go to end" onClick={() => onSeek?.(last)} icon="skipForward" />
+        <Btn title="Forward one frame" shortcut="→" onClick={() => step(1)} icon="chevronRight" />
+        <Btn title="Go to end" shortcut="End" onClick={() => onSeek?.(last)} icon="skipForward" />
         <Btn
           title={loop ? "Looping — click to play once" : "Play once — click to loop"}
           onClick={() => onLoopChange(!loop)}
@@ -141,18 +143,24 @@ export default function EditorPlayerControls({
   );
 }
 
+/**
+ * A transport button. Icon-only, so it gets a real tooltip rather than a
+ * native `title` — the shortcut string shown here is the same string the
+ * shortcuts sheet advertises, by contract.
+ */
 function Btn({
-  icon, title, onClick, active, emphasis,
+  icon, title, shortcut, onClick, active, emphasis,
 }: {
   icon: string;
   title: string;
+  shortcut?: string;
   onClick: () => void;
   active?: boolean;
   emphasis?: boolean;
 }) {
   return (
+    <Tooltip label={title} shortcut={shortcut} placement="top">
     <button
-      title={title}
       aria-label={title}
       onClick={onClick}
       style={{
@@ -169,5 +177,6 @@ function Btn({
         style={{ color: active ? "var(--ink-primary)" : "var(--ink-secondary)" }}
       />
     </button>
+    </Tooltip>
   );
 }

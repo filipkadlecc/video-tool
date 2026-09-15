@@ -167,7 +167,6 @@ export default function FootageBrowser({ projectId, doc, onChange, onSelect }: P
             <button
               key={f.path}
               onClick={() => void insert(f)}
-              title={`${f.name} — click to add at the playhead`}
               draggable
               onDragStart={(e) => e.dataTransfer.setData("application/x-vt-media", JSON.stringify(f))}
               style={{

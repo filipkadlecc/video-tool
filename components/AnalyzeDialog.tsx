@@ -193,7 +193,7 @@ export default function AnalyzeDialog({ open, onClose, projectId, hasMediaFolder
   const pending = files.filter((f) => f.status === "pending");
 
   return (
-    <Modal open={open} onClose={onClose} width={640} title="Analyze video" stepLabel="Probe · scene cuts · transcript — so the AI can see your footage">
+    <Modal open={open} onClose={onClose} width={620} title="Analyze video" subtitle="Probe · scene cuts · transcript — so the AI can see your footage">
       <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 560, padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
         {!hasMediaFolder && (
           <div style={{ fontSize: 12, color: "var(--ink-tertiary)", lineHeight: 1.5 }}>

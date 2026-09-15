@@ -115,7 +115,7 @@ export default function FeedbackButton() {
         Feedback
       </button>
 
-      <Modal open={open} onClose={handleClose} width={460} title="Send feedback" stepLabel="Help shape the tool">
+      <Modal open={open} onClose={handleClose} width={440} title="Send feedback" subtitle="Help shape the tool">
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
           {done ? (
             <div

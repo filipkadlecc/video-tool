@@ -37,6 +37,7 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { PlayerRef } from "@remotion/player";
 import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
+import Tooltip from "@/components/ui/Tooltip";
 
 const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
   ssr: false,
@@ -942,11 +943,13 @@ export default function ProjectEditor() {
       >
         {/* Back to the list this project came from, not the root — the type now
             has a URL of its own, so "back" can mean what it looks like. */}
-        <IconButton
-          icon="chevronLeft"
-          onClick={() => router.push(project ? `/${normalizeAnimationType(project.animationType)}` : "/")}
-          title="Back to projects"
-        />
+        <Tooltip label={`Back to ${project ? normalizeAnimationType(project.animationType) : "projects"}`}>
+          <IconButton
+            icon="chevronLeft"
+            onClick={() => router.push(project ? `/${normalizeAnimationType(project.animationType)}` : "/")}
+            aria-label="Back to projects"
+          />
+        </Tooltip>
         <Logo size={20} onClick={() => router.push("/")} />
         <div style={{ width: 1, height: 20, background: "var(--border-hairline)", marginLeft: 4 }} />
         <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
@@ -989,10 +992,11 @@ export default function ProjectEditor() {
             project the buttons undid the LEGACY CODE while Cmd+Z correctly
             undid the document. Branch the same way the keyboard handler does. */}
         <div style={{ display: "flex", gap: 2 }}>
+          <Tooltip label="Undo" shortcut="⌘Z">
           <IconButton
             icon="undo"
             size={26}
-            title="Undo (Cmd+Z)"
+            aria-label="Undo"
             disabled={doc ? !docHistory.canUndo : !codeHistory.canUndo}
             onClick={() => {
               if (doc) { const prevDoc = docHistory.undo(); if (prevDoc !== null) setDoc(prevDoc); return; }
@@ -1000,10 +1004,12 @@ export default function ProjectEditor() {
               if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); }
             }}
           />
+          </Tooltip>
+          <Tooltip label="Redo" shortcut="⇧⌘Z">
           <IconButton
             icon="redo"
             size={26}
-            title="Redo (Cmd+Shift+Z)"
+            aria-label="Redo"
             disabled={doc ? !docHistory.canRedo : !codeHistory.canRedo}
             onClick={() => {
               if (doc) { const nextDoc = docHistory.redo(); if (nextDoc !== null) setDoc(nextDoc); return; }
@@ -1011,6 +1017,7 @@ export default function ProjectEditor() {
               if (next !== null) { setCode(next.code); setChatHistory(next.chat); }
             }}
           />
+          </Tooltip>
         </div>
         <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
         <div
@@ -1130,9 +1137,6 @@ export default function ProjectEditor() {
             variant="outline"
             size="sm"
             icon={showCodeEditor ? "layers" : "code"}
-            title={showCodeEditor
-              ? "Switch back to the visual editor"
-              : "Show the original code view. Your editor arrangement is kept — this only changes which editor is on screen."}
             onClick={() => setShowCodeEditor((v) => !v)}
           >
             {showCodeEditor ? "Editor" : "Code view"}
@@ -1143,7 +1147,6 @@ export default function ProjectEditor() {
             variant="outline"
             size="sm"
             icon="layers"
-            title="Open this project in the visual editor. An AI interview edit comes in as separate clips you can recut; anything else comes in as one block, with the code left untouched."
             onClick={async () => {
               const evaluated = evalSceneCode(code);
               const size = { width, height, fps: evaluated?.fps ?? project.settings.fps };

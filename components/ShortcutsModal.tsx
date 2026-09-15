@@ -94,7 +94,7 @@ export default function ShortcutsModal({
   })).filter((g) => g.rows.length > 0);
 
   return (
-    <Modal open={open} onClose={onClose} title="Keyboard shortcuts" width={470}>
+    <Modal open={open} onClose={onClose} title="Keyboard shortcuts" width={440}>
       <div style={{ padding: "14px 20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
         {groups.map((group) => (
           <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: 9 }}>

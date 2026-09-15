@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Icon from "./Icon";
+import Tooltip from "./Tooltip";
 
 /** 28px square by default, 24px in dense chrome. Radius 4, 15px glyph. */
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -11,10 +12,18 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
   size?: number;
   /** Renders the glyph in danger red — for destructive inline actions. */
   tone?: "default" | "danger";
+  /**
+   * An icon button has no visible label, so `title` becomes a real tooltip
+   * rather than the native browser one — and the accessible name. Pass
+   * `shortcut` to show the key beside it; that string must match the shortcuts
+   * sheet exactly.
+   */
+  title?: string;
+  shortcut?: string;
 }
 
 export default function IconButton({
-  icon, active, size = 28, tone = "default", disabled, style, ...rest
+  icon, active, size = 28, tone = "default", disabled, title, shortcut, style, ...rest
 }: IconButtonProps) {
   const [hover, setHover] = useState(false);
 
@@ -26,8 +35,9 @@ export default function IconButton({
         ? "var(--ink-primary)"
         : "var(--ink-secondary)";
 
-  return (
+  const button = (
     <button
+      aria-label={title}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       disabled={disabled}
@@ -57,4 +67,6 @@ export default function IconButton({
       <Icon name={icon} size={size >= 28 ? 15 : 13} />
     </button>
   );
+
+  return title ? <Tooltip label={title} shortcut={shortcut}>{button}</Tooltip> : button;
 }

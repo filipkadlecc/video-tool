@@ -182,9 +182,9 @@ export default function TapeExamplesPicker({
     <Modal
       open={open}
       onClose={onClose}
-      width={680}
+      width={700}
       title="VHS tape examples"
-      stepLabel="Replace the current tape with a recipe"
+      subtitle="Replace the current tape with a recipe"
     >
       <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 540 }}>
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border-hairline)" }}>

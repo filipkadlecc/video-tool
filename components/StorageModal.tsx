@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Modal from "@/components/ui/Modal";
+import { useDialogs } from "@/components/ui/Dialogs";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
@@ -34,7 +35,7 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const dialogs = useDialogs();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -96,7 +97,6 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
         ids.map((id) => fetch(`/api/projects/${id}`, { method: "DELETE" })),
       );
       setSelected(new Set());
-      setConfirmOpen(false);
       onProjectsDeleted?.(ids);
       await refresh();
     } finally {
@@ -110,7 +110,7 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
 
   return (
     <>
-      <Modal open={open} onClose={onClose} width={680} title="Storage" stepLabel="Manage disk usage">
+      <Modal open={open} onClose={onClose} width={700} title="Storage" subtitle="Manage disk usage">
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, maxHeight: "70vh" }}>
           {/* Summary */}
           <div
@@ -234,7 +234,15 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
                       e.preventDefault();
                       e.stopPropagation();
                       setSelected(new Set([p.id]));
-                      setConfirmOpen(true);
+                      (async () => {
+              const ok = await dialogs.confirm({
+                title: `Delete ${selected.size} project${selected.size === 1 ? "" : "s"}?`,
+                body: `This frees ${formatBytes(selectedBytes)}. Chat history and media go with them, and it can't be undone.`,
+                confirmLabel: `Delete ${selected.size} project${selected.size === 1 ? "" : "s"}`,
+                destructive: true,
+              });
+              if (ok) handleDeleteSelected();
+            })();
                     }}
                   />
                 </label>
@@ -263,7 +271,15 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
               variant="danger"
               size="sm"
               icon="trash"
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => (async () => {
+              const ok = await dialogs.confirm({
+                title: `Delete ${selected.size} project${selected.size === 1 ? "" : "s"}?`,
+                body: `This frees ${formatBytes(selectedBytes)}. Chat history and media go with them, and it can't be undone.`,
+                confirmLabel: `Delete ${selected.size} project${selected.size === 1 ? "" : "s"}`,
+                destructive: true,
+              });
+              if (ok) handleDeleteSelected();
+            })()}
               disabled={selected.size === 0 || busy}
             >
               Delete selected
@@ -272,39 +288,6 @@ export default function StorageModal({ open, onClose, onProjectsDeleted }: Stora
         </div>
       </Modal>
 
-      <Modal open={confirmOpen} onClose={() => !busy && setConfirmOpen(false)} width={380}>
-        <div style={{ padding: 24 }}>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              background: "var(--danger-tint-bg)",
-              display: "grid",
-              placeItems: "center",
-              color: "var(--danger)",
-              marginBottom: 14,
-            }}
-          >
-            <Icon name="trash" size={16} />
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
-            Delete {selected.size} project{selected.size === 1 ? "" : "s"}?
-          </div>
-          <div style={{ fontSize: 12.5, color: "var(--ink-secondary)", lineHeight: 1.5, marginBottom: 18 }}>
-            This will free <span style={{ color: "var(--ink-primary)", fontWeight: 500 }}>{formatBytes(selectedBytes)}</span>.
-            All chat history and media will be permanently removed. This cannot be undone.
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Button variant="ghost" onClick={() => setConfirmOpen(false)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button variant="danger" onClick={handleDeleteSelected} disabled={busy}>
-              {busy ? "Deleting…" : "Delete"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }

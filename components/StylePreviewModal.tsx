@@ -84,7 +84,7 @@ function PreviewCell({
 
 export default function StylePreviewModal({ open, onClose, selected, onSelect }: StylePreviewModalProps) {
   return (
-    <Modal open={open} onClose={onClose} width={720} title="Style previews" stepLabel="Pick a look">
+    <Modal open={open} onClose={onClose} width={700} title="Style previews" subtitle="Pick a look">
       <div
         style={{
           padding: 20,

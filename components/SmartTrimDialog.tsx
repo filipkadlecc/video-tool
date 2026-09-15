@@ -219,7 +219,7 @@ export default function SmartTrimDialog({
       onClose={onClose}
       width={620}
       title="Smart trim"
-      stepLabel="Transcribe → cut silences → emit a Remotion composition"
+      subtitle="Transcribe → cut silences → emit a Remotion composition"
     >
       <div className="vt-scroll" style={{ overflowY: "auto", maxHeight: 560 }}>
         {!hasMediaFolder && (
