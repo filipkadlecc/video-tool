@@ -23,7 +23,8 @@ import {
   setItemKey, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
 } from "@/lib/editor-doc";
 import {
-  isAnimated, keyAt, valueAt, CHANNELS_BY_ID, channelsFor, type ChannelId,
+  isAnimated, keyAt, valueAt, CHANNELS_BY_ID, channelsFor,
+  type ChannelId, type Keyframe,
 } from "@/lib/editor-keys";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import GradeSection from "@/components/inspector/GradeSection";
@@ -113,6 +114,80 @@ function Diamond({
         }}
       />
     </button>
+  );
+}
+
+/**
+ * The inline keyframe strip, shown under an animated row.
+ *
+ * Indented to line up under the CONTROL rather than the label, so the keys sit
+ * beneath the value they belong to. This is the second of the three views onto
+ * the same data — the diamonds say THAT a property is animated, this says WHERE.
+ */
+function KeyStrip({
+  keys, durationInFrames, localFrame, fps,
+}: {
+  keys: Keyframe[];
+  durationInFrames: number;
+  localFrame: number;
+  fps: number;
+}) {
+  const span = Math.max(1, durationInFrames);
+  const pct = (f: number) => (Math.max(0, Math.min(span, f)) / span) * 100;
+  const first = keys[0];
+  const last = keys[keys.length - 1];
+  // Keys can sit outside the clip after a split; they are real and recoverable,
+  // so say how many rather than silently dropping them off the end.
+  const hidden = keys.filter((k) => k.frame < 0 || k.frame > span).length;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 78 }}>
+      <div
+        style={{
+          position: "relative", flex: 1, height: 26,
+          background: "var(--surface-void)",
+          border: "1px solid var(--border-hairline)",
+          borderRadius: "var(--r-item)",
+          overflow: "hidden",
+        }}
+      >
+        {/* the line joining consecutive keys */}
+        {keys.length > 1 && (
+          <div
+            style={{
+              position: "absolute", top: "50%", height: 1,
+              left: `${pct(first.frame)}%`, width: `${pct(last.frame) - pct(first.frame)}%`,
+              background: "var(--surface-active)",
+            }}
+          />
+        )}
+        {keys.map((k) => (
+          <span
+            key={k.frame}
+            title={`${frameCount(k.frame)}`}
+            style={{
+              position: "absolute", top: "50%", left: `${pct(k.frame)}%`,
+              width: 7, height: 7, marginLeft: -3.5, marginTop: -3.5,
+              transform: "rotate(45deg)", background: "var(--ink-primary)",
+            }}
+          />
+        ))}
+        {/* the playhead is the only live thing in here */}
+        {localFrame >= 0 && localFrame <= span && (
+          <div
+            style={{
+              position: "absolute", top: 0, bottom: 0, width: 1,
+              left: `${pct(localFrame)}%`, background: "var(--live)",
+            }}
+          />
+        )}
+      </div>
+      <span className="t-data-s" style={{ color: "var(--ink-tertiary)", flexShrink: 0 }}>
+        {hidden > 0
+          ? `${hidden} off-clip`
+          : `${timecode(Math.max(0, first.frame), fps)} → ${timecode(Math.max(0, last.frame), fps)}`}
+      </span>
+    </div>
   );
 }
 
@@ -346,10 +421,33 @@ export default function EditorInspector({
   const patchLayout = (p: Parameters<typeof setLayout>[2], opts?: { transient?: boolean }) =>
     onChange(setLayout(doc, item.id, p), opts);
 
-  const localFrame = playheadFrame - item.from;
+  const rawLocal = playheadFrame - item.from;
+  /**
+   * Keys are written at the playhead — CLAMPED to the clip.
+   *
+   * Negative and past-the-end keys are legal in the model (a split relies on
+   * it), but one created by clicking a diamond while the playhead sits off the
+   * clip is just a key you can neither see nor reach. Clamping puts it at the
+   * nearest end, which is what you meant.
+   */
+  const localFrame = Math.max(0, Math.min(item.durationInFrames - 1, rawLocal));
   const canAnimate = channelsFor(item.type).length > 0;
   const dia = (channels: ChannelId[]) =>
     canAnimate ? <Diamond doc={doc} item={item} channels={channels} localFrame={localFrame} onChange={onChange} /> : undefined;
+
+  /** The strip under an animated row — one per row, using its first keyed channel. */
+  const strip = (channels: ChannelId[]) => {
+    const ch = channels.find((c) => isAnimated(item, c));
+    if (!ch) return null;
+    return (
+      <KeyStrip
+        keys={item.keys![ch]!}
+        durationInFrames={item.durationInFrames}
+        localFrame={rawLocal}
+        fps={doc.size.fps}
+      />
+    );
+  };
 
   /**
    * Reset a row.
@@ -415,6 +513,7 @@ export default function EditorInspector({
                 onY={(n, o) => patchLayout({ y: n }, o)}
               />
             </Row>
+            {strip(["x", "y"])}
             <Row label="Size">
               <Vector
                 x={l.width} y={l.height}
@@ -450,6 +549,7 @@ export default function EditorInspector({
                 }}
               />
             </Row>
+            {strip(["scale"])}
             <Row
               label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
                 <Icon name="link" size={11} /> W · H
@@ -476,6 +576,7 @@ export default function EditorInspector({
                 onChange={(n, o) => patchLayout({ rotation: n }, o)}
               />
             </Row>
+            {strip(["rotation"])}
           </Section>
 
           <Section
@@ -497,6 +598,7 @@ export default function EditorInspector({
                 onChange={(n, o) => patchLayout({ opacity: n / 100 }, o)}
               />
             </Row>
+            {strip(["opacity"])}
             <Row label="Corner" onReset={() => patchLayout({ cornerRadius: 0 })} isDefault={!l.cornerRadius}>
               <Scalar
                 value={l.cornerRadius ?? 0} min={0} max={200}
