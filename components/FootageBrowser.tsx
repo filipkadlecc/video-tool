@@ -5,6 +5,7 @@ import Icon from "@/components/ui/Icon";
 import { addItem, makeId, type Asset, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
 import { usePlayheadStore } from "@/hooks/usePlayhead";
 import Input from "@/components/ui/Input";
+import { formatBytes } from "@/lib/format";
 import IconButton from "@/components/ui/IconButton";
 
 /**
@@ -16,6 +17,8 @@ export interface MediaFile {
   name: string;
   path: string;
   type: "video" | "audio" | "image" | "other";
+  /** Bytes, from the list route. Optional: older callers don't pass it. */
+  size?: number;
 }
 
 interface Props {
@@ -243,7 +246,11 @@ export default function FootageBrowser({ projectId, doc, onChange, onSelect }: P
         }}
       >
         <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
+          {/* Count AND size, per the spec — "7 items" doesn't tell you whether
+              this project is 40 MB or 4 GB, which is the thing you want to know
+              before an import or a copy. */}
           {files.length} {files.length === 1 ? "item" : "items"}
+          {files.length > 0 ? ` · ${formatBytes(files.reduce((n, f) => n + (f.size ?? 0), 0))}` : ""}
         </span>
         <div style={{ flex: 1 }} />
         <button

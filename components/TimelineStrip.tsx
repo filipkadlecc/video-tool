@@ -152,6 +152,20 @@ export default function TimelineStrip({
                         );
                       }}
                       title={label(item)}
+                      /*
+                        Draggable so a clip can be dropped into the chat
+                        composer ("drag a clip in here"). It is the STRIP that
+                        carries this, not the full timeline: there, pointerdown
+                        drives move/trim and calls preventDefault, which
+                        suppresses native drag — and trading a daily-use gesture
+                        for a nicety is a bad deal. In Direct the strip is what
+                        sits beside the chat anyway.
+                      */
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/x-vt-clip", item.id);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
                       style={{
                         position: "absolute", top: 0, bottom: 0,
                         left: `${left}%`, width: `${width}%`, minWidth: 2,

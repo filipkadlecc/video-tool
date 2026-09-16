@@ -212,6 +212,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
   const [svgPickerOpen, setSvgPickerOpen] = useState(false);
   const [svgOptions, setSvgOptions] = useState<SvgAssetOption[]>([]);
   const [svgLoading, setSvgLoading] = useState(false);
+  /** A clip is hovering over the composer. */
+  const [dropping, setDropping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoSentRef = useRef(false);
@@ -984,22 +986,41 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           </div>
         )}
 
+        {/*
+          A clip dragged in from the timeline becomes context — the same chip
+          selecting it would produce. "Drag a clip in here" is in the
+          placeholder, so the box has to actually take one.
+        */}
         <div
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes("application/x-vt-clip")) return;
+            e.preventDefault();
+            setDropping(true);
+          }}
+          onDragLeave={() => setDropping(false)}
+          onDrop={(e) => {
+            const id = e.dataTransfer.getData("application/x-vt-clip");
+            setDropping(false);
+            if (!id) return;
+            e.preventDefault();
+            onSelectItems?.([...new Set([...(selectedIds ?? []), id])]);
+          }}
           style={{
             display: "flex",
             flexDirection: "column",
             gap: 6,
             padding: 8,
             background: "var(--surface-void)",
-            border: "1px solid var(--border-hairline)",
+            border: `1px solid ${dropping ? "var(--ink-primary)" : "var(--border-hairline)"}`,
             borderRadius: "var(--r-panel)",
+            transition: "border-color var(--dur-state) var(--ease)",
           }}
         >
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask for a change..."
+            placeholder={doc ? "Describe the change, or drag a clip in here…" : "Ask for a change..."}
             rows={2}
             disabled={isGenerating}
             className="vt-scroll"

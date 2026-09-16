@@ -36,6 +36,36 @@ type Status = "idle" | "queued" | "rendering" | "done" | "error";
 /** Lower is better. h264 only; the ProRes profiles carry their own quality. */
 const CRF: Record<Quality, number> = { draft: 28, standard: 23, master: 18 };
 
+/**
+ * Roughly how big the file will be.
+ *
+ * An estimate, labelled as one, because the real size depends on what is IN the
+ * frames — and in this app that spans two orders of magnitude. Measured here:
+ *
+ *   flat animation, 1080p, CRF 23  →  0.007 bits per pixel per frame
+ *   DJI camera footage             →  0.06  (its own source bitrate)
+ *   the handoff's example          →  0.75  (generous even for footage)
+ *
+ * So the factor is chosen by what the composition actually contains rather than
+ * being one number that is wrong for everything. Still an estimate: "expect a
+ * mail attachment or a transfer" is the question it answers, and the dialog
+ * said nothing at all before.
+ */
+const BITS_PER_PIXEL: Record<"animation" | "footage", Record<Quality, number>> = {
+  animation: { draft: 0.004, standard: 0.008, master: 0.02 },
+  footage: { draft: 0.022, standard: 0.045, master: 0.09 },
+};
+/** ProRes and friends are intra-frame — hundreds of megabits per second. */
+const BPP_INTRA = 6;
+
+function estimateBytes(
+  width: number, height: number, frames: number,
+  codec: string, quality: Quality, footage: boolean,
+): number {
+  const bpp = codec === "h264" ? BITS_PER_PIXEL[footage ? "footage" : "animation"][quality] : BPP_INTRA;
+  return (width * height * frames * bpp) / 8;
+}
+
 const FORMATS = [
   { value: "h264", label: "MP4 · H.264", ext: "mp4" },
   { value: "prores", label: "MOV · ProRes 4444 (alpha)", ext: "mov" },
@@ -87,11 +117,19 @@ export default function ExportFlow({
   const [locateFor, setLocateFor] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const previewRef = useRef<HTMLVideoElement>(null);
   const poll = useRef<number | null>(null);
   const locateRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
 
   const ext = FORMATS.find((f) => f.value === format)?.ext ?? "mp4";
+  /*
+   * Can this browser actually show the file it just made? h264 in mp4, yes;
+   * ProRes and QuickTime RLE in a .mov, no — and asking it to try produces a
+   * black box, which reads as a broken export rather than an unplayable codec.
+   */
+  const playable = format === "h264";
   const hours = needsHours(durationInFrames, fps);
 
   useEffect(() => {
@@ -125,6 +163,9 @@ export default function ExportFlow({
     })();
     return () => { cancelledCheck = true; };
   }, [open, doc, projectId]);
+
+  /** Whether anything in this composition is real footage — see BITS_PER_PIXEL. */
+  const hasFootage = Boolean(doc?.tracks.some((t) => t.items.some((i) => i.type === "video")));
 
   const rangeIn = range?.in ?? 0;
   const rangeOut = range?.out ?? durationInFrames;
@@ -445,14 +486,53 @@ export default function ExportFlow({
         }
       >
         <div style={{ display: "flex", gap: 16 }}>
+          {/*
+            The file you just made, not a picture of a play button.
+            It is already served at /renders/<job>.<ext>, so the preview is the
+            export itself — seeked a little in, because frame 0 of a lot of
+            these is an empty stage. Clicking it plays it in place.
+            A codec the browser can't decode (ProRes, QuickTime RLE) falls back
+            to the glyph rather than showing a black rectangle and calling it a
+            preview.
+          */}
           <div
             style={{
-              width: 200, aspectRatio: "16 / 9", flexShrink: 0, borderRadius: "var(--r-frame)",
+              width: 200, aspectRatio: `${width} / ${height}`, maxHeight: 150, flexShrink: 0,
+              borderRadius: "var(--r-frame)", overflow: "hidden", position: "relative",
               background: "var(--surface-void)", border: "1px solid var(--border-hairline)",
               display: "grid", placeItems: "center",
             }}
           >
-            <Icon name="play" size={22} style={{ color: "var(--ink-tertiary)" }} />
+            {playable ? (
+              <video
+                ref={previewRef}
+                src={`${result.url}#t=0.5`}
+                preload="metadata"
+                playsInline
+                onClick={() => {
+                  const el = previewRef.current;
+                  if (!el) return;
+                  if (el.paused) { void el.play(); setPreviewPlaying(true); }
+                  else { el.pause(); setPreviewPlaying(false); }
+                }}
+                onEnded={() => setPreviewPlaying(false)}
+                style={{ width: "100%", height: "100%", objectFit: "contain", cursor: "pointer", display: "block" }}
+              />
+            ) : (
+              <Icon name="film" size={22} style={{ color: "var(--ink-tertiary)" }} />
+            )}
+            {playable && !previewPlaying && (
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute", width: 34, height: 34, borderRadius: "var(--r-pill)",
+                  background: "rgba(10,10,11,0.7)", display: "grid", placeItems: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <Icon name="play" size={14} style={{ color: "var(--ink-primary)" }} />
+              </span>
+            )}
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -585,7 +665,8 @@ export default function ExportFlow({
             <Input value={fileName} onChange={setFileName} suffix={`.${ext}`} />
           </div>
           <div className="t-caption" style={{ color: "var(--ink-tertiary)", marginTop: 6 }}>
-            {width}×{height} · downloads when it finishes
+            {width}×{height} · estimated {formatBytes(estimateBytes(width, height, exportFrames, format, quality, hasFootage))} ·
+            {" "}downloads when it finishes
           </div>
         </Field>
 

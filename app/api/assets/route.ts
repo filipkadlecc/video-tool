@@ -67,19 +67,34 @@ export async function POST(request: Request) {
     return Response.json({ error: `Only ${ALLOWED_EXTENSIONS.join(", ")} files allowed` }, { status: 400 });
   }
 
+  /*
+   * Both names come from the client, so both are reduced to a single path
+   * segment before they touch the filesystem. Without this a `folder` of
+   * "../../lib" writes wherever it likes — the media and LUT uploaders have
+   * always basenamed their input; this one never did, and it only stops being
+   * theoretical the moment the app leaves localhost.
+   */
+  const safeSegment = (name: string) => path.basename(name).replace(/^\.+/, "");
+  const safeFolder = safeSegment(folder);
+  const safeName = safeSegment(file.name);
+  if (!safeFolder || !safeName) {
+    return Response.json({ error: "invalid folder or file name" }, { status: 400 });
+  }
+
   const assetsDir = path.join(process.cwd(), "public", "assets");
-  const folderPath = path.join(assetsDir, folder);
+  const folderPath = path.join(assetsDir, safeFolder);
 
   // Ensure folder exists
   fs.mkdirSync(folderPath, { recursive: true });
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const filePath = path.join(folderPath, file.name);
+  const filePath = path.join(folderPath, safeName);
   fs.writeFileSync(filePath, buffer);
 
+  // Report where it ACTUALLY went, not where it was asked to go.
   return Response.json({
-    name: file.name,
-    path: `assets/${folder}/${file.name}`,
-    type: getFileType(file.name),
+    name: safeName,
+    path: `assets/${safeFolder}/${safeName}`,
+    type: getFileType(safeName),
   });
 }

@@ -26,6 +26,7 @@ import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
 import Segmented from "@/components/ui/Segmented";
+import Menu from "@/components/ui/Menu";
 import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
@@ -199,6 +200,18 @@ export default function ProjectEditor() {
    */
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /**
+   * A panel layout you chose, per workspace, per project.
+   *
+   * The geometry effect below sets the spec's widths every time you switch
+   * rooms. That is right until you have deliberately resized something — after
+   * which switching throws your layout away, every time. Saving one makes the
+   * switch restore yours instead; resetting forgets it and the spec takes over
+   * again.
+   */
+  const layoutKey = `vt:panels:${projectId}`;
+  const [savedLayout, setSavedLayout] = useState<Record<string, string> | null>(null);
   const rangeKey = `vt:range:${projectId}`;
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -983,6 +996,14 @@ export default function ProjectEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiEdit, chatOnScreen, undoAiEdit]);
 
+  // Restore a saved panel layout for this project, if there is one.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(layoutKey);
+      setSavedLayout(raw ? (JSON.parse(raw) as Record<string, string>) : null);
+    } catch { /* private window — the spec's widths are a fine default */ }
+  }, [layoutKey]);
+
   // Restore the last workspace for THIS project.
   useEffect(() => {
     try {
@@ -990,6 +1011,38 @@ export default function ProjectEditor() {
       if (saved === "cut" || saved === "direct") setWorkspace(saved);
     } catch { /* private window — the default is fine */ }
   }, [workspaceKey]);
+
+  /** Remember where you have the panels, for the workspace you are in. */
+  const saveLayout = useCallback(() => {
+    // getSize() reports either a CSS string or {inPixels}; store pixels, which
+    // is the unit resize() is given everywhere else here.
+    const px = (h: PanelImperativeHandle | null) => {
+      const size = h?.getSize();
+      if (size === undefined || size === null) return "";
+      if (typeof size === "number") return `${Math.round(size)}px`;
+      if (typeof size === "string") return size;
+      return `${Math.round(size.inPixels)}px`;
+    };
+    const next: Record<string, string> = {
+      ...(savedLayout ?? {}),
+      [`${workspace}:right`]: px(rightPanelRef.current),
+      [`${workspace}:timeline`]: px(timelinePanelRef.current),
+      [`${workspace}:rail`]: px(railPanelRef.current),
+    };
+    setSavedLayout(next);
+    try { window.localStorage.setItem(layoutKey, JSON.stringify(next)); } catch { /* ignore */ }
+    toast.success("Layout saved", `${workspace === "cut" ? "Cut" : "Direct"} opens like this from now on.`);
+    // `toast` is a stable context value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedLayout, workspace, layoutKey]);
+
+  /** Forget it, and let the design's widths take over again. */
+  const resetLayout = useCallback(() => {
+    setSavedLayout(null);
+    try { window.localStorage.removeItem(layoutKey); } catch { /* ignore */ }
+    toast.success("Back to the default layout");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey]);
 
   // Apply the workspace's geometry. Panels are resized in place.
   useEffect(() => {
@@ -1001,27 +1054,35 @@ export default function ProjectEditor() {
     // restored layout during the first, and whichever runs last wins.
     let inner = 0;
     const raf = requestAnimationFrame(() => { inner = requestAnimationFrame(() => {
+      /*
+       * A layout you saved wins over the spec's widths. Without this the
+       * "Save layout" menu item would be a lie: the next switch would put
+       * everything back where the design says it goes.
+       */
+      const mine = savedLayout;
+      const pick = (panel: string, fallback: string) => mine?.[`${workspace}:${panel}`] || fallback;
+
       if (workspace === "direct") {
         // Chat-first: a wide chat column and the timeline down to a strip, so
         // an AI edit's result is visible in the same glance as the sentence
         // describing it. Expanded, the strip gives way to the real timeline
         // and the keyframe lanes it carries.
-        rightPanelRef.current?.resize("452px");
-        timelinePanelRef.current?.resize(timelineExpanded ? "428px" : "152px");
+        rightPanelRef.current?.resize(pick("right", "452px"));
+        timelinePanelRef.current?.resize(timelineExpanded ? "428px" : pick("timeline", "152px"));
       } else {
         // Timeline-first: the inspector at 360px — the narrowest width that
         // holds the property row grid — and the timeline at full height.
         // Order matters: sizing the right panel steals width back from its
         // neighbours, so the rail goes last or it ends up 24px short.
-        rightPanelRef.current?.resize("360px");
-        timelinePanelRef.current?.resize("296px");
-        railPanelRef.current?.resize("248px");
+        rightPanelRef.current?.resize(pick("right", "360px"));
+        timelinePanelRef.current?.resize(pick("timeline", "296px"));
+        railPanelRef.current?.resize(pick("rail", "248px"));
       }
     }); });
     setRightTab(workspace === "direct" ? "chat" : "properties");
     if (workspace !== "direct") setTimelineExpanded(false);
     return () => { cancelAnimationFrame(raf); cancelAnimationFrame(inner); };
-  }, [workspace, workspaceKey, timelineExpanded]);
+  }, [workspace, workspaceKey, timelineExpanded, savedLayout]);
 
   const horizontalLayout = useDefaultLayout({
     // v3: the stage row is now rail | preview | right, and the timeline moved
@@ -1141,6 +1202,37 @@ export default function ProjectEditor() {
                 { value: "direct", label: "Direct", shortcut: "\u2325 2" },
               ]}
             />
+            {/*
+              The workspace menu the design puts after the switcher.
+
+              Two items, because two are true. The editor forces the spec's
+              panel widths on every switch — which is right until you have
+              deliberately resized something, at which point it throws your
+              layout away every time you change room. "Save layout" is what
+              makes the switch stop doing that.
+
+              The design's third item, "New workspace…", would need
+              user-defined workspaces, which this app does not have. Left out
+              rather than faked.
+            */}
+            <Menu
+              align="left"
+              items={[
+                {
+                  label: savedLayout ? "Save layout again" : "Save layout",
+                  icon: "check",
+                  onSelect: saveLayout,
+                },
+                {
+                  label: "Reset to default",
+                  icon: "reset",
+                  disabled: !savedLayout,
+                  onSelect: resetLayout,
+                },
+              ]}
+            >
+              <IconButton icon="chevronDown" size={28} title="Workspace layout" />
+            </Menu>
             <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
           </>
         )}
