@@ -24,7 +24,7 @@ import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
 import { sceneMeta } from "../lib/scene-eval";
 import {
-  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
+  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc, relinkAsset,
   makeId, moveItem, removeItem, reorderTrack, rippleRemoveItem, setLayout,
   captionPageAt, cloneItem, duplicateItem, moveItemToTrack, paginateCaptions,
   hasRoomAt, resizeLayout, snapBox, splitItem, trackWithRoomAt, trimItem, updateItem,
@@ -1176,6 +1176,35 @@ head("every real composition that imports, tiles");
   a(imported > 0, "the corpus actually exercises this");
 }
 
+
+head("re-linking a source that moved");
+{
+  /*
+   * The point of `relinkAsset` is that the CLIPS survive. A moved file used to
+   * mean re-importing it and rebuilding every trim, effect and keyframe that
+   * referred to it — so the repair cost more than the damage.
+   */
+  let doc = emptyDoc({ width: 1920, height: 1080, fps: 25 });
+  doc = addAsset(doc, { id: "a1", kind: "video", src: "/api/media/p/old.mp4", name: "old.mp4", durationSec: 30 });
+  doc = addItem(doc, doc.tracks[0].id, {
+    type: "video", id: "c1", from: 10, durationInFrames: 40,
+    layout: { x: 0, y: 0, width: 1920, height: 1080 },
+    assetId: "a1", sourceIn: 2, sourceOut: 6,
+  } as unknown as VideoItem);
+
+  const next = relinkAsset(doc, "a1", "/api/media/p/found.mp4", "found.mp4");
+  a(next.assets[0].src === "/api/media/p/found.mp4", "the asset points at the new file");
+  a(next.assets[0].name === "found.mp4", "and is named after it");
+
+  const clip = findItem(next, "c1")!.item as VideoItem;
+  a(clip.from === 10 && clip.durationInFrames === 40, "the clip keeps its place on the timeline");
+  a(clip.sourceIn === 2 && clip.sourceOut === 6, "and its trim into the footage");
+  a(isValidDoc(next), "the document stays valid");
+
+  a(relinkAsset(doc, "nope", "/x.mp4") === doc, "an unknown asset id is a no-op, not a new asset");
+  a(relinkAsset(doc, "a1", "/api/media/p/old.mp4", "old.mp4") === doc,
+    "re-linking to where it already points changes nothing");
+}
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
 if (fail) process.exit(1);

@@ -1787,6 +1787,7 @@ export default function ProjectEditor() {
             projectId={projectId}
             doc={doc}
             range={range}
+            onDocChange={commitDoc}
           />
         );
       })()}

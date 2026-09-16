@@ -10,7 +10,7 @@ import Segmented from "@/components/ui/Segmented";
 import Tag from "@/components/ui/Tag";
 import { timecode, needsHours } from "@/lib/timecode";
 import { formatBytes } from "@/lib/format";
-import type { EditorDoc } from "@/lib/editor-doc";
+import { relinkAsset, type EditorDoc } from "@/lib/editor-doc";
 
 /**
  * The export arc: 4e -> 5d -> 5e or 5f, with 5g reachable from 4e's warning.
@@ -45,16 +45,17 @@ const FORMATS = [
 ];
 
 export interface MissingSource {
-  itemId: string;
+  assetId: string;
   name: string;
-  track: string;
-  atFrame: number;
-  lastSeen?: string;
+  /** Folder it was last seen in, for the "last seen in …" line. */
+  lastSeen: string;
+  /** Every clip using it — so the row can say which track and when. */
+  clips: { itemId: string; track: string; atFrame: number }[];
 }
 
 export default function ExportFlow({
   open, onClose, code, durationInFrames, fps, width, height,
-  projectName, projectId, doc, range,
+  projectName, projectId, doc, range, onDocChange,
 }: {
   open: boolean;
   onClose: () => void;
@@ -67,6 +68,8 @@ export default function ExportFlow({
   projectId?: string;
   doc?: EditorDoc;
   range?: { in: number | null; out: number | null };
+  /** Re-linking a moved file edits the document, so the page commits it. */
+  onDocChange?: (doc: EditorDoc) => void;
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const [format, setFormat] = useState("h264");
@@ -79,7 +82,14 @@ export default function ExportFlow({
   const [result, setResult] = useState<{ url: string; bytes?: number; ms?: number } | null>(null);
   const [failure, setFailure] = useState<{ message: string; log?: string } | null>(null);
   const [showMissing, setShowMissing] = useState(false);
+  const [missing, setMissing] = useState<MissingSource[]>([]);
+  const [relinking, setRelinking] = useState<string | null>(null);
+  const [locateFor, setLocateFor] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
   const poll = useRef<number | null>(null);
+  const locateRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
 
   const ext = FORMATS.find((f) => f.value === format)?.ext ?? "mp4";
   const hours = needsHours(durationInFrames, fps);
@@ -92,26 +102,83 @@ export default function ExportFlow({
 
   useEffect(() => () => { if (poll.current) window.clearInterval(poll.current); }, []);
 
-  /** Clips whose source asset is gone. They render as black, so say so first. */
-  const missing: MissingSource[] = React.useMemo(() => {
-    if (!doc) return [];
-    const ids = new Set(doc.assets.map((a) => a.id));
-    const out: MissingSource[] = [];
-    doc.tracks.forEach((t) => {
-      t.items.forEach((it) => {
-        const assetId = (it as { assetId?: string }).assetId;
-        if (assetId && !ids.has(assetId)) {
-          out.push({ itemId: it.id, name: assetId, track: t.name, atFrame: it.from });
-        }
-      });
-    });
-    return out;
-  }, [doc]);
+  /*
+   * Sources whose FILE is gone — asked of the disk, every time the dialog
+   * opens.
+   *
+   * This used to be computed from the document: a clip pointing at an assetId
+   * with no row in `doc.assets`. That catches a corrupt document, which
+   * essentially never happens, and misses the case that does — the row is
+   * intact and the file has been moved or renamed underneath it. It also
+   * displayed the raw asset id, because a dangling reference has no name.
+   */
+  useEffect(() => {
+    if (!open || !doc || !projectId) return;
+    let cancelledCheck = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/projects/${projectId}/missing-sources`);
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!cancelledCheck) setMissing(j.missing ?? []);
+      } catch { /* a failed check must not block an export */ }
+    })();
+    return () => { cancelledCheck = true; };
+  }, [open, doc, projectId]);
 
   const rangeIn = range?.in ?? 0;
   const rangeOut = range?.out ?? durationInFrames;
   const hasRange = (range?.in ?? null) !== null || (range?.out ?? null) !== null;
   const exportFrames = useRange && hasRange ? Math.max(1, rangeOut - rangeIn) : durationInFrames;
+
+  /**
+   * Put a moved file back.
+   *
+   * The browser cannot hand us a path, so "found it" means uploading the bytes
+   * into the project's media folder and pointing the asset at them. That is the
+   * honest version of Locate… here, and it has a side benefit: the file is now
+   * *inside* the project, so it cannot wander off again.
+   *
+   * Every clip using the asset is fixed at once, because the asset is what was
+   * lost — the clips' trims, effects and keyframes were never in question.
+   */
+  const relink = useCallback(async (assetId: string, file: File) => {
+    if (!doc || !projectId || !onDocChange) return false;
+    setRelinking(assetId);
+    try {
+      const res = await fetch(
+        `/api/media/${projectId}/upload?name=${encodeURIComponent(file.name)}`,
+        { method: "POST", body: file },
+      );
+      if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+      const { path: rel } = await res.json();
+      const src = `/api/media/${projectId}/${String(rel ?? file.name).split("/").map(encodeURIComponent).join("/")}`;
+      onDocChange(relinkAsset(doc, assetId, src, file.name));
+      setMissing((prev) => prev.filter((m) => m.assetId !== assetId));
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setRelinking(null);
+    }
+  }, [doc, projectId, onDocChange]);
+
+  /**
+   * "Point at one and I'll find the rest in the same folder."
+   *
+   * A directory picker is the only way a page can see a folder's contents, and
+   * it is exactly the gesture the sentence describes. Names are matched
+   * case-insensitively; anything not found stays listed rather than being
+   * quietly dropped.
+   */
+  const searchFolder = useCallback(async (files: FileList) => {
+    const byName = new Map<string, File>();
+    for (const f of Array.from(files)) byName.set(f.name.toLowerCase(), f);
+    for (const m of [...missing]) {
+      const found = byName.get(m.name.toLowerCase());
+      if (found) await relink(m.assetId, found);
+    }
+  }, [missing, relink]);
 
   const start = useCallback(async () => {
     setStatus("queued");
@@ -132,6 +199,7 @@ export default function ExportFlow({
       });
       if (!res.ok) throw new Error(`The render couldn't be started (HTTP ${res.status}).`);
       const job = await res.json();
+      setJobId(job.id);
       setStatus("rendering");
 
       poll.current = window.setInterval(async () => {
@@ -152,6 +220,12 @@ export default function ExportFlow({
             if (poll.current) window.clearInterval(poll.current);
             setFailure({ message: j.error ?? "The render stopped.", log: j.log });
             setStatus("error");
+          } else if (j.status === "cancelled") {
+            // You asked for this, so there is nothing to report: the dialog
+            // goes away and the half-written file has already been removed.
+            if (poll.current) window.clearInterval(poll.current);
+            setStatus("idle");
+            onClose();
           }
         } catch { /* a dropped poll is not a failed render */ }
       }, 1000);
@@ -164,6 +238,27 @@ export default function ExportFlow({
   const reset = () => { setStatus("idle"); setResult(null); setFailure(null); setProgress(0); setFrames(null); };
   const close = () => { onClose(); };
 
+  /**
+   * Stop the render — the renderer, not just the dialog.
+   *
+   * "Stop render" and "Hide and keep working" used to call the same function,
+   * so the only thing Stop stopped was the window it was in: the render carried
+   * on, held a CPU, and eventually wrote a file nobody had asked for any more.
+   */
+  const stopRender = useCallback(async () => {
+    if (!jobId) { close(); return; }
+    setStopping(true);
+    try {
+      await fetch(`/api/render/${jobId}`, { method: "DELETE" });
+    } catch { /* the poll below settles it either way */ }
+    if (poll.current) window.clearInterval(poll.current);
+    setStopping(false);
+    setStatus("idle");
+    setJobId(null);
+    onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, onClose]);
+
   const remaining = (() => {
     if (!frames || !startedAt || frames.done < 10) return null;
     const perFrame = (Date.now() - startedAt) / frames.done;
@@ -173,7 +268,7 @@ export default function ExportFlow({
   })();
 
   /* ── 5g — missing sources ───────────────────────────────────────── */
-  if (open && showMissing) {
+  if (open && showMissing && missing.length > 0) {
     return (
       <Modal
         open
@@ -189,32 +284,82 @@ export default function ExportFlow({
             </span>
             <div style={{ flex: 1 }} />
             <Button size="dialog" variant="ghost" onClick={() => setShowMissing(false)}>Skip for now</Button>
-            <Button size="dialog" variant="primary" disabled>Search folder…</Button>
+            <Button
+              size="dialog"
+              variant="primary"
+              disabled={relinking !== null || !onDocChange}
+              onClick={() => folderRef.current?.click()}
+            >
+              Search folder…
+            </Button>
           </>
         }
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {missing.map((m) => (
-            <div
-              key={m.itemId}
-              style={{
-                display: "flex", alignItems: "center", gap: 10, padding: 12,
-                background: "var(--surface-raised)", border: "1px solid var(--border-hairline)",
-                borderRadius: "var(--r-panel)",
-              }}
-            >
-              <Icon name="warn" size={16} style={{ color: "var(--warning)", flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="t-control" style={{ color: "var(--ink-primary)" }}>{m.name}</div>
-                <div className="t-data-s" style={{ color: "var(--ink-tertiary)", marginTop: 2 }}>
-                  {m.track} · {timecode(m.atFrame, fps, hours)}
-                  {m.lastSeen ? ` · last seen in ${m.lastSeen}` : ""}
+          {missing.map((m) => {
+            const first = m.clips[0];
+            return (
+              <div
+                key={m.assetId}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: 12,
+                  background: "var(--surface-raised)", border: "1px solid var(--border-hairline)",
+                  borderRadius: "var(--r-panel)",
+                }}
+              >
+                <Icon name="warn" size={16} style={{ color: "var(--warning)", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="t-control" style={{ color: "var(--ink-primary)" }}>{m.name}</div>
+                  <div
+                    className="t-data-s"
+                    style={{ color: "var(--ink-tertiary)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {first ? `${first.track} · ${timecode(first.atFrame, fps, hours)}` : "unused"}
+                    {m.clips.length > 1 ? ` (+${m.clips.length - 1} more)` : ""}
+                    {` · last seen in ${m.lastSeen}`}
+                  </div>
                 </div>
+                <Button
+                  size="chrome"
+                  variant="secondary"
+                  disabled={relinking !== null || !onDocChange}
+                  onClick={() => {
+                    setLocateFor(m.assetId);
+                    locateRef.current?.click();
+                  }}
+                >
+                  {relinking === m.assetId ? "Copying…" : "Locate…"}
+                </Button>
               </div>
-              <Button size="chrome" variant="secondary" disabled>Locate…</Button>
-            </div>
-          ))}
+            );
+          })}
         </div>
+
+        {/* The two pickers. Hidden, because the buttons above are the UI. */}
+        <input
+          ref={locateRef}
+          type="file"
+          hidden
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file && locateFor) await relink(locateFor, file);
+            setLocateFor(null);
+          }}
+        />
+        <input
+          ref={folderRef}
+          type="file"
+          hidden
+          // A directory picker: the only way a page can look in a folder, and
+          // exactly the gesture "point at one and I'll find the rest" describes.
+          {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+          onChange={async (e) => {
+            const files = e.target.files;
+            e.target.value = "";
+            if (files?.length) await searchFolder(files);
+          }}
+        />
       </Modal>
     );
   }
@@ -233,8 +378,14 @@ export default function ExportFlow({
         subtitle={`${projectName} · ${FORMATS.find((f) => f.value === format)?.label}`}
         footer={
           <>
-            <Button size="dialog" variant="ghost" style={{ color: "var(--danger)" }} onClick={close}>
-              Stop render
+            <Button
+              size="dialog"
+              variant="ghost"
+              style={{ color: "var(--danger)" }}
+              disabled={stopping}
+              onClick={stopRender}
+            >
+              {stopping ? "Stopping…" : "Stop render"}
             </Button>
             <div style={{ flex: 1 }} />
             <Button size="dialog" variant="secondary" onClick={close}>Hide and keep working</Button>

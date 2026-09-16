@@ -499,6 +499,28 @@ export function addAsset(doc: EditorDoc, asset: Asset): EditorDoc {
 }
 
 /**
+ * Point an asset at a different file, keeping every clip that uses it.
+ *
+ * This is what "Locate…" does when a source has been moved or renamed. It
+ * deliberately changes the asset rather than the clips: the clips' trims,
+ * effects and keyframes are about the footage, not about where the footage
+ * happens to live, and re-importing to fix a moved file loses all of it.
+ *
+ * A clip whose source is gone renders as black, silently, and the only place
+ * that shows up today is the finished export.
+ */
+export function relinkAsset(doc: EditorDoc, assetId: string, src: string, name?: string): EditorDoc {
+  const asset = doc.assets.find((a) => a.id === assetId);
+  if (!asset) return doc;
+  if (asset.src === src && (name === undefined || asset.name === name)) return doc;
+  return {
+    ...doc,
+    assets: doc.assets.map((a) =>
+      a.id === assetId ? { ...a, src, ...(name !== undefined ? { name } : {}) } : a),
+  };
+}
+
+/**
  * Place an item on a track. If it would overlap something, it is pushed to the
  * first free slot at or after its requested position rather than rejected —
  * dropping a clip roughly where you want it should work.

@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -12,7 +12,7 @@ const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 export interface RenderJob {
   id: string;
   sceneId: string;
-  status: "queued" | "rendering" | "done" | "error";
+  status: "queued" | "rendering" | "done" | "error" | "cancelled";
   progress: number;
   /**
    * Real frame counts, straight from the renderer's own "Rendered X/Y".
@@ -76,6 +76,8 @@ function readProgress(job: RenderJob, line: string): void {
 const g = globalThis as unknown as {
   __renderQueue?: PQueue;
   __renderJobs?: Map<string, RenderJob>;
+  /** The process behind each running job, so a render can actually be stopped. */
+  __renderProcs?: Map<string, ChildProcess>;
   __rendersCleanupDone?: boolean;
 };
 
@@ -84,6 +86,9 @@ if (!g.__renderQueue) {
 }
 if (!g.__renderJobs) {
   g.__renderJobs = new Map();
+}
+if (!g.__renderProcs) {
+  g.__renderProcs = new Map();
 }
 
 // Auto-cleanup: on first boot, remove rendered files older than 7 days.
@@ -105,6 +110,7 @@ if (!g.__rendersCleanupDone) {
 
 const queue = g.__renderQueue;
 const jobs = g.__renderJobs;
+const procs = g.__renderProcs;
 
 function generateJobId(): string {
   return `render-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -112,6 +118,38 @@ function generateJobId(): string {
 
 export function getJob(jobId: string): RenderJob | undefined {
   return jobs.get(jobId);
+}
+
+/**
+ * Stop a render.
+ *
+ * "Stop render" used to close the dialog and leave the render going: there was
+ * no cancel path at all, so the button was a lie that also cost you a CPU for
+ * the next few minutes. A queued job is marked and skipped; a running one has
+ * its renderer killed and its half-written file removed, because a truncated
+ * mp4 that looks like an export is worse than no file.
+ */
+export function cancelRender(jobId: string): boolean {
+  const job = jobs.get(jobId);
+  if (!job || job.status === "done" || job.status === "error" || job.status === "cancelled") return false;
+
+  job.status = "cancelled";
+  job.finishedAt = Date.now();
+
+  const proc = procs.get(jobId);
+  if (proc) {
+    proc.kill("SIGTERM");
+    // Remotion spawns a browser; if the polite signal doesn't land, insist.
+    const hard = setTimeout(() => { try { proc.kill("SIGKILL"); } catch {} }, 4000);
+    proc.once("close", () => clearTimeout(hard));
+    procs.delete(jobId);
+  }
+  return true;
+}
+
+/** Whether this job has been asked to stop. Checked between phases. */
+function cancelled(job: RenderJob): boolean {
+  return job.status === "cancelled";
 }
 
 function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number, svgContents?: { filename: string; content: string }[]): string {
@@ -218,6 +256,8 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
   jobs.set(jobId, job);
 
   queue.add(async () => {
+    // Cancelled while it was still waiting its turn — never start it.
+    if (cancelled(job)) return;
     job.status = "rendering";
     job.startedAt = Date.now();
 
@@ -309,6 +349,9 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
             env: { ...process.env },
           }
         );
+        // Registered before any output arrives: a Stop pressed one tick after
+        // Export has to find something to kill.
+        procs.set(jobId, proc);
 
         proc.stderr.on("data", (data: Buffer) => {
           const line = data.toString();
@@ -322,6 +365,13 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         });
 
         proc.on("close", (exitCode) => {
+          procs.delete(jobId);
+          if (cancelled(job)) {
+            // A killed renderer exits non-zero. That is not a failure to
+            // report — it is the thing the user just asked for.
+            resolve();
+            return;
+          }
           if (exitCode === 0) {
             resolve();
           } else {
@@ -451,6 +501,16 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         fs.renameSync(tagged, outputPath);
       }
 
+      /*
+       * Stopped part-way. The file on disk is a truncated mp4 — it opens, it
+       * plays, and it ends in the middle, which is the most misleading thing
+       * an export can leave behind. Remove it and report nothing finished.
+       */
+      if (cancelled(job)) {
+        try { fs.unlinkSync(outputPath); } catch { /* may not exist yet */ }
+        return;
+      }
+
       job.status = "done";
       job.progress = 100;
       job.outputPath = `/renders/${jobId}.${ext}`;
@@ -459,6 +519,14 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       // pointing at a file and leaving you to go and look.
       try { job.bytes = fs.statSync(outputPath).size; } catch { /* size is a nicety */ }
     } catch (err) {
+      // A cancel unwinds through here when the kill lands mid-phase. It is not
+      // a failure and must not be reported as one.
+      if (cancelled(job)) {
+        for (const e of ["mp4", "mov"]) {
+          try { fs.unlinkSync(path.join(process.cwd(), "public", "renders", `${jobId}.${e}`)); } catch {}
+        }
+        return;
+      }
       job.status = "error";
       job.error = err instanceof Error ? err.message : "Unknown error";
       job.finishedAt = Date.now();
