@@ -37,6 +37,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
 import Tooltip from "@/components/ui/Tooltip";
 import ShortcutsModal from "@/components/ShortcutsModal";
+import { toSceneJson, sceneProblems } from "@/lib/scene-json";
 
 const titleCase = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
@@ -1522,23 +1523,53 @@ export default function ProjectEditor() {
                 <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
                   {doc ? (
                     /*
-                     * Code view on a doc-born project used to show the legacy
-                     * TSX field — which such a project never has, so it was a
-                     * blank editor. The composition IS the document, so that is
-                     * what it shows: scene.json, read-only.
-                     *
-                     * Read-only on purpose. Round-tripping edited JSON back
-                     * into the document is a real feature with real failure
-                     * modes; a readout that is honest about being a readout is
-                     * better than an edit surface that silently discards work.
+                     * 6a — the composition as scene.json, plus the problems it
+                     * has. A readable PROJECTION of the document rather than
+                     * the document itself: the internal shape is right for the
+                     * editor and unreadable as a document.
                      */
-                    <CodeEditor
-                      code={JSON.stringify(doc, null, 2)}
-                      onChange={() => {}}
-                      language="json"
-                      filename="scene.json"
-                      readOnly
-                    />
+                    (() => {
+                      const json = JSON.stringify(toSceneJson(doc), null, 2);
+                      const problems = sceneProblems(doc, json);
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+                          <div style={{ flex: 1, minHeight: 0 }}>
+                            <CodeEditor
+                              code={json}
+                              onChange={() => {}}
+                              language="json"
+                              filename="scene.json"
+                              readOnly
+                            />
+                          </div>
+                          {problems.length > 0 && (
+                            <div
+                              style={{
+                                flexShrink: 0, maxHeight: 88, overflowY: "auto",
+                                background: "var(--surface-chrome)",
+                                borderTop: "1px solid var(--border-hairline)",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, height: 28, padding: "0 12px" }}>
+                                <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Problems</span>
+                                <span className="t-data-s" style={{ color: "var(--warning)" }}>{problems.length}</span>
+                              </div>
+                              {problems.map((pr, i) => (
+                                <div key={i} style={{ display: "flex", gap: 8, padding: "0 12px 8px" }}>
+                                  <Icon name="warn" size={14} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 2 }} />
+                                  <div>
+                                    <div className="t-body" style={{ color: "var(--ink-primary)" }}>
+                                      Line {pr.line} · {pr.message}
+                                    </div>
+                                    <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>{pr.remedy}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()
                   ) : (
                     <CodeEditor
                       code={code}
