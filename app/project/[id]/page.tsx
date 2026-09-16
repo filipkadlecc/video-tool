@@ -30,7 +30,7 @@ import Menu from "@/components/ui/Menu";
 import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
-import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem , migrateDoc } from "@/lib/editor-doc";
+import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, updateItem, type EditorDoc, type EditorItem, type SceneItem , migrateDoc } from "@/lib/editor-doc";
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
@@ -740,6 +740,7 @@ export default function ProjectEditor() {
     setAiEdit(null);
   }, [docHistory]);
 
+
   /** The strip's one edit: cut the selected clip where the playhead is. */
   const splitSelectedAtPlayhead = useCallback(() => {
     const id = [...selectedItemIds][0];
@@ -760,6 +761,97 @@ export default function ProjectEditor() {
       return next;
     });
   }, [docHistory]);
+
+  /**
+   * Give a code-first project a document, so it can open in the editor.
+   *
+   * This used to be an "Open in editor" button beside a second, older layout —
+   * a preview, a Scene.tsx panel and a chat — and 299 of 316 projects still
+   * landed there. Two editors meant two of everything: two timelines' worth of
+   * shortcuts, two places a project could be edited, and a button you had to
+   * know to press before the real editor existed for you.
+   *
+   * The chain is unchanged and is the one that button ran: rebuild a video edit
+   * as real clips if it has the structured data for it, else cut an animation
+   * into blocks at its own boundaries, else embed it whole as one scene block —
+   * which renders identically to the old preview, because it IS the old scene.
+   * Nothing is lost on the way in: `project.code` stays exactly where it was.
+   */
+  const importToDoc = useCallback(async () => {
+    // Terminal projects are a tape, not a Remotion scene — they keep their own
+    // recorder view, which is the one place a second layout still earns itself.
+    if (!project || project.animationType === "terminal") return;
+    const evaluated = evalSceneCode(code);
+    const size = { ...getProjectSize(project.settings), fps: evaluated?.fps ?? project.settings.fps };
+
+    // Nothing written yet: start an EMPTY timeline rather than wrapping
+    // an empty string as a scene block. This is the only way a document
+    // can currently be born from scratch in the UI.
+    if (!code.trim()) {
+      commitDoc(emptyDoc(size));
+      return;
+    }
+
+    // The importer records how long the source file is so the timeline
+    // can show the right slice of its filmstrip on each clip.
+    let sourceDurationSec: number | undefined;
+    try {
+      const probe = await fetch(`/api/media/${projectId}/probe-map`).then((r) => (r.ok ? r.json() : null));
+      const rel = /["\`'](?:\/api\/media\/[^/]+\/)([^"\`']+)["\`']/.exec(code)?.[1];
+      if (rel && probe?.fps?.[rel] && probe?.nbFrames?.[rel]) {
+        sourceDurationSec = probe.nbFrames[rel] / probe.fps[rel];
+      }
+    } catch {
+      // Filmstrips just won't window; the import itself is unaffected.
+    }
+
+    // An edit driven by a topics array carries its own decisions as
+    // structured data — which footage, named how — so rebuild those as
+    // real clips rather than dropping the whole thing in as one
+    // immovable block. Falls back to the block for everything else.
+    const imported = docFromVideoEdit(code, size, {
+      sourceDurationSec,
+      compositionDurationInFrames: evaluated?.durationInFrames,
+    });
+    if (imported) {
+      commitDoc(imported);
+      const n = imported.tracks[0].items.length;
+      const odd = suspiciousSegments(code, size.fps);
+      if (odd.length > 0) {
+        // A caveat you can proceed past, so amber and dismissible —
+        // not a dialog, and not on a timer you have to wait out.
+        toast.warning(
+          `Imported ${n} ${n === 1 ? "clip" : "clips"} — ${odd.length === 1 ? "one topic is" : `${odd.length} topics are`} nearly invisible`,
+          `${odd.map((o) => `${o.label} ${o.seconds.toFixed(2)}s`).join(" · ")}. That came from the generated edit, not the import — trim the clip out or drag its edge.`,
+        );
+      } else {
+        toast.success(`Imported ${n} ${n === 1 ? "clip" : "clips"}`);
+      }
+      return;
+    }
+    // No footage, but the animation still has cuts: a TransitionSeries
+    // of branded scenes, or a few Sequences. Each cut becomes a block
+    // windowed onto the original, so the design and motion are exactly
+    // as authored and only the arrangement becomes editable.
+    const asBlocks = docFromComposition(code, size, evaluated?.durationInFrames ?? 0);
+    if (asBlocks) {
+      commitDoc(asBlocks);
+      return;
+    }
+
+    // Nothing to cut on — a continuous move, say. One block is then the
+    // honest answer, not a failure.
+    commitDoc(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name));
+  }, [project, code, projectId, commitDoc]);
+
+  /*
+   * Every project opens in the editor now, so a project without a document
+   * gets one the moment it is opened rather than when a button is found.
+   */
+  useEffect(() => {
+    if (!project || doc || project.animationType === "terminal" || loading) return;
+    void importToDoc();
+  }, [project, doc, loading, importToDoc]);
 
   /**
    * Use a snippet. In the code editor that replaces the whole project, which is
@@ -1319,11 +1411,38 @@ export default function ProjectEditor() {
             size="sm"
             icon="checkerboard"
             title="Remove background (Cmd+Z to undo)"
-            disabled={!code.trim() || bgRemovedFlash}
+            disabled={bgRemovedFlash || (doc ? !doc.tracks.some((t) => t.items.some((i) => i.type === "scene")) : !code.trim())}
             onClick={() => {
-              const next = stripBackgroundsForTransparency(code);
-              if (next === code) return;
-              commitComposition(next);
+              /*
+               * Strip the opaque backgrounds so the export can carry alpha.
+               *
+               * It used to rewrite `project.code`, which was what rendered. Now
+               * every project is a document and the animation lives in its scene
+               * blocks, so that write would have edited a field nothing draws —
+               * the button would have flashed "Removed" and changed nothing.
+               */
+              if (doc) {
+                let changed = false;
+                const next: EditorDoc = {
+                  ...doc,
+                  tracks: doc.tracks.map((t) => ({
+                    ...t,
+                    items: t.items.map((item) => {
+                      if (item.type !== "scene") return item;
+                      const stripped = stripBackgroundsForTransparency((item as SceneItem).code);
+                      if (stripped === (item as SceneItem).code) return item;
+                      changed = true;
+                      return { ...item, code: stripped } as EditorItem;
+                    }),
+                  })),
+                };
+                if (!changed) return;
+                commitDoc(next);
+              } else {
+                const next = stripBackgroundsForTransparency(code);
+                if (next === code) return;
+                commitComposition(next);
+              }
               setBgRemovedFlash(true);
               setTimeout(() => setBgRemovedFlash(false), 1500);
             }}
@@ -1402,78 +1521,7 @@ export default function ProjectEditor() {
             {showCodeEditor ? "Editor" : "Code view"}
           </Button>
         )}
-        {!doc && !isTerminalProject && (
-          <Button
-            variant="outline"
-            size="sm"
-            icon="layers"
-            onClick={async () => {
-              const evaluated = evalSceneCode(code);
-              const size = { width, height, fps: evaluated?.fps ?? project.settings.fps };
 
-              // Nothing written yet: start an EMPTY timeline rather than wrapping
-              // an empty string as a scene block. This is the only way a document
-              // can currently be born from scratch in the UI.
-              if (!code.trim()) {
-                commitDoc(emptyDoc(size));
-                return;
-              }
-
-              // The importer records how long the source file is so the timeline
-              // can show the right slice of its filmstrip on each clip.
-              let sourceDurationSec: number | undefined;
-              try {
-                const probe = await fetch(`/api/media/${projectId}/probe-map`).then((r) => (r.ok ? r.json() : null));
-                const rel = /["\`'](?:\/api\/media\/[^/]+\/)([^"\`']+)["\`']/.exec(code)?.[1];
-                if (rel && probe?.fps?.[rel] && probe?.nbFrames?.[rel]) {
-                  sourceDurationSec = probe.nbFrames[rel] / probe.fps[rel];
-                }
-              } catch {
-                // Filmstrips just won't window; the import itself is unaffected.
-              }
-
-              // An edit driven by a topics array carries its own decisions as
-              // structured data — which footage, named how — so rebuild those as
-              // real clips rather than dropping the whole thing in as one
-              // immovable block. Falls back to the block for everything else.
-              const imported = docFromVideoEdit(code, size, {
-                sourceDurationSec,
-                compositionDurationInFrames: evaluated?.durationInFrames,
-              });
-              if (imported) {
-                commitDoc(imported);
-                const n = imported.tracks[0].items.length;
-                const odd = suspiciousSegments(code, size.fps);
-                if (odd.length > 0) {
-                  // A caveat you can proceed past, so amber and dismissible —
-                  // not a dialog, and not on a timer you have to wait out.
-                  toast.warning(
-                    `Imported ${n} ${n === 1 ? "clip" : "clips"} — ${odd.length === 1 ? "one topic is" : `${odd.length} topics are`} nearly invisible`,
-                    `${odd.map((o) => `${o.label} ${o.seconds.toFixed(2)}s`).join(" · ")}. That came from the generated edit, not the import — trim the clip out or drag its edge.`,
-                  );
-                } else {
-                  toast.success(`Imported ${n} ${n === 1 ? "clip" : "clips"}`);
-                }
-                return;
-              }
-              // No footage, but the animation still has cuts: a TransitionSeries
-              // of branded scenes, or a few Sequences. Each cut becomes a block
-              // windowed onto the original, so the design and motion are exactly
-              // as authored and only the arrangement becomes editable.
-              const asBlocks = docFromComposition(code, size, evaluated?.durationInFrames ?? 0);
-              if (asBlocks) {
-                commitDoc(asBlocks);
-                return;
-              }
-
-              // Nothing to cut on — a continuous move, say. One block is then the
-              // honest answer, not a failure.
-              commitDoc(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name));
-            }}
-          >
-            Open in editor
-          </Button>
-        )}
         {isTerminalProject ? (
           <Button
             variant="primary"
@@ -1761,21 +1809,22 @@ export default function ProjectEditor() {
                   </Panel>
                 </>
               )}
-          {/* A legacy project has no document, so its code IS the edit surface.
-              It keeps the full-width bottom panel it has always had. */}
-          {!docView && (
+          {/*
+            Terminal projects keep a code panel, because their code IS a tape —
+            a VHS script the recorder types out, with no timeline to hold it.
+            Every other project now has a document (see `importToDoc`), so the
+            second editor that used to live here is gone.
+          */}
+          {isTerminalProject && (
             <>
               <Separator className="resize-handle resize-handle-horizontal" />
               <Panel id="code" defaultSize="35%" minSize="10%">
                 <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                  {/* A legacy project's code IS its composition, so this is an
-                      edit surface rather than a readout. A DOCUMENT project's
-                      scene.json lives in code mode's own screen (6a). */}
                   <CodeEditor
                     code={code}
                     onChange={handleCodeChange}
-                    language={isTerminalProject ? "vhs" : "typescript"}
-                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
+                    language="vhs"
+                    filename="tape.tape"
                   />
                 </div>
               </Panel>

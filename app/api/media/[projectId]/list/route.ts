@@ -68,12 +68,20 @@ export async function GET(
 ) {
   const { projectId } = await params;
   const project = getProject(projectId);
-  if (!project?.mediaFolder) {
-    return Response.json({ error: "Project has no media folder" }, { status: 404 });
+  if (!project) {
+    return Response.json({ error: "Project not found" }, { status: 404 });
   }
 
-  if (!fs.existsSync(project.mediaFolder)) {
-    return Response.json({ error: "Media folder does not exist", path: project.mediaFolder }, { status: 404 });
+  /*
+   * No media folder is not an error — it is an animation.
+   *
+   * These used to 404, which was fine while only video projects opened the
+   * footage rail. Every project opens in the editor now, so every animation
+   * logged three console 404s on load, and console noise is how real errors
+   * get missed. An empty list is the true answer.
+   */
+  if (!project.mediaFolder || !fs.existsSync(project.mediaFolder)) {
+    return Response.json({ folder: project.mediaFolder ?? null, files: [], totalSize: 0 });
   }
 
   const files = walkDir(project.mediaFolder, project.mediaFolder);
