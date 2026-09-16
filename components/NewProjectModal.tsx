@@ -6,14 +6,13 @@ import { TRANSITION_MODES } from "@/lib/prompts/transitions";
 import type { AnimationType, Engine, Resolution, Orientation, FPS, SvgFile, StyleMode, TopicCardStyle, TransitionStyle, Collection } from "@/lib/types";
 import { getAnimationTypeMeta, normalizeAnimationType } from "@/lib/animation-types";
 import { emptyDoc } from "@/lib/editor-doc";
-import { getProjectSize } from "@/lib/types";
+import { getProjectSize, getResolution } from "@/lib/types";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Segmented from "@/components/ui/Segmented";
-import TypeTile from "@/components/TypeTile";
 import SnippetParamsForm from "@/components/SnippetParamsForm";
 import { SNIPPET_SCHEMAS, buildDefaultValues } from "@/lib/snippet-schemas";
 import { SNIPPET_ICONS } from "@/lib/snippet-icons";
@@ -125,30 +124,84 @@ const SNIPPET_ACCENT: Record<string, string> = {
   SymbolBug: "#F86606",
 };
 
-function OrientationPreview({ ratio, active }: { ratio: string; active: boolean }) {
-  const dims =
-    ratio === "16:9" ? { w: 36, h: 20 } : ratio === "9:16" ? { w: 20, h: 36 } : { w: 28, h: 28 };
+/**
+ * The kinds of project, and — the point of the step — where each one opens.
+ *
+ * The design has two cards; this app has three types, and inventing a fourth
+ * question to hide one of them would be worse than showing it.
+ */
+/**
+ * The four frames the sheet draws, in its order. Each is a preset this app
+ * already has — the wizard is not inventing sizes, it is naming the ones that
+ * exist so they can be drawn at their true proportion.
+ */
+const FRAME_PRESETS: { label: string; orientation: Orientation; resolution: Resolution; ratio: string }[] = [
+  { label: "Landscape", orientation: "horizontal", resolution: "1080p", ratio: "16:9" },
+  { label: "Square", orientation: "square", resolution: "1080p", ratio: "1:1" },
+  { label: "Vertical", orientation: "vertical", resolution: "1080p", ratio: "9:16" },
+  { label: "Cinema 4K", orientation: "horizontal", resolution: "4k", ratio: "16:9" },
+];
+
+const KINDS: { type: AnimationType; title: string; detail: string }[] = [
+  { type: "animation", title: "Animation", detail: "Describe it and the assistant builds the scene. Opens in Direct." },
+  { type: "svg", title: "From artwork", detail: "Animate an SVG you already have. Opens in Direct." },
+  { type: "video", title: "From footage", detail: "Start with files you already have. Opens in Cut." },
+];
+
+/**
+ * A choice card with a radio ring.
+ *
+ * The ring matters: these are one-of-N, and a card that only changes colour
+ * when chosen reads as a toggle you could have several of.
+ */
+function KindCard({ active, title, detail, onClick }: {
+  active: boolean; title: string; detail: string; onClick: () => void;
+}) {
   return (
-    <div
+    <button
+      onClick={onClick}
+      role="radio"
+      aria-checked={active}
       style={{
-        width: dims.w,
-        height: dims.h,
-        background: active ? "var(--brand)" : "var(--surface-raised)",
-        border: `1px solid ${active ? "var(--brand)" : "var(--border-edge)"}`,
-        borderRadius: 3,
+        display: "flex", flexDirection: "column", gap: 8, padding: 16, textAlign: "left",
+        background: active ? "var(--surface-raised)" : "var(--surface-chrome)",
+        border: `1px solid ${active ? "var(--ink-primary)" : "var(--border-edge)"}`,
+        borderRadius: "var(--r-panel)", cursor: "pointer",
+        transition: "border-color var(--dur-state) var(--ease), background var(--dur-state) var(--ease)",
       }}
-    />
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+        <span className="t-heading" style={{ color: "var(--ink-primary)", flex: 1 }}>{title}</span>
+        <span
+          aria-hidden
+          style={{
+            width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+            border: `1px solid ${active ? "var(--ink-primary)" : "var(--ink-disabled)"}`,
+            display: "grid", placeItems: "center",
+          }}
+        >
+          {active && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink-primary)" }} />}
+        </span>
+      </span>
+      <span className="t-body" style={{ color: "var(--ink-secondary)", lineHeight: 1.45 }}>{detail}</span>
+    </button>
   );
 }
 
+/**
+ * A form label. Sentence case, in the UI face — not mono small-caps.
+ *
+ * The wizard used to shout every label in uppercase monospace, which reads as
+ * machine output rather than as a question someone is asking you.
+ */
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-      <span className="mono cap" style={{ color: "var(--ink-secondary)" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+      <span className="t-control" style={{ color: "var(--ink-secondary)" }}>
         {children}
       </span>
       {hint && (
-        <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)" }}>
+        <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>
           {hint}
         </span>
       )}
@@ -162,6 +215,12 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [resolution, setResolution] = useState<Resolution>("4k");
   const [fps, setFps] = useState<FPS>(25);
   const [orientation, setOrientation] = useState<Orientation>("horizontal");
+  /**
+   * Roughly how long it should run. Not a canvas property — the composition's
+   * length is decided by what is on the timeline — so it goes into the brief,
+   * where "a 20-second spot" is a real instruction the assistant can follow.
+   */
+  const [targetSeconds, setTargetSeconds] = useState("20");
   // "broll" is still a valid stored value, but new projects are "animation" —
   // the two generate from an identical prompt (see normalizeAnimationType).
   const [animationType, setAnimationType] = useState<AnimationType>(
@@ -171,7 +230,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   // project and sent to the generate/render routes.
   const engine: Engine = "remotion";
   const typeLocked = initialType !== undefined;
-  const typeMeta = getAnimationTypeMeta(animationType);
 
   const [prompt, setPrompt] = useState("");
   const [notionUrl, setNotionUrl] = useState("");
@@ -333,6 +391,18 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     //
     // Smart trim gets none: it builds its own document from the cut plan.
     const composeSettings = { resolution, orientation, fps };
+
+    /*
+     * The target length goes into the brief, because that is where it is
+     * actionable: "about 20 seconds" is something the assistant can build to,
+     * whereas the composition's own length is decided by what ends up on the
+     * timeline. Only added when there is a brief to add it to, and only when
+     * the brief doesn't already say how long it should be.
+     */
+    const briefed = prompt.trim();
+    const withLength = briefed && targetSeconds && !isVideo && !/\b\d+\s*(s|sec|second)/i.test(briefed)
+      ? `${briefed}\n\nTarget length: about ${targetSeconds} seconds.`
+      : briefed;
     // "manual" gets one too: the whole point is to land on a timeline with the
     // footage ready and nothing done to it yet.
     const startsAsTimeline = isVideo && (videoMode === "compose" || videoMode === "manual");
@@ -345,14 +415,14 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         ? { doc: emptyDoc({ ...getProjectSize(composeSettings), fps }) }
         : {}),
       initialPrompt: isSmartTrim
-        ? prompt.trim() || "Smart trim recording"
+        ? briefed || "Smart trim recording"
         : selectedSnippet
-          ? prompt.trim() || `Started from ${selectedSnippet.name}`
+          ? briefed || `Started from ${selectedSnippet.name}`
           : isVideo
             ? // Video projects build via Analyze → chat, so a prompt is optional.
               // Fall back to a label so the API's (initialPrompt||initialCode) check passes.
-              prompt.trim() || "Edit uploaded footage"
-            : prompt.trim(),
+              briefed || "Edit uploaded footage"
+            : withLength,
       initialCode: selectedSnippet
         ? (() => {
             const schema = SNIPPET_SCHEMAS[selectedSnippet.id];
@@ -459,9 +529,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const showSnippetPicker =
     animationType !== "terminal" && animationType !== "video";
 
-  const ratioForOrientation = (o: Orientation) =>
-    o === "horizontal" ? "16:9" : o === "vertical" ? "9:16" : "1:1";
-
   // This is a fixed, full-screen overlay. <Modal> used to return null when it
   // was closed, and taking Modal away took that guard with it — so the wizard
   // rendered over the whole app, permanently, with no way past it. The guard
@@ -509,25 +576,72 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
       {/* the 760px column the design centres everything in */}
       <div className="vt-scroll" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
         <div style={{ width: 760, margin: "0 auto", padding: "40px 0 48px", display: "flex", flexDirection: "column", gap: 32 }}>
-      {/* Step progress bar */}
-      <div style={{ display: "flex", gap: 6, padding: "0 20px 16px" }}>
-        <div style={{ flex: 1, height: 3, background: "var(--brand)", borderRadius: 2 }} />
-        <div
-          style={{
-            flex: 1,
-            height: 3,
-            background: step === 2 ? "var(--brand)" : "var(--surface-raised)",
-            borderRadius: 2,
-            transition: "background 200ms",
-          }}
-        />
-      </div>
+      {/* No progress bar: the step pills in the header already say where you
+          are, and two things saying it disagree the moment one is wrong. */}
 
       <div className="vt-scroll" style={{ overflowY: "auto" }}>
+        {/*
+          `4c` — step 1 asks what you are making, because that decides which
+          room the editor opens in, and then the two things only you can say:
+          what it should be, and what it is called.
+
+          It used to ask name -> collection -> type -> resolution -> fps ->
+          orientation, so the "Kind" pill sat over four questions about the
+          frame and the "Frame" pill sat over a step about snippets and notes.
+        */}
         {step === 1 && (
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ padding: "0 0 20px", display: "flex", flexDirection: "column", gap: 24 }}>
             <div>
-              <FieldLabel>Project name</FieldLabel>
+              <h2 className="t-display" style={{ color: "var(--ink-primary)", margin: 0 }}>
+                What are you making?
+              </h2>
+              <p className="t-body" style={{ color: "var(--ink-secondary)", margin: "8px 0 0" }}>
+                This sets which workspace the editor opens in. You can switch at any time.
+              </p>
+            </div>
+
+            {!typeLocked && (
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${KINDS.length}, minmax(0,1fr))`, gap: 12 }}>
+                {KINDS.map((k) => (
+                  <KindCard
+                    key={k.type}
+                    active={animationType === k.type}
+                    title={k.title}
+                    detail={k.detail}
+                    onClick={() => setAnimationType(k.type)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {!isVideo && (
+              <div>
+                <FieldLabel
+                  hint={
+                    selectedSnippet
+                      ? "Optional — refine after creation via chat"
+                      : "Optional. The assistant uses this to build a first pass — you can also start empty."
+                  }
+                >
+                  {animationType === "terminal" ? "Terminal script prompt" : "Describe it"}
+                </FieldLabel>
+                <Textarea
+                  value={prompt}
+                  onChange={setPrompt}
+                  rows={4}
+                  placeholder={
+                    selectedSnippet
+                      ? `${selectedSnippet.name} loaded — leave blank or note any tweaks…`
+                      : animationType === "terminal"
+                        ? `e.g. "Type 'apify actors search instagram', press Enter, show results, 8 seconds total. Dark theme, large font."`
+                        : "A 20-second spot for the LED installation at Innovation Week — headline lands on the beat, ends on the Apify mark."
+                  }
+                />
+              </div>
+            )}
+
+            <div>
+              <FieldLabel>Name</FieldLabel>
               <Input
                 value={name}
                 onChange={setName}
@@ -540,6 +654,150 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   }
                 }}
               />
+            </div>
+          </div>
+        )}
+
+        {/*
+          `4d` — step 2 asks what shape it is, at true proportion, and then the
+          questions the design didn't know this app asks (a snippet to start
+          from, a style, footage, notes). Those live BELOW the summary, so the
+          step still opens with the thing its pill is named after.
+        */}
+        {step === 2 && (
+          <div style={{ padding: "0 0 20px", display: "flex", flexDirection: "column", gap: 24 }}>
+            <div>
+              <h2 className="t-display" style={{ color: "var(--ink-primary)", margin: 0 }}>
+                What shape is it?
+              </h2>
+              <p className="t-body" style={{ color: "var(--ink-secondary)", margin: "8px 0 0" }}>
+                Changeable later, but re-framing a finished animation means re-laying it out — so
+                it&apos;s worth picking now.
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
+              {FRAME_PRESETS.map((preset) => {
+                const size = getResolution(preset.orientation, preset.resolution);
+                const active = orientation === preset.orientation && resolution === preset.resolution;
+                return (
+                  <button
+                    key={preset.label}
+                    onClick={() => {
+                      setOrientation(preset.orientation);
+                      setResolution(preset.resolution);
+                    }}
+                    style={{
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+                      padding: "16px 10px",
+                      background: active ? "var(--surface-raised)" : "var(--surface-chrome)",
+                      border: `1px solid ${active ? "var(--ink-primary)" : "var(--border-edge)"}`,
+                      borderRadius: "var(--r-panel)", cursor: "pointer",
+                    }}
+                  >
+                    {/* Drawn from the real ratio, not from a hardcoded box —
+                        the point of showing a shape is that it is the shape. */}
+                    <span style={{ height: 52, display: "grid", placeItems: "center" }}>
+                      <span
+                        style={{
+                          display: "block",
+                          width: size.width >= size.height ? 52 : Math.round((size.width / size.height) * 52),
+                          height: size.height >= size.width ? 52 : Math.round((size.height / size.width) * 52),
+                          background: active ? "var(--ink-primary)" : "var(--surface-active)",
+                          borderRadius: 2,
+                        }}
+                      />
+                    </span>
+                    <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                      <span className="t-control" style={{ color: "var(--ink-primary)" }}>{preset.label}</span>
+                      <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
+                        {size.width}×{size.height} · {preset.ratio}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              <div>
+                <FieldLabel>Width · height</FieldLabel>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Input value={String(getResolution(orientation, resolution).width)} onChange={() => {}} disabled mono style={{ flex: 1, minWidth: 0 }} />
+                  <Input value={String(getResolution(orientation, resolution).height)} onChange={() => {}} disabled mono style={{ flex: 1, minWidth: 0 }} />
+                </div>
+              </div>
+              <div>
+                <FieldLabel>Frame rate</FieldLabel>
+                <Segmented
+                  value={fps}
+                  onChange={(v) => setFps(v as FPS)}
+                  options={[
+                    { value: 24, label: "24" },
+                    { value: 25, label: "25" },
+                    { value: 30, label: "30" },
+                    { value: 50, label: "50" },
+                  ]}
+                />
+              </div>
+              <div>
+                <FieldLabel hint={isVideo ? "Footage decides" : undefined}>Duration</FieldLabel>
+                <Input
+                  value={String(targetSeconds)}
+                  onChange={(v) => setTargetSeconds(v.replace(/[^0-9]/g, "").slice(0, 4))}
+                  disabled={isVideo}
+                  mono
+                  suffix="seconds"
+                />
+              </div>
+            </div>
+
+            {!isVideo && (
+              <span className="t-caption" style={{ color: "var(--ink-disabled)", marginTop: -14 }}>
+                Duration goes into the brief — the composition&apos;s real length is whatever ends up on
+                the timeline.
+              </span>
+            )}
+
+            {/* The summary: the four answers in one sentence, so the step can
+                be checked without re-reading the controls. */}
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 14, padding: 14,
+                background: "var(--surface-chrome)", border: "1px solid var(--border-hairline)",
+                borderRadius: "var(--r-panel)",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 64, height: 40, flexShrink: 0, borderRadius: 3,
+                  background: "var(--surface-void)", border: "1px solid var(--border-edge)",
+                  display: "grid", placeItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    width: getResolution(orientation, resolution).width >= getResolution(orientation, resolution).height ? 44 : 20,
+                    height: getResolution(orientation, resolution).width >= getResolution(orientation, resolution).height ? 25 : 32,
+                    background: "var(--surface-active)", borderRadius: 2,
+                  }}
+                />
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span className="t-body" style={{ color: "var(--ink-primary)", display: "block" }}>
+                  {FRAME_PRESETS.find((f) => f.orientation === orientation && f.resolution === resolution)?.label
+                    ?? `${orientation} · ${resolution}`}
+                  {" · "}
+                  {getResolution(orientation, resolution).width}×{getResolution(orientation, resolution).height}
+                  {" · "}{fps} fps
+                  {!isVideo && targetSeconds ? ` · ${targetSeconds} seconds` : ""}
+                </span>
+                <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                  Safe area shown in the editor. Exports as MP4 by default.
+                </span>
+              </span>
             </div>
 
             <div>
@@ -569,108 +827,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </select>
             </div>
 
-            {!typeLocked && (
-              <div>
-                <FieldLabel>Type</FieldLabel>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {(["animation", "svg", "video"] as AnimationType[]).map((t) => (
-                    <TypeTile
-                      key={t}
-                      type={t}
-                      active={animationType === t}
-                      onClick={() => setAnimationType(t)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 14 }}>
-              <div style={{ flex: 1 }}>
-                <FieldLabel>Resolution</FieldLabel>
-                <Segmented
-                  value={resolution}
-                  onChange={(v) => setResolution(v as Resolution)}
-                  options={[
-                    { value: "4k", label: "4K" },
-                    { value: "1080p", label: "1080p" },
-                  ]}
-                />
-              </div>
-              <div style={{ flex: 2 }}>
-                <FieldLabel>FPS</FieldLabel>
-                <Segmented
-                  value={fps}
-                  onChange={(v) => setFps(v as FPS)}
-                  options={[
-                    { value: 24, label: "24" },
-                    { value: 25, label: "25" },
-                    { value: 30, label: "30" },
-                    { value: 50, label: "50" },
-                  ]}
-                />
-              </div>
-            </div>
-
-            <div>
-              <FieldLabel>Orientation</FieldLabel>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(
-                  [
-                    { o: "horizontal" as Orientation, label: "Horizontal", sub: "16 : 9" },
-                    { o: "vertical" as Orientation, label: "Vertical", sub: "9 : 16" },
-                    { o: "square" as Orientation, label: "Square", sub: "1 : 1" },
-                  ] as const
-                ).map(({ o, label, sub }) => {
-                  const active = orientation === o;
-                  return (
-                    <button
-                      key={o}
-                      onClick={() => setOrientation(o)}
-                      style={{
-                        flex: 1,
-                        height: 92,
-                        padding: 10,
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 8,
-                        background: active ? "var(--brand-tint-bg)" : "var(--surface-void)",
-                        border: `1px solid ${active ? "var(--brand)" : "var(--border-hairline)"}`,
-                        borderRadius: "var(--r-panel)",
-                        cursor: "pointer",
-                        color: "var(--ink-primary)",
-                        transition: "all 120ms",
-                      }}
-                    >
-                      <div style={{ height: 40, display: "grid", placeItems: "center" }}>
-                        <OrientationPreview ratio={ratioForOrientation(o)} active={active} />
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          gap: 1,
-                        }}
-                      >
-                        <span style={{ fontSize: 12, fontWeight: 500 }}>{label}</span>
-                        <span className="mono" style={{ fontSize: 10, color: "var(--ink-tertiary)" }}>
-                          {sub}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
-        )}
-
-        {step === 2 && (
-          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
             {isVideo && (
               <div>
                 <FieldLabel hint="How should we build your starting cut?">
@@ -896,41 +1052,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 so notes/instructions can't be split across two fields (the trap
                 where notes silently land in the wrong one). Non-video keeps its
                 generate prompt. */}
-            {!isSmartTrim && !isVideo && (
-              <div>
-                <FieldLabel
-                  hint={
-                    selectedSnippet
-                      ? "Optional — refine after creation via chat"
-                      : animationType === "terminal"
-                        ? "Describe the command(s), timing, and style"
-                        : "What should the AI generate?"
-                  }
-                >
-                  {animationType === "terminal" ? "Terminal script prompt" : "Prompt"}
-                </FieldLabel>
-                <Textarea
-                  value={prompt}
-                  onChange={setPrompt}
-                  rows={selectedSnippet ? 3 : 5}
-                  placeholder={
-                    selectedSnippet
-                      ? `${selectedSnippet.name} loaded — leave blank or note any tweaks…`
-                      : animationType === "terminal"
-                        ? `e.g. "Type 'apify actors search instagram', press Enter, show results, 8 seconds total. Dark theme, large font."`
-                        : "Describe the animation you want..."
-                  }
-                  style={undefined}
-                  onKeyDown={(e) => {
-                    // Enter creates; Shift+Enter inserts a newline.
-                    if (e.key === "Enter" && !e.shiftKey && canCreate() && !creating) {
-                      e.preventDefault();
-                      handleCreate();
-                    }
-                  }}
-                />
-              </div>
-            )}
+            {/* The brief moved to step 1, where `4c` asks for it: "Describe
+                it" belongs with what you are making, not with how it is set
+                up. */}
 
             {isVideo && (
               <div
@@ -1522,11 +1646,11 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         }}
       >
         <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
-          {step === 1
-            ? "The kind decides which workspace the editor opens in."
-            : animationType === "video"
-              ? "Opens in Cut · ⌥2 switches to Direct"
-              : "Opens in Direct · ⌥1 switches to Cut"}
+          {/* The consequence of the choice you just made, stated where you
+              are about to act on it. */}
+          {animationType === "video"
+            ? "Opens in Cut · ⌥2 switches to Direct"
+            : "Opens in Direct · ⌥1 switches to Cut"}
         </span>
         <div style={{ flex: 1 }} />
         {step === 2 && (
@@ -1543,7 +1667,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             disabled={!name.trim()}
             onClick={() => { if (name.trim()) setStep(2); }}
           >
-            Next · Content
+            Next · Frame
           </Button>
         ) : (
           <Button

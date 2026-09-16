@@ -250,7 +250,10 @@ export default function Workspace({
       <NewProjectModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        initialType={selectedType ?? "animation"}
+        // Undefined on Home, so the wizard ASKS what you are making (4c). It
+        // used to default to "animation" here, which locked the type and hid
+        // the question that decides which workspace you land in.
+        initialType={selectedType ?? undefined}
         onCreated={handleCreated}
       />
       <StorageModal
