@@ -1403,3 +1403,77 @@ export const DOC_TOOL_NAMES = new Set(DOC_TOOLS.map((t) => t.name));
 
 /** Tools that only read — they never need a re-render or an undo entry. */
 export const READ_ONLY_TOOLS = new Set(["read_transcript", "find_gaps"]);
+
+/* ────────────────────────── the edit receipt ────────────────────────── */
+
+export interface DocChange {
+  /** The clip this is about, for "Show in timeline". */
+  itemId: string;
+  label: string;
+  /** What moved — "in", "out", "keys", "added", "removed". */
+  field: string;
+  before?: string;
+  after?: string;
+}
+
+function clipLabel(item: EditorItem): string {
+  if (item.type === "text") return `"${(item as { text?: string }).text?.slice(0, 24) ?? "Text"}"`;
+  if (item.type === "scene" && "snippet" in item && item.snippet) return String(item.snippet.id);
+  return item.type;
+}
+
+const tc = (frame: number, fps: number) => {
+  const safe = fps > 0 ? fps : 25;
+  const f = Math.max(0, Math.round(frame));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(Math.floor(f / safe / 60))}:${p(Math.floor((f / safe) % 60))}:${p(f % safe)}`;
+};
+
+/**
+ * What the model actually did, as a list you can read.
+ *
+ * This is what makes an AI edit reviewable rather than something that simply
+ * happened to your timeline. Without it you get a changed document and a
+ * sentence claiming what changed, with no way to check one against the other —
+ * and no way to put it back except undo-and-hope.
+ *
+ * Deliberately shallow: moves, trims, adds, removes and keyframe counts. A
+ * field-by-field diff of every layout property would be noise, and the point is
+ * to be readable at a glance.
+ */
+export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChange[] {
+  const fps = after.size.fps || 25;
+  const was = new Map<string, EditorItem>();
+  for (const t of before.tracks) for (const i of t.items) was.set(i.id, i);
+  const now = new Map<string, EditorItem>();
+  for (const t of after.tracks) for (const i of t.items) now.set(i.id, i);
+
+  const out: DocChange[] = [];
+
+  for (const [id, item] of now) {
+    const prev = was.get(id);
+    if (!prev) {
+      out.push({ itemId: id, label: clipLabel(item), field: "added", after: tc(item.from, fps) });
+      continue;
+    }
+    if (prev.from !== item.from) {
+      out.push({ itemId: id, label: clipLabel(item), field: "in", before: tc(prev.from, fps), after: tc(item.from, fps) });
+    }
+    const prevEnd = prev.from + prev.durationInFrames;
+    const end = item.from + item.durationInFrames;
+    if (prevEnd !== end) {
+      out.push({ itemId: id, label: clipLabel(item), field: "out", before: tc(prevEnd, fps), after: tc(end, fps) });
+    }
+    const keysBefore = Object.values(prev.keys ?? {}).reduce((n, k) => n + (k?.length ?? 0), 0);
+    const keysAfter = Object.values(item.keys ?? {}).reduce((n, k) => n + (k?.length ?? 0), 0);
+    if (keysBefore !== keysAfter) {
+      out.push({ itemId: id, label: clipLabel(item), field: "keys", before: String(keysBefore), after: String(keysAfter) });
+    }
+  }
+
+  for (const [id, item] of was) {
+    if (!now.has(id)) out.push({ itemId: id, label: clipLabel(item), field: "removed", before: tc(item.from, fps) });
+  }
+
+  return out;
+}

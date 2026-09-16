@@ -12,11 +12,11 @@
  * model can act on.
  */
 import {
-  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
+  addAsset, setItemKey, removeItem, trimItem, moveItem, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
   type Asset, type EditorDoc, type SolidItem, type TextItem, type VideoItem,
 } from "../lib/editor-doc";
 import {
-  applyDocTool, describeDoc, DOC_TOOLS, type AgentContext,
+  applyDocTool, describeDoc, DOC_TOOLS, summariseDocChange, type AgentContext,
 } from "../lib/editor-agent";
 import {
   cutRange, docTranscript, frameToSourceSecond, itemSourceWindow,
@@ -706,6 +706,42 @@ head("an unknown tool is an error, not a crash");
   const doc = base();
   const out = applyDocTool(doc, "definitely_not_a_tool", {}, ctx());
   a(out.isError === true && out.doc === doc, "refused cleanly");
+}
+
+head("the edit receipt says what actually moved");
+{
+  const d = addTrack(emptyDoc({ width: 1920, height: 1080, fps: 25 }), "V1");
+  const tid = d.tracks[d.tracks.length - 1].id;
+  const before = addItem(d, tid, {
+    id: "r1", type: "text", from: 50, durationInFrames: 50,
+    layout: { x: 0, y: 0, width: 100, height: 40 }, text: "Ship it", style: {},
+  } as unknown as TextItem);
+
+  a(summariseDocChange(before, before).length === 0, "an unchanged document reports nothing");
+
+  const moved = moveItem(before, "r1", 25);
+  const m = summariseDocChange(before, moved);
+  a(m.some((c) => c.field === "in" && c.before === "00:02:00" && c.after === "00:03:00"),
+    "a move reports the in point, before and after");
+  a(m.every((c) => c.itemId === "r1"), "and points at the clip it happened to");
+  a(m[0].label.includes("Ship it"), "labelled by what the clip says, not its id");
+
+  const trimmed = trimItem(before, "r1", "right", -25, 25);
+  a(summariseDocChange(before, trimmed).some((c) => c.field === "out"), "a trim reports the out point");
+
+  const removed = removeItem(before, "r1");
+  a(summariseDocChange(before, removed).some((c) => c.field === "removed"), "a delete is reported");
+
+  const added = addItem(before, tid, {
+    id: "r2", type: "solid", from: 200, durationInFrames: 30,
+    layout: { x: 0, y: 0, width: 10, height: 10 }, color: "#fff",
+  } as unknown as SolidItem);
+  a(summariseDocChange(before, added).some((c) => c.field === "added"), "so is an insert");
+
+  // Keys are the thing you can least easily see, so they are counted.
+  const keyed = setItemKey(before, "r1", "opacity", 0, 0);
+  a(summariseDocChange(before, keyed).some((c) => c.field === "keys" && c.after === "1"),
+    "and keyframes are counted, since they are the hardest change to spot");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);

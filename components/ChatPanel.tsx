@@ -10,6 +10,7 @@ import IconButton from "@/components/ui/IconButton";
 import { normalizeTapeQuotes } from "@/lib/tape-parser";
 import { usePlayheadStore } from "@/hooks/usePlayhead";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import type { DocChange } from "@/lib/editor-agent";
 
 function extractCodeFromResponse(text: string, animationType?: string): string {
   // Accept tsx/js/html fences — older responses used a variety of them.
@@ -91,6 +92,10 @@ interface ChatPanelProps {
   doc?: EditorDoc;
   selectedIds?: string[];
   onDocChanged?: (doc: EditorDoc, opts?: { transient?: boolean }) => void;
+  /** Put the last AI edit back. */
+  onUndoEdit?: () => void;
+  /** Select the clips an AI edit touched. */
+  onSelectItems?: (ids: string[]) => void;
 }
 
 const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel(
@@ -121,11 +126,21 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     doc,
     selectedIds,
     onDocChanged,
+    onUndoEdit,
+    onSelectItems,
   },
   ref,
 ) {
   // Only needed when a message is sent, so this never subscribes.
   const playhead = usePlayheadStore();
+  /**
+   * The last AI edit, as a list of what actually moved.
+   *
+   * It stays on screen until you Keep or Undo it, because "you must never lose
+   * track of what the model did" is the whole reason it exists — a sentence
+   * claiming what changed is not the same as being able to check it.
+   */
+  const [receipt, setReceipt] = useState<DocChange[] | null>(null);
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
@@ -432,7 +447,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         if (!line.startsWith("data: ")) continue;
         const data = line.slice(6);
         if (data === "[DONE]") continue;
-        let parsed: { text?: string; doc?: EditorDoc; transient?: boolean; error?: string; edited?: boolean };
+        let parsed: { text?: string; doc?: EditorDoc; transient?: boolean; error?: string; edited?: boolean; changes?: DocChange[] };
         try {
           parsed = JSON.parse(data);
         } catch {
@@ -447,6 +462,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           latestDoc = parsed.doc;
           onDocChanged?.(parsed.doc, { transient: parsed.transient === true });
         }
+        if (parsed.changes?.length) setReceipt(parsed.changes);
         if (parsed.edited) edited = true;
       }
     }
@@ -703,6 +719,64 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             }}
           >
             {streamingContent.trim()}
+          </div>
+        )}
+
+        {/* The AI edit receipt: what actually moved, and a way to put it back.
+            Old value struck through, new value in full ink — the shape you read
+            as "this became that". */}
+        {receipt && receipt.length > 0 && !isGenerating && (
+          <div
+            style={{
+              marginTop: 10,
+              background: "var(--surface-raised)",
+              border: "1px solid var(--border-edge)",
+              borderRadius: "var(--r-panel)",
+              padding: 12,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Changed</span>
+              <div style={{ flex: 1 }} />
+              <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                {receipt.length} {receipt.length === 1 ? "edit" : "edits"}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+              {receipt.slice(0, 6).map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span className="t-data-m" style={{ color: "var(--ink-tertiary)", minWidth: 52 }}>{c.field}</span>
+                  {c.before && (
+                    <span className="t-data-m" style={{ color: "var(--ink-tertiary)", textDecoration: "line-through" }}>
+                      {c.before}
+                    </span>
+                  )}
+                  {c.before && c.after && <Icon name="arrowRight" size={11} style={{ color: "var(--ink-disabled)" }} />}
+                  {c.after && <span className="t-data-m" style={{ color: "var(--ink-primary)" }}>{c.after}</span>}
+                  <span className="t-caption" style={{ color: "var(--ink-disabled)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {c.label}
+                  </span>
+                </div>
+              ))}
+              {receipt.length > 6 && (
+                <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>
+                  and {receipt.length - 6} more
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 4 }}>
+              <Button size="chrome" variant="secondary" onClick={() => setReceipt(null)}>Keep</Button>
+              <Button size="chrome" variant="ghost" onClick={() => { onUndoEdit?.(); setReceipt(null); }}>Undo</Button>
+              <Button
+                size="chrome"
+                variant="ghost"
+                onClick={() => { onSelectItems?.(receipt.map((c) => c.itemId)); setReceipt(null); }}
+              >
+                Show in timeline
+              </Button>
+            </div>
           </div>
         )}
 

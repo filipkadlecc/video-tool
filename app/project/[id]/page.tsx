@@ -1479,6 +1479,8 @@ export default function ProjectEditor() {
                 doc={docView}
                 selectedIds={[...selectedItemIds]}
                 onDocChanged={commitDoc}
+                onUndoEdit={() => { const prev = docHistory.undo(); if (prev !== null) setDoc(prev); }}
+                onSelectItems={(ids) => setSelectedItemIds(new Set(ids))}
               />
               )}
             </div>

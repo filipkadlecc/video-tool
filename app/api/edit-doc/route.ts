@@ -7,7 +7,7 @@ import { renderSampleFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { getProject } from "@/lib/projects";
 import { sceneCodeFromDoc } from "@/lib/editor-render";
 import { docDuration, isValidDoc, type AssetKind, type EditorDoc } from "@/lib/editor-doc";
-import { applyDocTool, describeDoc, DOC_TOOLS, DOC_TOOL_NAMES, toolsWithSnippets, type AgentContext } from "@/lib/editor-agent";
+import { applyDocTool, describeDoc, DOC_TOOLS, DOC_TOOL_NAMES, toolsWithSnippets, type AgentContext, summariseDocChange } from "@/lib/editor-agent";
 import { loadSnippetCatalog } from "@/lib/snippet-catalog";
 import { readCachedTranscript, transcribeWithCache, type TranscriptWord } from "@/lib/transcribe";
 import { probeWithCache } from "@/lib/probe";
@@ -453,8 +453,12 @@ export async function POST(request: Request) {
           });
         }
 
-        // The commit: one undo step for the whole turn.
-        if (working !== incomingDoc) send({ doc: working });
+        // The commit: one undo step for the whole turn, plus a RECEIPT of what
+        // changed. Without the receipt an AI edit is something that happened to
+        // your timeline; with it, it is something you can check and put back.
+        if (working !== incomingDoc) {
+          send({ doc: working, changes: summariseDocChange(incomingDoc, working) });
+        }
         send({ done: true, stopReason: lastStopReason, edited: working !== incomingDoc });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
