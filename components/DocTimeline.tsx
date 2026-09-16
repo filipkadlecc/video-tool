@@ -6,7 +6,7 @@ import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import { timecode, needsHours } from "@/lib/timecode";
-import { CHANNELS_BY_ID, type ChannelId } from "@/lib/editor-keys";
+import { CHANNELS_BY_ID, channelsFor, type ChannelId } from "@/lib/editor-keys";
 import Tooltip from "@/components/ui/Tooltip";
 import Toggle from "@/components/ui/Toggle";
 import { snapFrame } from "@/lib/editor-doc";
@@ -123,6 +123,8 @@ export default function DocTimeline({
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [snapOn, setSnapOn] = useState(true);
+  /** Expanded shows the selected clip's property lanes. */
+  const [expanded, setExpanded] = useState(false);
   const [containerWidth, setContainerWidth] = useState(900);
   const [pickerOpen, setPickerOpen] = useState(false);
   const toast = useToast();
@@ -585,15 +587,18 @@ export default function DocTimeline({
    * can see a key land against a cut.
    */
   const keyLanes = useMemo(() => {
-    if (selectedIds.size !== 1) return null;
+    if (!expanded || selectedIds.size !== 1) return null;
     const id = [...selectedIds][0];
     const found = findItem(doc, id);
-    if (!found?.item.keys) return null;
-    const channels = (Object.keys(found.item.keys) as ChannelId[])
-      .filter((c) => (found.item.keys?.[c]?.length ?? 0) > 0);
+    if (!found) return null;
+    // EVERY animatable property, not only the keyed ones. A property with no
+    // keys says so in its own lane rather than being absent — otherwise you
+    // cannot tell "not animated" from "not animatable", and the row you are
+    // looking for simply isn't there.
+    const channels = channelsFor(found.item.type).map((c) => c.id);
     if (channels.length === 0) return null;
     return { trackId: found.track.id, item: found.item, channels };
-  }, [doc, selectedIds]);
+  }, [doc, selectedIds, expanded]);
 
   const LANE_H = 28;
 
@@ -867,7 +872,9 @@ export default function DocTimeline({
     {/* Property lanes for the selected clip — the keyframe model's third view,
         on the same ruler as the cuts. */}
     {keyLanes && keyLanes.trackId === track.id && keyLanes.channels.map((ch) => {
-      const keys = keyLanes.item.keys![ch] ?? [];
+      // `keys` is absent entirely on a clip that has never been animated, and
+      // every animatable channel gets a lane now — so this cannot assert.
+      const keys = keyLanes.item.keys?.[ch] ?? [];
       const info = CHANNELS_BY_ID[ch];
       return (
         <div key={ch} style={{ display: "flex", height: LANE_H, borderBottom: "1px solid var(--border-hairline)" }}>
@@ -881,6 +888,14 @@ export default function DocTimeline({
             <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{info?.label ?? ch}</span>
           </div>
           <div style={{ position: "relative", width: contentW, background: "rgba(244,244,245,0.02)" }}>
+            {keys.length === 0 && (
+              <span
+                className="t-data-s"
+                style={{ position: "absolute", left: 8, top: "50%", marginTop: -7, color: "var(--ink-disabled)" }}
+              >
+                no keys
+              </span>
+            )}
             {keys.length > 1 && (
               <div
                 style={{
@@ -991,6 +1006,13 @@ export default function DocTimeline({
           <span className="t-control" style={{ color: snapOn ? "var(--ink-primary)" : "var(--ink-tertiary)" }}>Snap</span>
         </span>
         <button onClick={() => setZoom(1)} style={toolBtn}>Fit</button>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          style={{ ...toolBtn, color: expanded ? "var(--ink-primary)" : "var(--ink-secondary)" }}
+          title={expanded ? "Hide property lanes" : "Show the selected clip's property lanes"}
+        >
+          {expanded ? "Collapse" : "Expand"}
+        </button>
         <IconButton icon="help" size={22} title="Keyboard shortcuts" shortcut="⌘/" onClick={onShowShortcuts} />
         <span className="mono nums" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
           {Math.floor(currentFrame / fps / 60).toString().padStart(2, "0")}:

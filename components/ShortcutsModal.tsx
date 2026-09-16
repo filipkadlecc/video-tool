@@ -96,31 +96,49 @@ export default function ShortcutsModal({
     rows: g.rows.filter((r) => !r.only || r.only === kind),
   })).filter((g) => g.rows.length > 0);
 
+  /*
+   * Three columns, because the sheet is a reference you scan rather than read:
+   * you already know whether you want a transport key, an editing key or a
+   * workspace key, so the column IS the first filter. A single list makes you
+   * read all of it every time.
+   *
+   * Groups are packed into whichever column is shortest so the three end up
+   * roughly level, rather than one running long and leaving the others empty.
+   */
+  const columns: typeof groups[] = [[], [], []];
+  const heights = [0, 0, 0];
+  for (const g of groups) {
+    const shortest = heights.indexOf(Math.min(...heights));
+    columns[shortest].push(g);
+    heights[shortest] += g.rows.length + 1;
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title="Keyboard shortcuts" width={440}>
-      <div style={{ padding: "14px 20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-        {groups.map((group) => (
-          <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
-              {group.title}
-            </span>
-            {group.rows.map((row, i) => (
-              <div
-                key={i}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
-              >
-                <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>{row.label}</span>
-                <span style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                  {row.keys.map((k, j) =>
-                    k.startsWith("~") ? (
-                      <span key={j} style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>
-                        {k.slice(1)}
-                      </span>
-                    ) : (
-                      <Kbd key={j}>{k}</Kbd>
-                    ),
-                  )}
-                </span>
+    <Modal open={open} onClose={onClose} padded title="Keyboard shortcuts" width={700}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 24 }}>
+        {columns.map((col, ci) => (
+          <div key={ci} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {col.map((group) => (
+              <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>{group.title}</span>
+                {group.rows.map((row, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+                    <span style={{ fontSize: 13, color: "var(--ink-secondary)", flex: 1, minWidth: 0 }}>
+                      {row.label}
+                    </span>
+                    <span style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                      {row.keys.map((k, j) =>
+                        k.startsWith("~") ? (
+                          <span className="t-caption" key={j} style={{ color: "var(--ink-disabled)" }}>
+                            {k.slice(1)}
+                          </span>
+                        ) : (
+                          <Kbd key={j}>{k}</Kbd>
+                        ),
+                      )}
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>
