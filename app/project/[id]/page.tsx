@@ -29,7 +29,7 @@ import Segmented from "@/components/ui/Segmented";
 import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
-import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem , migrateDoc } from "@/lib/editor-doc";
+import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, updateItem, type EditorDoc, type SceneItem , migrateDoc } from "@/lib/editor-doc";
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
@@ -52,6 +52,7 @@ const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
 });
 
 const DocTimeline = dynamic(() => import("@/components/DocTimeline"), { ssr: false });
+const TimelineStrip = dynamic(() => import("@/components/TimelineStrip"), { ssr: false });
 const EditorInspector = dynamic(() => import("@/components/EditorInspector"), { ssr: false });
 const FootageBrowser = dynamic(() => import("@/components/FootageBrowser"), { ssr: false });
 const EffectsPanel = dynamic(() => import("@/components/EffectsPanel"), { ssr: false });
@@ -188,6 +189,14 @@ export default function ProjectEditor() {
    * in Cut as a toast with the same three actions.
    */
   const [aiEdit, setAiEdit] = useState<DocChange[] | null>(null);
+
+  /**
+   * Direct's timeline: the collapsed strip, or the full one at 428px.
+   *
+   * Direct only — Cut's timeline is always the full one, and its own Expand is
+   * about the property lanes rather than about the panel.
+   */
+  const [timelineExpanded, setTimelineExpanded] = useState(false);
   const rangeKey = `vt:range:${projectId}`;
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -716,6 +725,13 @@ export default function ProjectEditor() {
     setAiEdit(null);
   }, [docHistory]);
 
+  /** The strip's one edit: cut the selected clip where the playhead is. */
+  const splitSelectedAtPlayhead = useCallback(() => {
+    const id = [...selectedItemIds][0];
+    if (!id || !doc) return;
+    setDoc(splitItem(doc, id, playhead.getFrame(), doc.size.fps));
+  }, [selectedItemIds, doc, playhead]);
+
   const commitDoc = useCallback((next: EditorDoc, opts?: { transient?: boolean }) => {
     setDoc((prev) => {
       if (opts?.transient) {
@@ -986,9 +1002,10 @@ export default function ProjectEditor() {
       if (workspace === "direct") {
         // Chat-first: a wide chat column and the timeline down to a strip, so
         // an AI edit's result is visible in the same glance as the sentence
-        // describing it.
+        // describing it. Expanded, the strip gives way to the real timeline
+        // and the keyframe lanes it carries.
         rightPanelRef.current?.resize("452px");
-        timelinePanelRef.current?.resize("152px");
+        timelinePanelRef.current?.resize(timelineExpanded ? "428px" : "152px");
       } else {
         // Timeline-first: the inspector at 360px — the narrowest width that
         // holds the property row grid — and the timeline at full height.
@@ -1000,8 +1017,9 @@ export default function ProjectEditor() {
       }
     }); });
     setRightTab(workspace === "direct" ? "chat" : "properties");
+    if (workspace !== "direct") setTimelineExpanded(false);
     return () => { cancelAnimationFrame(raf); cancelAnimationFrame(inner); };
-  }, [workspace, workspaceKey]);
+  }, [workspace, workspaceKey, timelineExpanded]);
 
   const horizontalLayout = useDefaultLayout({
     // v3: the stage row is now rail | preview | right, and the timeline moved
@@ -1561,23 +1579,42 @@ export default function ProjectEditor() {
                   <Separator className="resize-handle resize-handle-horizontal" />
                   <Panel id="timeline" panelRef={timelinePanelRef} defaultSize="296px" minSize="120px">
                     <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                      {docView && (
-                      <DocTimeline
-                        doc={docView}
-                        onChange={commitDoc}
+                      {/*
+                        Direct gets the collapsed STRIP, not the full timeline
+                        squeezed into 152px. Expand swaps the real one in at
+                        428px — the same control, two different components,
+                        because a 26px row and a 52px track want different
+                        furniture.
+                      */}
+                      {docView && (workspace === "direct" && !timelineExpanded ? (
+                        <TimelineStrip
+                          doc={docView}
+                          selectedIds={selectedItemIds}
+                          onSelectionChange={setSelectedItemIds}
                           onSeek={seekTo}
-                        onScrubStart={handleScrubStart}
-                        onTogglePlay={togglePlay}
-                        mediaFiles={docMedia}
-                        mediaDurations={docMediaDurations}
-                        projectId={projectId}
-                        selectedIds={selectedItemIds}
-                        onSelectionChange={setSelectedItemIds}
-                        onPromptAnimation={() => setPromptAnimOpen(true)}
-                        onShowShortcuts={() => setShortcutsOpen(true)}
-                        range={range}
-                      />
-                      )}
+                          onScrubStart={handleScrubStart}
+                          onExpand={() => setTimelineExpanded(true)}
+                          onSplit={splitSelectedAtPlayhead}
+                        />
+                      ) : (
+                        <DocTimeline
+                          doc={docView}
+                          onChange={commitDoc}
+                          onSeek={seekTo}
+                          onScrubStart={handleScrubStart}
+                          onTogglePlay={togglePlay}
+                          mediaFiles={docMedia}
+                          mediaDurations={docMediaDurations}
+                          projectId={projectId}
+                          selectedIds={selectedItemIds}
+                          onSelectionChange={setSelectedItemIds}
+                          onPromptAnimation={() => setPromptAnimOpen(true)}
+                          onShowShortcuts={() => setShortcutsOpen(true)}
+                          range={range}
+                          expanded={workspace === "direct" ? timelineExpanded : undefined}
+                          onExpandedChange={workspace === "direct" ? setTimelineExpanded : undefined}
+                        />
+                      ))}
                     </div>
                   </Panel>
                 </>

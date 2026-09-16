@@ -86,6 +86,15 @@ interface Props {
   onShowShortcuts: () => void;
   /** In / out points, drawn on the ruler as the export range. */
   range?: { in: number | null; out: number | null };
+  /**
+   * Whether the property lanes are showing.
+   *
+   * Uncontrolled in Cut, where Expand is just a disclosure. CONTROLLED in
+   * Direct, where the page swaps this whole timeline for the collapsed strip
+   * and back — so collapsing has to reach outside this component.
+   */
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }
 
 /**
@@ -128,6 +137,7 @@ export default function DocTimeline({
   doc, onChange, onSeek, onScrubStart, onTogglePlay,
   mediaFiles, mediaDurations, projectId, selectedIds, onSelectionChange,
   onPromptAnimation, onShowShortcuts, range,
+  expanded: expandedProp, onExpandedChange,
 }: Props) {
   const [zoom, setZoom] = useState(1);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -136,7 +146,13 @@ export default function DocTimeline({
   /** Track-head controls show on hover; at 168px they crowd the name otherwise. */
   const [hoverHead, setHoverHead] = useState<string | null>(null);
   /** Expanded shows the selected clip's property lanes. */
-  const [expanded, setExpanded] = useState(false);
+  const [expandedOwn, setExpandedOwn] = useState(false);
+  const expanded = expandedProp ?? expandedOwn;
+  const setExpanded = (next: boolean | ((v: boolean) => boolean)) => {
+    const value = typeof next === "function" ? next(expanded) : next;
+    if (onExpandedChange) onExpandedChange(value);
+    else setExpandedOwn(value);
+  };
   const [containerWidth, setContainerWidth] = useState(900);
   const [pickerOpen, setPickerOpen] = useState(false);
   const toast = useToast();
