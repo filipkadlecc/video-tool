@@ -6,6 +6,7 @@ import PQueue from "p-queue";
 import { bundle } from "@remotion/bundler";
 import { selectComposition, renderStill } from "@remotion/renderer";
 import { stripBackgroundsForTransparency } from "./transparent-bg";
+import { leanPublicDir, sweepStaleBundles } from "./remotion-bundle";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -328,6 +329,10 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         remotionOutputPath,
         "--codec",
         remotionCodec,
+        // Bundle against a public folder that leaves `renders` out, so an export
+        // doesn't copy every previously exported video into its temp bundle.
+        "--public-dir",
+        leanPublicDir(),
       ];
       // Quality, for the codec that has a quality knob.
       if (codec === "h264" && typeof opts.crf === "number") {
@@ -549,6 +554,9 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
     } finally {
       try { fs.unlinkSync(scenePath); } catch {}
       try { if (entryPath) fs.unlinkSync(entryPath); } catch {}
+      // The CLI leaves its own bundle behind. Clear up the ones old enough to
+      // be certain no render is still reading from them.
+      try { sweepStaleBundles(); } catch {}
     }
   });
 
@@ -603,6 +611,8 @@ export async function renderThumbnail(
           outputPath,
           "--frame",
           String(frame),
+          "--public-dir",
+          leanPublicDir(),
         ],
         { cwd: process.cwd(), env: { ...process.env } },
       );
@@ -660,11 +670,19 @@ export async function renderSampleFrames(
   const scale = longEdge > 1280 ? 1280 / longEdge : 1;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "vt-frames-"));
+  /*
+   * Name the bundle ourselves rather than letting Remotion mkdtemp one. Left to
+   * itself it scatters `remotion-webpack-bundle-*` folders through $TMPDIR and
+   * never clears them; a refine pass runs often enough that they stack up into
+   * tens of gigabytes within a day.
+   */
+  const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), "vt-frames-bundle-"));
   try {
     // Bundle once — the cold bundle dominates; each still after it is cheap.
     const serveUrl = await bundle({
       entryPoint: entryPath,
-      publicDir: path.join(process.cwd(), "public"),
+      outDir: bundleDir,
+      publicDir: leanPublicDir(),
     });
     const composition = await selectComposition({ serveUrl, id: "Scene" });
 
@@ -681,6 +699,7 @@ export async function renderSampleFrames(
     try { fs.unlinkSync(scenePath); } catch {}
     try { fs.unlinkSync(entryPath); } catch {}
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(bundleDir, { recursive: true, force: true }); } catch {}
   }
 }
 
