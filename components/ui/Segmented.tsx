@@ -21,14 +21,16 @@ interface SegmentedProps {
   options: SegmentedOption[];
   /** 26 is the toolbar switcher; 24 the dense filter row. */
   height?: number;
+  /** Fill the width, splitting it evenly — for a control that owns its row. */
+  stretch?: boolean;
   style?: React.CSSProperties;
 }
 
-export default function Segmented({ value, onChange, options, height = 26, style }: SegmentedProps) {
+export default function Segmented({ value, onChange, options, height = 26, stretch, style }: SegmentedProps) {
   return (
     <div
       style={{
-        display: "inline-flex",
+        display: stretch ? "flex" : "inline-flex",
         padding: 2,
         gap: 2,
         background: "var(--surface-void)",
@@ -48,8 +50,11 @@ export default function Segmented({ value, onChange, options, height = 26, style
             style={{
               display: "inline-flex",
               alignItems: "center",
+              justifyContent: "center",
               gap: 6,
               height,
+              flex: stretch ? 1 : undefined,
+              minWidth: 0,
               padding: "0 10px",
               fontSize: "var(--t-control-size)",
               fontWeight: "var(--t-control-weight)" as unknown as number,
