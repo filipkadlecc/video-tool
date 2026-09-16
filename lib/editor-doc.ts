@@ -311,6 +311,14 @@ export interface EditorDoc {
   /** Later tracks render in FRONT of earlier ones. */
   tracks: Track[];
   assets: Asset[];
+  /**
+   * What shows through where nothing is drawn. Hex, e.g. "#0A0A0B".
+   *
+   * Optional, and absent means black — which is what the renderer hardcoded
+   * before this existed, so every stored document keeps rendering exactly as it
+   * did. A transparent export ignores it.
+   */
+  background?: string;
 }
 
 // ── construction ────────────────────────────────────────────────────────────
@@ -496,6 +504,132 @@ export function reorderTrack(doc: EditorDoc, trackId: string, targetIndex: numbe
 export function addAsset(doc: EditorDoc, asset: Asset): EditorDoc {
   if (doc.assets.some((a) => a.id === asset.id)) return doc;
   return { ...doc, assets: [...doc.assets, asset] };
+}
+
+/* ───────────────────── changing the frame, and the rate ───────────────────── */
+
+/**
+ * Re-lay out the whole composition for a different frame size.
+ *
+ * Positions are in composition pixels, so changing the frame without moving
+ * anything would leave every element in the wrong place — a title centred in
+ * 2560×1440 sits off to the left in 1080×1920. Horizontal values scale by the
+ * width ratio, vertical by the height ratio, and font size and corner radius by
+ * the SMALLER of the two, which is the same convention the aspect-ratio
+ * conversion already uses for code projects.
+ *
+ * Keyframed x and y scale with their axis, or an animation would drift back to
+ * where it was drawn.
+ *
+ * It cannot be perfect — a layout composed for one shape is not automatically
+ * right in another — which is why the dialog says so before you apply it.
+ */
+export function resizeDoc(doc: EditorDoc, width: number, height: number): EditorDoc {
+  if (width <= 0 || height <= 0) return doc;
+  if (width === doc.size.width && height === doc.size.height) return doc;
+
+  const sx = width / doc.size.width;
+  const sy = height / doc.size.height;
+  const sf = Math.min(sx, sy);
+  const r = (n: number) => Math.round(n * 100) / 100;
+
+  const scaleKeys = (keys: Keyframes | undefined): Keyframes | undefined => {
+    if (!keys) return keys;
+    const next: Keyframes = { ...keys };
+    for (const ch of ["x", "y"] as const) {
+      const list = keys[ch];
+      if (list?.length) next[ch] = list.map((k) => ({ ...k, value: r(k.value * (ch === "x" ? sx : sy)) }));
+    }
+    return next;
+  };
+
+  return {
+    ...doc,
+    size: { ...doc.size, width, height },
+    tracks: doc.tracks.map((t) => ({
+      ...t,
+      items: t.items.map((item) => {
+        const l = item.layout;
+        const next = {
+          ...item,
+          layout: {
+            ...l,
+            x: r(l.x * sx),
+            y: r(l.y * sy),
+            width: r(l.width * sx),
+            height: r(l.height * sy),
+            ...(l.cornerRadius !== undefined ? { cornerRadius: r(l.cornerRadius * sf) } : {}),
+          },
+          ...(item.keys ? { keys: scaleKeys(item.keys) } : {}),
+        } as EditorItem;
+        // Type scales with the frame too, or a headline built for 4K turns
+        // into a caption at 1080.
+        if (next.type === "text") {
+          const t2 = next as TextItem;
+          if (t2.style?.fontSize) {
+            return { ...t2, style: { ...t2.style, fontSize: Math.max(1, Math.round(t2.style.fontSize * sf)) } };
+          }
+        }
+        return next;
+      }),
+    })),
+  };
+}
+
+/**
+ * Change the frame rate and re-time everything to keep the same WALL CLOCK.
+ *
+ * Frames are the document's only unit of time, so changing fps without
+ * re-timing silently changes how long everything lasts: at 25 -> 50 a
+ * two-second title becomes a one-second title. Every `from`, duration,
+ * keyframe and effect length scales by the ratio.
+ *
+ * Boundaries are rounded from the same numbers on both sides — a clip's end and
+ * the next clip's start are one value — so clips that were adjacent stay
+ * adjacent, with no overlap opened by rounding and no one-frame gap.
+ */
+export function retimeDoc(doc: EditorDoc, fps: number): EditorDoc {
+  if (!Number.isFinite(fps) || fps <= 0 || fps === doc.size.fps) return doc;
+  const ratio = fps / doc.size.fps;
+  const at = (frame: number) => Math.round(frame * ratio);
+
+  return {
+    ...doc,
+    size: { ...doc.size, fps },
+    tracks: doc.tracks.map((t) => ({
+      ...t,
+      items: t.items.map((item) => {
+        const from = at(item.from);
+        const end = at(item.from + item.durationInFrames);
+        const next: EditorItem = {
+          ...item,
+          from,
+          durationInFrames: Math.max(1, end - from),
+        };
+
+        if (item.keys) {
+          const keys: Keyframes = {};
+          for (const [ch, list] of Object.entries(item.keys) as [ChannelId, Keyframe[] | undefined][]) {
+            if (!list?.length) continue;
+            // Two keys can land on the same frame when slowing down; the later
+            // one wins, because keys must stay sorted and unique.
+            const seen = new Map<number, Keyframe>();
+            for (const k of list) seen.set(at(k.frame), { ...k, frame: at(k.frame) });
+            keys[ch] = [...seen.values()].sort((a, b) => a.frame - b.frame);
+          }
+          next.keys = keys;
+        }
+
+        if (item.effects?.length) {
+          next.effects = item.effects.map((fx) =>
+            "durationInFrames" in fx
+              ? { ...fx, durationInFrames: Math.max(1, Math.round(fx.durationInFrames * ratio)) }
+              : fx);
+        }
+        return next;
+      }),
+    })),
+  };
 }
 
 /**

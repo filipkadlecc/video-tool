@@ -53,6 +53,7 @@ const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
 const DocTimeline = dynamic(() => import("@/components/DocTimeline"), { ssr: false });
 const TimelineStrip = dynamic(() => import("@/components/TimelineStrip"), { ssr: false });
 const CodeModeScreen = dynamic(() => import("@/components/CodeModeScreen"), { ssr: false });
+const ProjectSettingsDialog = dynamic(() => import("@/components/ProjectSettingsDialog"), { ssr: false });
 const EditorInspector = dynamic(() => import("@/components/EditorInspector"), { ssr: false });
 const FootageBrowser = dynamic(() => import("@/components/FootageBrowser"), { ssr: false });
 const EffectsPanel = dynamic(() => import("@/components/EffectsPanel"), { ssr: false });
@@ -197,6 +198,7 @@ export default function ProjectEditor() {
    * about the property lanes rather than about the panel.
    */
   const [timelineExpanded, setTimelineExpanded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const rangeKey = `vt:range:${projectId}`;
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -1291,6 +1293,14 @@ export default function ProjectEditor() {
           </Button>
         )}
         {doc && (
+          <IconButton
+            icon="settings"
+            size={28}
+            title="Project settings"
+            onClick={() => setSettingsOpen(true)}
+          />
+        )}
+        {doc && (
           <Button
             variant="outline"
             size="sm"
@@ -1680,6 +1690,33 @@ export default function ProjectEditor() {
           )}
         </Group>
       </div>
+      )}
+
+      {doc && (
+        <ProjectSettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          doc={doc}
+          projectName={project.name}
+          // Transient, so looking at a re-layout costs you nothing: Cancel puts
+          // the document back and no undo entry is created either way.
+          onPreview={(next) => commitDoc(next, { transient: true })}
+          onApply={async (next, settings) => {
+            commitDoc(next);
+            // The project stores the frame and rate too — getProjectSize reads
+            // them — so leaving them behind would make the two disagree about
+            // what this project is.
+            try {
+              await fetch(`/api/projects/${projectId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  settings: { ...project.settings, width: settings.width, height: settings.height, fps: settings.fps },
+                }),
+              });
+            } catch { /* the document is already right; the badge can lag */ }
+          }}
+        />
       )}
 
       {docView && (

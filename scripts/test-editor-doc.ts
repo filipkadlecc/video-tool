@@ -24,7 +24,8 @@ import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
 import { sceneMeta } from "../lib/scene-eval";
 import {
-  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc, relinkAsset,
+  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
+  relinkAsset, resizeDoc, retimeDoc,
   makeId, moveItem, removeItem, reorderTrack, rippleRemoveItem, setLayout,
   captionPageAt, cloneItem, duplicateItem, moveItemToTrack, paginateCaptions,
   hasRoomAt, resizeLayout, snapBox, splitItem, trackWithRoomAt, trimItem, updateItem,
@@ -1176,6 +1177,71 @@ head("every real composition that imports, tiles");
   a(imported > 0, "the corpus actually exercises this");
 }
 
+
+head("changing the frame re-lays the composition out");
+{
+  let doc = emptyDoc({ width: 1920, height: 1080, fps: 25 });
+  doc = addItem(doc, doc.tracks[0].id, {
+    type: "text", id: "t1", from: 0, durationInFrames: 50,
+    layout: { x: 960, y: 540, width: 480, height: 200, cornerRadius: 10 },
+    text: "Centred", style: { fontSize: 100 },
+  } as unknown as TextItem);
+  doc = setItemKey(doc, "t1", "x", 0, 0);
+  doc = setItemKey(doc, "t1", "x", 25, 960);
+
+  const wide = resizeDoc(doc, 3840, 2160);
+  const item = findItem(wide, "t1")!.item as TextItem;
+  a(wide.size.width === 3840 && wide.size.height === 2160, "the frame is the new size");
+  a(item.layout.x === 1920 && item.layout.y === 1080, "positions scale with their own axis");
+  a(item.layout.width === 960 && item.layout.height === 400, "so does the box");
+  a(item.style.fontSize === 200, "type scales too, or a headline becomes a caption");
+  a(item.layout.cornerRadius === 20, "and so does the corner radius");
+  a(item.keys!.x![1].value === 1920, "keyframed x scales, or the animation drifts off its marks");
+  a(isValidDoc(wide), "the result is a valid document");
+
+  // A different SHAPE, not just a different size: x and y scale differently.
+  const tall = resizeDoc(doc, 1080, 1920);
+  const t2 = findItem(tall, "t1")!.item as TextItem;
+  a(t2.layout.x === 540, "x follows the width ratio");
+  a(Math.round(t2.layout.y) === 960, "y follows the height ratio");
+  a(t2.style.fontSize === 56, "type follows the SMALLER ratio, so it still fits");
+
+  a(resizeDoc(doc, 1920, 1080) === doc, "resizing to the size it already is changes nothing");
+}
+
+head("changing the rate keeps the wall clock");
+{
+  let doc = emptyDoc({ width: 1920, height: 1080, fps: 25 });
+  const tid = doc.tracks[0].id;
+  doc = addItem(doc, tid, solid("a", 0, 50));      // 0-2s
+  doc = addItem(doc, tid, solid("b", 50, 25));     // 2-3s, adjacent
+  doc = setItemKey(doc, "a", "opacity", 0, 0);
+  doc = setItemKey(doc, "a", "opacity", 25, 1);
+
+  const fast = retimeDoc(doc, 50);
+  a(fast.size.fps === 50, "the rate is the new rate");
+  const a2 = findItem(fast, "a")!.item;
+  const b2 = findItem(fast, "b")!.item;
+  a(a2.from === 0 && a2.durationInFrames === 100, "a two-second clip is still two seconds");
+  a(b2.from === 100 && b2.durationInFrames === 50, "and so is the one after it");
+  a(a2.from + a2.durationInFrames === b2.from, "adjacent clips stay exactly adjacent");
+  a(a2.keys!.opacity![1].frame === 50, "keyframes move with the clip");
+  a(isValidDoc(fast), "the result is a valid document");
+
+  // Slowing down is where rounding can collide two keys onto one frame.
+  let dense = emptyDoc({ width: 100, height: 100, fps: 50 });
+  dense = addItem(dense, dense.tracks[0].id, solid("s", 0, 20));
+  dense = setItemKey(dense, "s", "opacity", 0, 0);
+  dense = setItemKey(dense, "s", "opacity", 1, 0.5);
+  dense = setItemKey(dense, "s", "opacity", 2, 1);
+  const slow = retimeDoc(dense, 25);
+  const keys = findItem(slow, "s")!.item.keys!.opacity!;
+  a(new Set(keys.map((k) => k.frame)).size === keys.length, "collided keyframes are deduped, not duplicated");
+  a(keys.every((k, i) => i === 0 || k.frame > keys[i - 1].frame), "and the list stays sorted");
+  a(isValidDoc(slow), "a slowed document is still valid");
+
+  a(retimeDoc(doc, 25) === doc, "re-timing to the rate it already has changes nothing");
+}
 
 head("re-linking a source that moved");
 {
