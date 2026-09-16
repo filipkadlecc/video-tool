@@ -775,9 +775,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         {/* Left: the one question, and the one input that answers it. */}
         <div
-          className="vt-scroll"
           style={{
-            flex: 1, minWidth: 0, padding: "40px 44px", overflowY: "auto",
+            flex: 1, minWidth: 0, minHeight: 0, padding: "40px 44px", overflow: "hidden",
             display: "flex", flexDirection: "column", gap: 24,
           }}
         >
@@ -862,7 +861,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           {/* B · from a snippet — search, six results, and what the selected
               one actually lands as. */}
           {!isFootage && !isTerminal && source === "snippet" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0 }}>
               <Input
                 value={snippetQuery}
                 onChange={setSnippetQuery}
@@ -872,8 +871,21 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 suffix="↑↓ ↵"
                 style={{ background: "var(--surface-chrome)" }}
               />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {filteredSnippets.slice(0, 6).map((s) => {
+              {/*
+                All of them, scrolling.
+                The handoff shows six and says the rest are "reachable by
+                typing" — but the six sat above a screen of empty space, and a
+                list you can only reach by guessing its name is not a list.
+              */}
+              <div
+                className="vt-scroll"
+                style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+                  gridAutoRows: "min-content",
+                  flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4,
+                }}
+              >
+                {filteredSnippets.map((s) => {
                   const active = selectedSnippetId === s.id;
                   return (
                     <button
@@ -906,7 +918,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               {selectedSnippet && (
                 <div
                   style={{
-                    display: "flex", alignItems: "center", gap: 14, padding: "12px 14px",
+                    display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", flexShrink: 0,
                     background: "var(--surface-chrome)", border: "1px solid var(--border-edge)",
                     borderRadius: "var(--r-panel)",
                   }}
@@ -1049,10 +1061,10 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               to brief an animation, so it sits with the other three rather
               than becoming a third kind. */}
           {!isFootage && !isTerminal && source === "artwork" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0 }}>
               <label
                 style={{
-                  height: 168, display: "flex", flexDirection: "column", alignItems: "center",
+                  height: 168, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
                   justifyContent: "center", gap: 10, background: "var(--surface-chrome)",
                   border: "1px dashed var(--border-edge)", borderRadius: "var(--r-panel)",
                   cursor: "pointer",
@@ -1077,7 +1089,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 />
               </label>
               {svgFiles.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
                   <div style={{ display: "flex", alignItems: "baseline" }}>
                     <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Ready to import</span>
                     <div style={{ flex: 1 }} />
@@ -1085,7 +1097,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                       {svgFiles.length} {svgFiles.length === 1 ? "file" : "files"}
                     </span>
                   </div>
-                  <div style={{ background: "var(--surface-chrome)", border: "1px solid var(--border-hairline)", borderRadius: "var(--r-panel)" }}>
+                  <div
+                    className="vt-scroll"
+                    style={{
+                      flex: 1, minHeight: 0, overflowY: "auto", background: "var(--surface-chrome)",
+                      border: "1px solid var(--border-hairline)", borderRadius: "var(--r-panel)",
+                    }}
+                  >
                     {svgFiles.map((f, i) => (
                       <div
                         key={`${f.filename}:${i}`}
@@ -1119,7 +1137,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           {/* F · from footage — no source switcher, because there is no brief
               to source. */}
           {isFootage && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 24, flex: 1, minHeight: 0 }}>
               <label
                 onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                 onDragLeave={() => setDragActive(false)}
@@ -1129,7 +1147,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   void addFiles(Array.from(e.dataTransfer.files));
                 }}
                 style={{
-                  height: 168, display: "flex", flexDirection: "column", alignItems: "center",
+                  height: 168, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
                   justifyContent: "center", gap: 10,
                   background: dragActive ? "var(--surface-raised)" : "var(--surface-chrome)",
                   border: `1px dashed ${dragActive ? "var(--ink-primary)" : "var(--border-edge)"}`,
@@ -1166,7 +1184,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </label>
 
               {mediaFiles.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
                   <div style={{ display: "flex", alignItems: "baseline" }}>
                     <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Ready to import</span>
                     <div style={{ flex: 1 }} />
@@ -1178,7 +1196,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   <div
                     className="vt-scroll"
                     style={{
-                      maxHeight: 220, overflowY: "auto", background: "var(--surface-chrome)",
+                      flex: 1, minHeight: 0, overflowY: "auto", background: "var(--surface-chrome)",
                       border: "1px solid var(--border-hairline)", borderRadius: "var(--r-panel)",
                     }}
                   >
