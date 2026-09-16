@@ -785,6 +785,94 @@ export function itemLayoutAt(item: EditorItem, compositionFrame: number) {
   return resolvedLayout(item, compositionFrame - item.from);
 }
 
+/* ─────────────────── acting on a whole selection ─────────────────── */
+
+/** The selected items on one track, in time order. Other tracks are ignored. */
+function selectionOnTracks(doc: EditorDoc, ids: string[]): { track: Track; items: EditorItem[] }[] {
+  const wanted = new Set(ids);
+  return doc.tracks
+    .map((track) => ({ track, items: track.items.filter((i) => wanted.has(i.id)).sort((a, b) => a.from - b.from) }))
+    .filter((g) => g.items.length > 1);
+}
+
+/**
+ * The gap `evenSpacing` would produce, so the button can say what it will do
+ * before you press it.
+ *
+ * Returns null when there is nothing to space — fewer than two clips on any one
+ * track, or they already fill their own span with no room between them.
+ */
+export function evenSpacingGap(doc: EditorDoc, ids: string[]): number | null {
+  const groups = selectionOnTracks(doc, ids);
+  if (groups.length === 0) return null;
+  const g = groups[0];
+  const first = g.items[0];
+  const last = g.items[g.items.length - 1];
+  const span = last.from + last.durationInFrames - first.from;
+  const used = g.items.reduce((n, i) => n + i.durationInFrames, 0);
+  const gap = Math.floor((span - used) / (g.items.length - 1));
+  return gap >= 0 ? gap : 0;
+}
+
+/**
+ * Distribute the selection evenly between its own first and last clip.
+ *
+ * The outer two do not move — they define the span you already chose by
+ * placing them. Everything between them gets an equal gap. Clips on different
+ * tracks are spaced within their own track, since a gap only means anything
+ * against neighbours you can actually see.
+ */
+export function evenSpacing(doc: EditorDoc, ids: string[]): EditorDoc {
+  let next = doc;
+  for (const g of selectionOnTracks(doc, ids)) {
+    const gap = evenSpacingGap(doc, g.items.map((i) => i.id)) ?? 0;
+    let cursor = g.items[0].from;
+    for (const item of g.items) {
+      if (item.from !== cursor) next = replaceItem(next, item.id, (i) => ({ ...i, from: cursor }));
+      cursor += item.durationInFrames + gap;
+    }
+  }
+  return next;
+}
+
+/**
+ * Give every selected clip the length of the first one.
+ *
+ * The first in TIME, not the first you happened to click — the one you can see
+ * at the left of the run is the one you are matching to.
+ */
+export function sameDuration(doc: EditorDoc, ids: string[], fps: number): EditorDoc {
+  const groups = selectionOnTracks(doc, ids);
+  if (groups.length === 0) return doc;
+  const target = groups[0].items[0].durationInFrames;
+  let next = doc;
+  for (const g of groups) {
+    for (const item of g.items) {
+      if (item.durationInFrames === target) continue;
+      next = trimItem(next, item.id, "right", target - item.durationInFrames, fps);
+    }
+  }
+  return next;
+}
+
+/** Copy one clip's effect stack onto every other clip in the selection. */
+export function pasteEffects(doc: EditorDoc, fromId: string, toIds: string[]): EditorDoc {
+  const source = findItem(doc, fromId);
+  if (!source) return doc;
+  const effects = itemEffects(source.item);
+  let next = doc;
+  for (const id of toIds) {
+    if (id === fromId) continue;
+    // Ids are derived from the item, so each copy gets its own — otherwise two
+    // clips would share a React key and a section would toggle both.
+    next = replaceItem(next, id, (i) => ({
+      ...i,
+      effects: effects.map((e) => ({ ...e, id: `${i.id}:${e.kind === "animateIn" ? "in" : "out"}` })),
+    }));
+  }
+  return next;
+}
+
 export function setLayout(doc: EditorDoc, itemId: string, patch: Partial<ItemLayout>): EditorDoc {
   return replaceItem(doc, itemId, (i) => ({ ...i, layout: { ...i.layout, ...patch } }));
 }

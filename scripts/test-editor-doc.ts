@@ -30,7 +30,7 @@ import {
   hasRoomAt, resizeLayout, snapBox, splitItem, trackWithRoomAt, trimItem, updateItem,
   fitSceneItem, retimeSceneCode, sceneFit,
   type Asset, type CaptionToken, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
-  migrateDoc, EDITOR_DOC_VERSION, setItemKey, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
+  migrateDoc, EDITOR_DOC_VERSION, setItemKey, evenSpacing, evenSpacingGap, sameDuration, pasteEffects, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
   type EditorItem,
 } from "../lib/editor-doc";
 
@@ -599,6 +599,59 @@ head("keyframes: a diamond on and off never moves a pixel");
   const plain = resolvedLayout({ layout: { x: 1, y: 2, width: 3, height: 4 } }, 0);
   a(plain.scale === 1 && plain.anchorX === 0.5 && plain.anchorY === 0.5 && plain.opacity === 1,
     "a v1 layout resolves to scale 1, centre anchor, full opacity");
+}
+
+head("acting on a whole selection");
+{
+  const base = () => {
+    const d = addTrack(emptyDoc(SIZE), "V1");
+    const tid = d.tracks[d.tracks.length - 1].id;
+    let doc = d;
+    // three clips, unevenly spaced: 0-20, 50-70, 200-260
+    for (const [id, from, dur] of [["a", 0, 20], ["b", 50, 20], ["c", 200, 60]] as const) {
+      doc = addItem(doc, tid, {
+        id, type: "solid", from, durationInFrames: dur,
+        layout: { x: 0, y: 0, width: 10, height: 10 }, color: "#fff",
+      } as EditorItem);
+    }
+    return doc;
+  };
+
+  const doc = base();
+  const ids = ["a", "b", "c"];
+
+  // span is 0..260 = 260, used is 100, two gaps -> 80 each
+  a(evenSpacingGap(doc, ids) === 80, `the gap is stated before you press it (got ${evenSpacingGap(doc, ids)})`);
+
+  const spaced = evenSpacing(doc, ids);
+  const at = (d: EditorDoc, id: string) => findItem(d, id)!.item;
+  a(at(spaced, "a").from === 0, "the first clip does not move — it defines the span");
+  a(at(spaced, "c").from + at(spaced, "c").durationInFrames === 260, "and neither does the end of the last");
+  a(at(spaced, "b").from === 100, "the middle clip lands on an equal gap");
+  a(isValidDoc(spaced), "and nothing overlaps");
+
+  // idempotent: spacing an evenly spaced run changes nothing
+  a(JSON.stringify(evenSpacing(spaced, ids)) === JSON.stringify(spaced), "spacing twice is spacing once");
+
+  const same = sameDuration(doc, ids, SIZE.fps);
+  a(at(same, "b").durationInFrames === 20 && at(same, "c").durationInFrames === 20,
+    "same duration matches the FIRST clip in time");
+  a(isValidDoc(same), "and still does not overlap");
+
+  // effects copy across, with ids of their own
+  const withFx = updateItem(doc, "a", {
+    effects: [{ id: "a:in", kind: "animateIn", enabled: true, preset: "rise", durationInFrames: 12 }],
+  } as Partial<EditorItem>);
+  const pasted = pasteEffects(withFx, "a", ids);
+  a(itemEffects(at(pasted, "b")).length === 1, "paste effects reaches the other clips");
+  a(itemEffects(at(pasted, "b"))[0].preset === "rise", "carrying the preset");
+  a(itemEffects(at(pasted, "b"))[0].id !== itemEffects(at(pasted, "a"))[0].id,
+    "with an id of its own, so toggling one section cannot toggle another clip's");
+  a(itemEffects(at(pasted, "a")).length === 1, "and the source is left alone");
+
+  // a single clip is not a selection to act across
+  a(evenSpacingGap(doc, ["a"]) === null, "one clip has no spacing to even");
+  a(evenSpacing(doc, ["a"]) === doc, "and evening it is a no-op");
 }
 
 head("the effect stack: bypassing keeps the values");

@@ -11,6 +11,7 @@ import Tabs from "@/components/ui/Tabs";
 import Menu from "@/components/ui/Menu";
 import {
   findItem, hasSource, setLayout, updateItem, docDuration,
+  evenSpacing, evenSpacingGap, sameDuration, pasteEffects,
   type AudioItem, type CaptionsItem, type EditorDoc, type EditorItem,
   type TextItem, type VideoItem,
 } from "@/lib/editor-doc";
@@ -403,7 +404,11 @@ export default function EditorInspector({
     const hours = needsHours(total, doc.size.fps);
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-        <Header subject={ids.length > 1 ? `${ids.length} clips` : undefined} />
+        <Header
+          subject={ids.length > 1
+            ? `${ids.length} clips${findItem(doc, ids[0])?.track.name ? ` · ${findItem(doc, ids[0])!.track.name}` : ""}`
+            : undefined}
+        />
         {ids.length > 1 ? (
           <MultiSelection doc={doc} ids={ids} onChange={onChange} />
         ) : (
@@ -933,8 +938,15 @@ function ColourField({ value, onChange }: { value: string; onChange: (v: string)
 }
 
 /**
- * Multi-selection. Shared values edit normally; differing ones read "Mixed"
- * rather than lying about one clip's value standing for all of them.
+ * Multi-selection — the SAME stack, not a reduced one.
+ *
+ * The design is explicit that selecting three clips shouldn't drop you into a
+ * different, poorer panel: the sections are the same, shared values edit
+ * together, and a value that differs across the selection reads "Mixed" rather
+ * than one clip's number quietly standing in for all of them.
+ *
+ * Then one group the single-clip panel has no use for: the things you can only
+ * mean about several clips at once.
  */
 function MultiSelection({
   doc, ids, onChange,
@@ -942,38 +954,160 @@ function MultiSelection({
   doc: EditorDoc; ids: string[];
   onChange: (next: EditorDoc, opts?: { transient?: boolean }) => void;
 }) {
+  const [open, setOpenState] = useState<Record<string, boolean>>({});
+  const isOpen = (k: string, d = true) => open[k] ?? d;
+  const setOpen = (k: string, v: boolean) => setOpenState((p) => ({ ...p, [k]: v }));
+
   const items = ids.map((id) => findItem(doc, id)?.item).filter(Boolean) as EditorItem[];
-  const shared = <K extends keyof EditorItem["layout"]>(k: K): number | "mixed" => {
-    const first = items[0]?.layout[k] ?? 0;
-    return items.every((i) => (i.layout[k] ?? 0) === first) ? (first as number) : "mixed";
+  if (items.length === 0) return null;
+
+  const track = findItem(doc, ids[0])?.track;
+
+  /** A value, or "mixed" when the selection disagrees about it. */
+  const shared = (read: (i: EditorItem) => number): number | "mixed" => {
+    const first = read(items[0]);
+    return items.every((i) => Math.abs(read(i) - first) < 1e-9) ? first : "mixed";
   };
-  const setAll = (k: "x" | "y" | "opacity", v: number) => {
+
+  const setAll = (patch: Parameters<typeof setLayout>[2], opts?: { transient?: boolean }) => {
     let next = doc;
-    for (const i of items) next = setLayout(next, i.id, { [k]: v });
+    for (const i of items) next = setLayout(next, i.id, patch);
+    onChange(next, opts);
+  };
+
+  const bypassedAll = (section: string) => items.every((i) => i.bypass?.includes(section));
+  const setBypassAll = (section: string, off: boolean) => {
+    let next = doc;
+    for (const i of items) {
+      const cur = i.bypass ?? [];
+      const b = off ? [...new Set([...cur, section])] : cur.filter((x) => x !== section);
+      next = updateItem(next, i.id, { bypass: b.length ? b : undefined } as Partial<EditorItem>);
+    }
     onChange(next);
   };
 
-  const x = shared("x"), y = shared("y"), op = shared("opacity");
+  /** "on all 3" — only when every selected clip actually has it. */
+  const onAll = (present: (i: EditorItem) => boolean) =>
+    items.every(present)
+      ? <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>on all {items.length}</span>
+      : undefined;
+
+  const x = shared((i) => i.layout.x);
+  const y = shared((i) => i.layout.y);
+  const rot = shared((i) => i.layout.rotation ?? 0);
+  const op = shared((i) => i.layout.opacity ?? 1);
+
+  const gap = evenSpacingGap(doc, ids);
+  const firstDuration = [...items].sort((p, q) => p.from - q.from)[0].durationInFrames;
+  const fx = itemEffects([...items].sort((p, q) => p.from - q.from)[0]);
+
   return (
-    <div style={{ padding: "8px 8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-      <Row label="Position">
-        {x === "mixed" || y === "mixed" ? <Mixed /> : (
-          <Vector x={x} y={y} onX={(n) => setAll("x", n)} onY={(n) => setAll("y", n)} />
-        )}
-      </Row>
-      <Row label="Opacity">
-        {op === "mixed" ? <Mixed /> : (
-          <Scalar value={Math.round((op ?? 1) * 100)} min={0} max={100} suffix="%" onChange={(n) => setAll("opacity", n / 100)} />
-        )}
-      </Row>
-      <div style={{ height: 1, background: "var(--border-hairline)", margin: "6px 0" }} />
-      <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
-        {items.length} clips selected. Shared values edit together.
+    <div className="vt-scroll" style={{ overflowY: "auto", minHeight: 0 }}>
+      <Section
+        title="Transform"
+        open={isOpen("transform")}
+        onOpenChange={(v) => setOpen("transform", v)}
+        enabled={!bypassedAll("transform")}
+        onEnabledChange={(v) => setBypassAll("transform", !v)}
+        subtitle={onAll((i) => !i.bypass?.includes("transform"))}
+      >
+        <Row label="Position">
+          {x === "mixed" || y === "mixed" ? <Mixed /> : (
+            <Vector
+              x={x} y={y}
+              onX={(n, o) => setAll({ x: n }, o)}
+              onY={(n, o) => setAll({ y: n }, o)}
+            />
+          )}
+        </Row>
+        <Row label="Rotation">
+          {rot === "mixed" ? <Mixed /> : (
+            <Scalar value={rot} min={-180} max={180} suffix="°" onChange={(n, o) => setAll({ rotation: n }, o)} />
+          )}
+        </Row>
+      </Section>
+
+      <Section
+        title="Opacity"
+        open={isOpen("opacity")}
+        onOpenChange={(v) => setOpen("opacity", v)}
+        enabled={!bypassedAll("opacity")}
+        onEnabledChange={(v) => setBypassAll("opacity", !v)}
+        subtitle={onAll((i) => !i.bypass?.includes("opacity"))}
+      >
+        <Row label="Opacity">
+          {op === "mixed" ? <Mixed /> : (
+            <Scalar
+              value={Math.round(op * 100)} min={0} max={100}
+              onChange={(n, o) => setAll({ opacity: n / 100 }, o)}
+            />
+          )}
+        </Row>
+      </Section>
+
+      {/* The things you can only mean about several clips at once. */}
+      <div style={{ padding: "10px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <span className="t-section" style={{ color: "var(--ink-tertiary)", paddingLeft: 2 }}>
+          Across the selection
+        </span>
+
+        <SelectionAction
+          label="Even spacing"
+          meta={gap === null ? undefined : `${gap}f gaps`}
+          disabled={gap === null}
+          onClick={() => onChange(evenSpacing(doc, ids))}
+        />
+        <SelectionAction
+          label="Same duration"
+          meta={`${firstDuration}f`}
+          onClick={() => onChange(sameDuration(doc, ids, doc.size.fps))}
+        />
+        <SelectionAction
+          label={`Paste effects to all ${items.length}`}
+          meta={fx.length ? `${fx.length} on the first` : undefined}
+          disabled={fx.length === 0}
+          onClick={() => onChange(pasteEffects(doc, [...items].sort((p, q) => p.from - q.from)[0].id, ids))}
+        />
+
+        <span className="t-caption" style={{ color: "var(--ink-tertiary)", paddingLeft: 2, marginTop: 4 }}>
+          {items.length} clips{track ? ` on ${track.name}` : ""}. Shared values edit together.
+        </span>
       </div>
     </div>
   );
 }
 
+/** A 28px row: what it does on the left, what it will produce on the right. */
+function SelectionAction({
+  label, meta, disabled, onClick,
+}: { label: string; meta?: string; disabled?: boolean; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, height: 28, width: "100%",
+        padding: "0 10px", textAlign: "left", cursor: disabled ? "default" : "pointer",
+        background: disabled ? "transparent" : hover ? "var(--surface-hover)" : "var(--surface-raised)",
+        border: `1px solid ${disabled ? "var(--border-hairline)" : "var(--border-edge)"}`,
+        borderRadius: "var(--r-control)",
+        color: disabled ? "var(--ink-disabled)" : "var(--ink-primary)",
+        fontSize: "var(--t-control-size)", fontWeight: 500,
+      }}
+    >
+      <span style={{ flex: 1 }}>{label}</span>
+      {meta && <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>{meta}</span>}
+    </button>
+  );
+}
+
+
+
+/** A value the selection disagrees about. Centred, so it reads as "no single
+ *  answer" rather than as a value you could edit. */
 function Mixed() {
   return (
     <div className="t-caption" style={{ ...FIELD, display: "grid", placeItems: "center", color: "var(--ink-tertiary)" }}>
