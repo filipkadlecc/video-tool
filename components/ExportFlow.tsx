@@ -118,6 +118,8 @@ export default function ExportFlow({
   const [jobId, setJobId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  /** The ✕ was pressed mid-render: ask before throwing the frames away. */
+  const [leaving, setLeaving] = useState(false);
   const previewRef = useRef<HTMLVideoElement>(null);
   const poll = useRef<number | null>(null);
   const locateRef = useRef<HTMLInputElement>(null);
@@ -139,6 +141,21 @@ export default function ExportFlow({
   }, [open, projectName, fileName]);
 
   useEffect(() => () => { if (poll.current) window.clearInterval(poll.current); }, []);
+
+  /*
+   * The other way out of the window: closing the tab, or navigating away.
+   *
+   * The render is a local process tied to this page's job, so leaving ends it
+   * the same way closing the dialog does — and the browser's own "leave site?"
+   * prompt is the only warning available for that exit.
+   */
+  useEffect(() => {
+    const rendering = status === "queued" || status === "rendering";
+    if (!rendering) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [status]);
 
   /*
    * Sources whose FILE is gone — asked of the disk, every time the dialog
@@ -276,7 +293,7 @@ export default function ExportFlow({
     }
   }, [fileName, code, durationInFrames, fps, width, height, format, projectId, quality, useRange, hasRange, rangeIn, rangeOut, doc]);
 
-  const reset = () => { setStatus("idle"); setResult(null); setFailure(null); setProgress(0); setFrames(null); };
+  const reset = () => { setStatus("idle"); setResult(null); setFailure(null); setProgress(0); setFrames(null); setLeaving(false); };
   const close = () => { onClose(); };
 
   /**
@@ -296,6 +313,7 @@ export default function ExportFlow({
     setStopping(false);
     setStatus("idle");
     setJobId(null);
+    setLeaving(false);
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, onClose]);
@@ -412,25 +430,51 @@ export default function ExportFlow({
         open
         padded
         width={520}
+        // Escape and the backdrop do not dismiss: this window IS the render,
+        // and a stray keypress should not end one. The ✕ asks first.
         dismissible={false}
-        hideClose
-        onClose={close}
         title="Rendering"
         subtitle={`${projectName} · ${FORMATS.find((f) => f.value === format)?.label}`}
+        onClose={() => setLeaving(true)}
         footer={
-          <>
-            <Button
-              size="dialog"
-              variant="ghost"
-              style={{ color: "var(--danger)" }}
-              disabled={stopping}
-              onClick={stopRender}
-            >
-              {stopping ? "Stopping…" : "Stop render"}
-            </Button>
-            <div style={{ flex: 1 }} />
-            <Button size="dialog" variant="secondary" onClick={close}>Hide and keep working</Button>
-          </>
+          leaving ? (
+            <>
+              <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                {frames && frames.done > 0
+                  ? `${frames.done} rendered ${frames.done === 1 ? "frame" : "frames"} would be thrown away.`
+                  : "Nothing has been written yet."}
+              </span>
+              <div style={{ flex: 1 }} />
+              <Button size="dialog" variant="secondary" onClick={() => setLeaving(false)}>
+                Keep rendering
+              </Button>
+              <Button
+                size="dialog"
+                variant="ghost"
+                style={{ color: "var(--danger)" }}
+                disabled={stopping}
+                onClick={stopRender}
+              >
+                {stopping ? "Stopping…" : "Stop and close"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="dialog"
+                variant="ghost"
+                style={{ color: "var(--danger)" }}
+                disabled={stopping}
+                onClick={stopRender}
+              >
+                {stopping ? "Stopping…" : "Stop render"}
+              </Button>
+              <div style={{ flex: 1 }} />
+              <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                Keep this window open — closing it stops the render.
+              </span>
+            </>
+          )
         }
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -455,9 +499,33 @@ export default function ExportFlow({
               {Math.min(100, Math.round(progress))}%{remaining ? ` · about ${remaining} left` : ""}
             </span>
           </div>
-          <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
-            Renders in the background — you can keep working.
-          </div>
+
+          {/*
+            Asked, not assumed.
+
+            There used to be a "Hide and keep working" button here, and nothing
+            anywhere showed the render once it was hidden — so hiding it meant
+            losing sight of it, and people went looking for a progress bar that
+            did not exist. The render now lives and dies with this window, which
+            is a simpler promise, and the only thing that can break it says so
+            first.
+          */}
+          {leaving && (
+            <div
+              style={{
+                display: "flex", gap: 10, padding: 12,
+                background: "var(--surface-raised)",
+                border: "1px solid var(--warning-tint-line)",
+                borderRadius: "var(--r-panel)",
+              }}
+            >
+              <Icon name="warn" size={16} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 1 }} />
+              <span className="t-body" style={{ color: "var(--ink-primary)", lineHeight: 1.5 }}>
+                Closing this window stops the render. It can&apos;t be resumed — the next export starts
+                again from the first frame.
+              </span>
+            </div>
+          )}
         </div>
       </Modal>
     );
@@ -608,8 +676,10 @@ export default function ExportFlow({
       subtitle={`${projectName} · ${exportFrames} frames at ${fps} fps`}
       footer={
         <>
+          {/* It does not render in the background any more, so it no longer
+              says it does — the progress window has to stay open. */}
           <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
-            Renders in the background — you can keep working.
+            Keep the progress window open until it finishes.
           </span>
           <div style={{ flex: 1 }} />
           <Button size="dialog" variant="ghost" onClick={close}>Cancel</Button>

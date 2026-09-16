@@ -43,6 +43,14 @@
     // resolve inside the eval sandbox rather than on disk. Type-checking 313
     // generated scenes as part of the app broke `next build` outright.
     "data",
+    // Ephemeral render artifacts. The render queue writes a scene and an entry
+    // file into remotion/scenes/ for the duration of a job and deletes them
+    // after — but while one is in flight they are app source as far as the
+    // compiler is concerned, and `next build` FAILS on them. Building while a
+    // render runs is not an exotic case; it is a Tuesday.
+    "remotion/scenes/_render_*",
+    "remotion/scenes/_thumb_*",
+    "remotion/scenes/_frames_*",
     // The standalone GIF-batch pipeline: _gifbatch.tsx is its own registerRoot
     // entry (never built by Next) and the .built.tsx scenes under scenes/gen
     // are generated output whose object literals widen to `string` instead of

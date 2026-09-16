@@ -68,8 +68,21 @@ function readProgress(job: RenderJob, line: string): void {
       return;
     }
   }
+  /*
+   * The fallback, for the phases that report no frames — bundling, stitching.
+   *
+   * It is deliberately NOT allowed to overwrite a frame-derived number, and
+   * never to reach 100: "Bundling 100%" arrives before a single frame exists,
+   * and the dialog was showing a full green bar beside "0 / 600 frames". A
+   * progress bar that claims to be finished while nothing has been written is
+   * worse than one that moves slowly.
+   */
+  if (job.renderedFrames !== undefined) return;
   const pct = line.match(/(\d+)%/);
-  if (pct) job.progress = parseInt(pct[1], 10);
+  if (pct) {
+    const value = parseInt(pct[1], 10);
+    if (Number.isFinite(value)) job.progress = Math.min(95, value);
+  }
 }
 
 // Use globalThis to persist state across Next.js dev mode module re-evaluations

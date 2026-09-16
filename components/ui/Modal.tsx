@@ -110,7 +110,9 @@ export default function Modal({
                 </div>
               )}
             </div>
-            {!hideClose && <IconButton icon="close" onClick={onClose} />}
+            {/* `title` is the accessible name for an icon-only button — without
+                it this ✕ was unnamed to a screen reader (and untestable). */}
+            {!hideClose && <IconButton icon="close" title="Close" onClick={onClose} />}
           </div>
         )}
 
