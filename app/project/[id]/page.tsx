@@ -38,7 +38,6 @@ import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
 import Tooltip from "@/components/ui/Tooltip";
 import ShortcutsModal from "@/components/ShortcutsModal";
-import { toSceneJson, sceneProblems } from "@/lib/scene-json";
 
 const titleCase = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
@@ -53,6 +52,7 @@ const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
 
 const DocTimeline = dynamic(() => import("@/components/DocTimeline"), { ssr: false });
 const TimelineStrip = dynamic(() => import("@/components/TimelineStrip"), { ssr: false });
+const CodeModeScreen = dynamic(() => import("@/components/CodeModeScreen"), { ssr: false });
 const EditorInspector = dynamic(() => import("@/components/EditorInspector"), { ssr: false });
 const FootageBrowser = dynamic(() => import("@/components/FootageBrowser"), { ssr: false });
 const EffectsPanel = dynamic(() => import("@/components/EffectsPanel"), { ssr: false });
@@ -1058,6 +1058,28 @@ export default function ProjectEditor() {
   // by importing — "Open in editor" — rather than by being parsed in place.
   const hasTimeline = Boolean(docView);
 
+  /** Code mode is only a mode for a DOCUMENT project; legacy code keeps its panel. */
+  const codeMode = showCodeEditor && Boolean(doc);
+
+  /*
+   * One preview element, used by both layouts. Built once so the studio layout
+   * and code mode cannot drift into showing different things — the bug this
+   * replaces was exactly that: two call sites, one of which rendered the legacy
+   * scene code for a project that has no scene code.
+   */
+  const docPreview = doc ? (
+    <EditorPreview
+      range={range}
+      doc={doc}
+      playerRef={playerRef}
+      selectedIds={selectedItemIds}
+      onSelectionChange={setSelectedItemIds}
+      onChange={commitDoc}
+      onSeek={seekTo}
+      onTogglePlay={togglePlay}
+    />
+  ) : null;
+
   return (
     <PlayheadContext.Provider value={playhead}>
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -1380,7 +1402,33 @@ export default function ProjectEditor() {
         )}
       </div>
 
-      {/* Studio layout: resizable panels */}
+      {/*
+        Code mode is a SCREEN, not a panel (6a). It used to drop scene.json into
+        the timeline's slot and leave the editor standing around it — which also
+        meant the preview, gated on the document being visible, fell back to the
+        legacy scene-code path and rendered nothing for a timeline project.
+      */}
+      {codeMode && doc ? (
+        <CodeModeScreen
+          doc={doc}
+          selectedIds={selectedItemIds}
+          onSelectionChange={setSelectedItemIds}
+          saveLabel={SAVE_LABEL[saveState].toLowerCase()}
+          preview={docPreview}
+          strip={
+            <TimelineStrip
+              doc={doc}
+              selectedIds={selectedItemIds}
+              onSelectionChange={setSelectedItemIds}
+              onSeek={seekTo}
+              onScrubStart={handleScrubStart}
+              onExpand={() => setShowCodeEditor(false)}
+              onSplit={splitSelectedAtPlayhead}
+            />
+          }
+        />
+      ) : (
+      /* Studio layout: resizable panels */
       <div style={{ flex: 1, minHeight: 0, background: "var(--border-hairline)" }}>
         <Group
           orientation="vertical"
@@ -1470,16 +1518,7 @@ export default function ProjectEditor() {
                     </div>
                   )}
                   {docView ? (
-                    <EditorPreview
-                      range={range}
-                      doc={docView}
-                      playerRef={playerRef}
-                      selectedIds={selectedItemIds}
-                      onSelectionChange={setSelectedItemIds}
-                      onChange={commitDoc}
-                      onSeek={seekTo}
-                      onTogglePlay={togglePlay}
-                    />
+                    docPreview
                   ) : isTerminalProject ? (
                     <TerminalPreview
                       projectId={projectId}
@@ -1626,69 +1665,22 @@ export default function ProjectEditor() {
               <Separator className="resize-handle resize-handle-horizontal" />
               <Panel id="code" defaultSize="35%" minSize="10%">
                 <div style={{ background: "var(--surface-chrome)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-                  {doc ? (
-                    /*
-                     * 6a — the composition as scene.json, plus the problems it
-                     * has. A readable PROJECTION of the document rather than
-                     * the document itself: the internal shape is right for the
-                     * editor and unreadable as a document.
-                     */
-                    (() => {
-                      const json = JSON.stringify(toSceneJson(doc), null, 2);
-                      const problems = sceneProblems(doc, json);
-                      return (
-                        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-                          <div style={{ flex: 1, minHeight: 0 }}>
-                            <CodeEditor
-                              code={json}
-                              onChange={() => {}}
-                              language="json"
-                              filename="scene.json"
-                              readOnly
-                            />
-                          </div>
-                          {problems.length > 0 && (
-                            <div
-                              style={{
-                                flexShrink: 0, maxHeight: 88, overflowY: "auto",
-                                background: "var(--surface-chrome)",
-                                borderTop: "1px solid var(--border-hairline)",
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, height: 28, padding: "0 12px" }}>
-                                <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Problems</span>
-                                <span className="t-data-s" style={{ color: "var(--warning)" }}>{problems.length}</span>
-                              </div>
-                              {problems.map((pr, i) => (
-                                <div key={i} style={{ display: "flex", gap: 8, padding: "0 12px 8px" }}>
-                                  <Icon name="warn" size={14} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 2 }} />
-                                  <div>
-                                    <div className="t-body" style={{ color: "var(--ink-primary)" }}>
-                                      Line {pr.line} · {pr.message}
-                                    </div>
-                                    <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>{pr.remedy}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <CodeEditor
-                      code={code}
-                      onChange={handleCodeChange}
-                      language={isTerminalProject ? "vhs" : "typescript"}
-                      filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
-                    />
-                  )}
+                  {/* A legacy project's code IS its composition, so this is an
+                      edit surface rather than a readout. A DOCUMENT project's
+                      scene.json lives in code mode's own screen (6a). */}
+                  <CodeEditor
+                    code={code}
+                    onChange={handleCodeChange}
+                    language={isTerminalProject ? "vhs" : "typescript"}
+                    filename={isTerminalProject ? "tape.tape" : "Scene.tsx"}
+                  />
                 </div>
               </Panel>
             </>
           )}
         </Group>
       </div>
+      )}
 
       {docView && (
         <SnippetEditDialog

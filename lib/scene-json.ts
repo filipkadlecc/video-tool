@@ -106,6 +106,68 @@ export function toSceneJson(doc: EditorDoc): SceneJson {
   };
 }
 
+/** The rendered text, plus where each clip lives in it. */
+export interface SceneJsonText {
+  text: string;
+  /** itemId -> [first line, last line], 1-based and inclusive. */
+  lines: Record<string, [number, number]>;
+}
+
+/**
+ * The composition as text, WITH a line map.
+ *
+ * Written out by hand rather than with `JSON.stringify` because the whole
+ * point of code mode is that a clip in the timeline and a clip in the text are
+ * the same clip: click one, the other highlights. That needs to know which
+ * lines belong to which item.
+ *
+ * The line numbers used to be recovered afterwards by searching the text for
+ * `"in": <frame>`, which is wrong the moment two clips start on the same frame
+ * — and two clips starting on the same frame is not an edge case, it is what
+ * a cut between two tracks looks like.
+ */
+export function sceneJsonText(doc: EditorDoc): SceneJsonText {
+  const scene = toSceneJson(doc);
+  const lines: Record<string, [number, number]> = {};
+  const out: string[] = [];
+  const push = (text: string) => out.push(text);
+
+  // Ids in document order, matched to the clips as they are written out.
+  const idsByTrack = [...doc.tracks].reverse().map((t) => t.items.map((i) => i.id));
+
+  push("{");
+  push(`  "frame": { "w": ${scene.frame.w}, "h": ${scene.frame.h}, "fps": ${scene.frame.fps} },`);
+  push(`  "duration": ${scene.duration},`);
+  push('  "tracks": [');
+  scene.tracks.forEach((track, ti) => {
+    push(`    { "id": ${JSON.stringify(track.id)}, "kind": ${JSON.stringify(track.kind)}, "clips": [`);
+    track.clips.forEach((clip, ci) => {
+      const id = idsByTrack[ti]?.[ci];
+      const start = out.length + 1;
+      const comma = ci === track.clips.length - 1 ? "" : ",";
+      const fields = Object.entries(clip)
+        .map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`);
+      const oneLine = `      { ${fields.join(", ")} }${comma}`;
+      // A cut is one line; a title with a face, a size, a fill and two
+      // effects is not. Wrapping at the point it stops being scannable keeps
+      // both readable, which is the entire job of this projection.
+      if (oneLine.length <= 96) {
+        push(oneLine);
+      } else {
+        push("      {");
+        fields.forEach((f, fi) => push(`        ${f}${fi === fields.length - 1 ? "" : ","}`));
+        push(`      }${comma}`);
+      }
+      if (id) lines[id] = [start, out.length];
+    });
+    push(`    ]}${ti === scene.tracks.length - 1 ? "" : ","}`);
+  });
+  push("  ]");
+  push("}");
+
+  return { text: out.join("\n"), lines };
+}
+
 export interface SceneProblem {
   line: number;
   itemId?: string;
@@ -119,24 +181,50 @@ export interface SceneProblem {
  * Missing sources are the whole point: a clip whose file is gone renders as
  * black, and today nothing says so until the export is already finished.
  */
-export function sceneProblems(doc: EditorDoc, text: string): SceneProblem[] {
+export function sceneProblems(doc: EditorDoc, lineMap: Record<string, [number, number]>): SceneProblem[] {
   const out: SceneProblem[] = [];
   const known = new Set(doc.assets.map((a) => a.id));
-  const lines = text.split("\n");
 
   for (const track of doc.tracks) {
     for (const item of track.items) {
+      // Point at the line the clip is on, so the problem and the thing it is
+      // about are in the same place.
+      const line = lineMap[item.id]?.[0] ?? 1;
+
       const assetId = (item as { assetId?: string }).assetId;
       if (assetId && !known.has(assetId)) {
-        // Point at the line the clip is on, so the problem and the thing it is
-        // about are the same place.
-        const needle = `"in": ${item.from}`;
-        const line = Math.max(1, lines.findIndex((l) => l.includes(needle)) + 1);
         out.push({
           line,
           itemId: item.id,
           message: `${assetId} isn't on disk — this clip will render black.`,
           remedy: "Locate the file, or delete the clip.",
+        });
+        continue;
+      }
+
+      // A clip nothing can be seen through is almost always a mistake left
+      // behind by an experiment, and it renders as an invisible gap.
+      if (item.layout.opacity === 0) {
+        out.push({
+          line,
+          itemId: item.id,
+          message: "This clip is fully transparent — nothing of it will appear.",
+          remedy: "Raise its opacity, or delete it.",
+        });
+        continue;
+      }
+
+      // A clip entirely outside the frame is the same class of problem: it
+      // still costs render time and shows nothing.
+      const l = item.layout;
+      const offScreen = l.x + l.width <= 0 || l.y + l.height <= 0
+        || l.x >= doc.size.width || l.y >= doc.size.height;
+      if (offScreen) {
+        out.push({
+          line,
+          itemId: item.id,
+          message: "This clip sits entirely outside the frame.",
+          remedy: "Move it back into shot, or delete it.",
         });
       }
     }

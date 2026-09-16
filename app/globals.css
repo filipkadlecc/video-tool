@@ -289,6 +289,17 @@ input, textarea { font-family: inherit; color: inherit; }
 .resize-handle:hover,
 .resize-handle:active { background: var(--ink-disabled); }
 
+/*
+ * Code mode's line states (6a). Monaco owns the editor's own colours, so these
+ * are the only two things painted on top of it: the clip you have selected, and
+ * a line something is wrong with. Both are washes rather than new hues — the
+ * system has five inks and two status colours, and a code view is not a reason
+ * to invent a sixth.
+ */
+.vt-code-selected { background: rgba(244, 244, 245, 0.04); }
+.vt-code-selected-edge { box-shadow: inset 2px 0 0 0 var(--ink-primary); }
+.vt-code-warned { background: rgba(233, 169, 58, 0.07); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
