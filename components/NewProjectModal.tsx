@@ -19,6 +19,7 @@ import { SNIPPET_SCHEMAS, buildDefaultValues } from "@/lib/snippet-schemas";
 import { SNIPPET_ICONS } from "@/lib/snippet-icons";
 import { renderSnippet } from "@/lib/snippet-template";
 import StylePreviewModal from "@/components/StylePreviewModal";
+import IconButton from "@/components/ui/IconButton";
 
 interface SnippetSummary {
   id: string;
@@ -461,21 +462,47 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const ratioForOrientation = (o: Orientation) =>
     o === "horizontal" ? "16:9" : o === "vertical" ? "9:16" : "1:1";
 
+  /*
+   * 4c / 4d — a full-screen flow, not a dialog.
+   *
+   * The design makes this a screen because it IS one: two steps, a decision on
+   * each, and a consequence worth stating. A 560px box with a scroll bar made
+   * it feel like a form to get through rather than a choice to make.
+   *
+   * The logic underneath is untouched — same steps, same creation, same
+   * uploads. Rewriting the machinery that creates projects in order to get a
+   * layout would be trading a working thing for a prettier one.
+   */
   return (
     <>
-    <Modal
-      open={open}
-      onClose={handleClose}
-      width={560}
-      title={
-        step === 1
-          ? typeLocked
-            ? `New ${typeMeta.label} project`
-            : "New project"
-          : animationType === "terminal" ? "Describe the recording" : "Describe the animation"
-      }
-      stepLabel={`Step ${step} of 2`}
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        position: "fixed", inset: 0, zIndex: 60,
+        background: "var(--surface-void)",
+        display: "flex", flexDirection: "column",
+        animation: "vt-fade-in var(--dur-enter) var(--ease)",
+      }}
     >
+      {/* 56px header: what this is, where you are, and the way out */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 12, height: 56, flexShrink: 0,
+          padding: "0 32px", borderBottom: "1px solid var(--border-hairline)",
+        }}
+      >
+        <span className="t-heading" style={{ color: "var(--ink-primary)" }}>New project</span>
+        <StepPill n={1} label="Kind" active={step === 1} />
+        <span style={{ width: 20, height: 1, background: "var(--border-hairline)" }} />
+        <StepPill n={2} label="Frame" active={step === 2} />
+        <div style={{ flex: 1 }} />
+        <IconButton icon="close" title="Close" onClick={handleClose} />
+      </div>
+
+      {/* the 760px column the design centres everything in */}
+      <div className="vt-scroll" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+        <div style={{ width: 760, margin: "0 auto", padding: "40px 0 48px", display: "flex", flexDirection: "column", gap: 32 }}>
       {/* Step progress bar */}
       <div style={{ display: "flex", gap: 6, padding: "0 20px 16px" }}>
         <div style={{ flex: 1, height: 3, background: "var(--brand)", borderRadius: 2 }} />
@@ -633,19 +660,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </div>
             </div>
 
-            <div style={{ paddingTop: 4 }}>
-              <Button
-                variant="primary"
-                size="lg"
-                full
-                onClick={() => {
-                  if (name.trim()) setStep(2);
-                }}
-                disabled={!name.trim()}
-              >
-                Next &middot; Content <Icon name="arrowRight" size={14} />
-              </Button>
-            </div>
           </div>
         )}
 
@@ -1329,27 +1343,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </>
             )}
 
-            <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
-              <Button variant="outline" onClick={() => setStep(1)} icon="chevronLeft">
-                Back
-              </Button>
-              <div style={{ flex: 1 }} />
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={handleCreate}
-                disabled={!canCreate() || creating}
-                icon={isSmartTrim ? "sparkle" : selectedSnippet ? "layers" : "sparkle"}
-              >
-                {creating
-                  ? "Creating..."
-                  : isVideo
-                    ? "Create & build first cut"
-                    : selectedSnippet
-                      ? `Create from ${selectedSnippet.name}`
-                      : animationType === "terminal" ? "Create recording" : "Create animation"}
-              </Button>
-            </div>
           </div>
         )}
       </div>
@@ -1511,7 +1504,59 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           </div>
         </div>
       )}
-    </Modal>
+        </div>
+      </div>
+
+      {/* 72px footer: the consequence on the left, the actions on the right */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 8, height: 72, flexShrink: 0,
+          padding: "0 32px", background: "var(--surface-chrome)",
+          borderTop: "1px solid var(--border-hairline)",
+        }}
+      >
+        <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+          {step === 1
+            ? "The kind decides which workspace the editor opens in."
+            : animationType === "video"
+              ? "Opens in Cut · ⌥2 switches to Direct"
+              : "Opens in Direct · ⌥1 switches to Cut"}
+        </span>
+        <div style={{ flex: 1 }} />
+        {step === 2 && (
+          <Button variant="ghost" size="dialog" icon="chevronLeft" onClick={() => setStep(1)}>
+            Back
+          </Button>
+        )}
+        <Button variant="ghost" size="dialog" onClick={handleClose}>Cancel</Button>
+        {step === 1 ? (
+          <Button
+            variant="primary"
+            size="dialog"
+            iconRight="arrowRight"
+            disabled={!name.trim()}
+            onClick={() => { if (name.trim()) setStep(2); }}
+          >
+            Next · Content
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            size="dialog"
+            onClick={handleCreate}
+            disabled={!canCreate() || creating}
+          >
+            {creating
+              ? "Creating…"
+              : isVideo
+                ? "Create & build first cut"
+                : selectedSnippet
+                  ? `Create from ${selectedSnippet.name}`
+                  : animationType === "terminal" ? "Create recording" : "Create animation"}
+          </Button>
+        )}
+      </div>
+    </div>
     <StylePreviewModal
       open={stylePreviewOpen}
       onClose={() => setStylePreviewOpen(false)}
@@ -1566,5 +1611,26 @@ function ModeCard({
         {subtitle}
       </span>
     </button>
+  );
+}
+
+
+/**
+ * A step marker. Active is an ink-primary fill with dark text; inactive is a
+ * raised chip — so where you are reads at a glance rather than by counting.
+ */
+function StepPill({ n, label, active }: { n: number; label: string; active: boolean }) {
+  return (
+    <span
+      className="t-control"
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6, height: 22, padding: "0 10px",
+        borderRadius: "var(--r-pill)",
+        background: active ? "var(--ink-primary)" : "var(--surface-raised)",
+        color: active ? "var(--surface-void)" : "var(--ink-secondary)",
+      }}
+    >
+      {n} · {label}
+    </span>
   );
 }
