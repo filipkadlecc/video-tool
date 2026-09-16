@@ -128,6 +128,15 @@ function channelText(info: ChannelInfo | undefined, v: number | undefined): stri
   return String(Math.round(v));
 }
 
+/** What the inspector calls each row — the lanes must agree with it. */
+const ROW_LABELS: Record<string, string> = {
+  position: "Position",
+  scale: "Scale",
+  rotation: "Rotation",
+  anchor: "Anchor",
+  opacity: "Opacity",
+};
+
 const ITEM_ICONS: Record<string, string> = {
   video: "film", audio: "monitor", image: "layers", gif: "layers",
   text: "layers", solid: "layers", captions: "layers", scene: "layers",
@@ -617,13 +626,24 @@ export default function DocTimeline({
     const id = [...selectedIds][0];
     const found = findItem(doc, id);
     if (!found) return null;
-    // EVERY animatable property, not only the keyed ones. A property with no
-    // keys says so in its own lane rather than being absent — otherwise you
-    // cannot tell "not animated" from "not animatable", and the row you are
-    // looking for simply isn't there.
-    const channels = channelsFor(found.item.type).map((c) => c.id);
-    if (channels.length === 0) return null;
-    return { trackId: found.track.id, item: found.item, channels };
+    /*
+     * EVERY animatable property, not only the keyed ones — otherwise you cannot
+     * tell "not animated" from "not animatable", and the row you are looking
+     * for simply isn't there.
+     *
+     * Grouped by inspector ROW, not by channel: Position is one lane carrying
+     * both x and y, the way the inspector gives that row one diamond. Seven
+     * lanes for what the panel beside them calls five properties made the two
+     * views disagree about what a property is.
+     */
+    const rows: { row: string; label: string; channels: ChannelId[] }[] = [];
+    for (const info of channelsFor(found.item.type)) {
+      const existing = rows.find((r) => r.row === info.row);
+      if (existing) existing.channels.push(info.id);
+      else rows.push({ row: info.row, label: ROW_LABELS[info.row] ?? info.label, channels: [info.id] });
+    }
+    if (rows.length === 0) return null;
+    return { trackId: found.track.id, item: found.item, rows };
   }, [doc, selectedIds, expanded]);
 
   /**
@@ -674,7 +694,7 @@ export default function DocTimeline({
       y += trackHeight(t);
       // Property lanes push everything below them down; leaving them out of
       // this is the same class of bug as dividing by a fixed track height.
-      if (keyLanes && keyLanes.trackId === t.id) y += keyLanes.channels.length * LANE_H;
+      if (keyLanes && keyLanes.trackId === t.id) y += keyLanes.rows.length * LANE_H;
     }
     out.push(y);
     return out;
@@ -949,13 +969,19 @@ export default function DocTimeline({
 
     {/* Property lanes for the selected clip — the keyframe model's third view,
         on the same ruler as the cuts. */}
-    {keyLanes && keyLanes.trackId === track.id && keyLanes.channels.map((ch) => {
-      // `keys` is absent entirely on a clip that has never been animated, and
-      // every animatable channel gets a lane now — so this cannot assert.
-      const keys = keyLanes.item.keys?.[ch] ?? [];
-      const info = CHANNELS_BY_ID[ch];
+    {keyLanes && keyLanes.trackId === track.id && keyLanes.rows.map((row) => {
+      /*
+       * One lane per inspector ROW. A row with two channels (Position, Anchor)
+       * merges their keys onto one line, because that is what the inspector's
+       * single diamond means: a key on x is a key on the Position row.
+       */
+      const keyed = row.channels.flatMap((ch) => keyLanes.item.keys?.[ch] ?? []);
+      const frames = [...new Set(keyed.map((k) => k.frame))].sort((a, b) => a - b);
+      const value = row.channels.length > 1
+        ? row.channels.map((ch) => channelText(CHANNELS_BY_ID[ch], laneValues?.[ch])).join(", ")
+        : channelText(CHANNELS_BY_ID[row.channels[0]], laneValues?.[row.channels[0]]);
       return (
-        <div key={ch} style={{ display: "flex", height: LANE_H, borderBottom: "1px solid var(--border-hairline)" }}>
+        <div key={row.row} style={{ display: "flex", height: LANE_H, borderBottom: "1px solid var(--border-hairline)" }}>
           <div
             style={{
               width: LABEL_W, flexShrink: 0, display: "flex", alignItems: "center",
@@ -963,36 +989,36 @@ export default function DocTimeline({
               background: "var(--surface-chrome)",
             }}
           >
-            <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{info?.label ?? ch}</span>
+            <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{row.label}</span>
           </div>
           <div style={{ position: "relative", width: contentW, background: "rgba(244,244,245,0.02)" }}>
-            {keys.length === 0 && (
+            {frames.length === 0 && (
               // An empty lane says nothing; an empty lane that states the value
               // it is holding says "this property exists, it just isn't moving".
               <span
                 className="t-data-s"
                 style={{ position: "absolute", left: 8, top: "50%", marginTop: -7, color: "var(--ink-disabled)" }}
               >
-                no keys · {channelText(info, laneValues?.[ch])}
+                no keys · {value}
               </span>
             )}
-            {keys.length > 1 && (
+            {frames.length > 1 && (
               <div
                 style={{
                   position: "absolute", top: "50%", height: 1,
-                  left: (keyLanes.item.from + keys[0].frame) * pxPerFrame,
-                  width: Math.max(0, (keys[keys.length - 1].frame - keys[0].frame) * pxPerFrame),
+                  left: (keyLanes.item.from + frames[0]) * pxPerFrame,
+                  width: Math.max(0, (frames[frames.length - 1] - frames[0]) * pxPerFrame),
                   background: "var(--surface-active)",
                 }}
               />
             )}
-            {keys.map((k) => (
+            {frames.map((f) => (
               <span
-                key={k.frame}
-                title={`${info?.label ?? ch} · ${k.value}`}
+                key={f}
+                title={`${row.label} · frame ${f}`}
                 style={{
                   position: "absolute", top: "50%", marginTop: -4.5, marginLeft: -4.5,
-                  left: (keyLanes.item.from + k.frame) * pxPerFrame,
+                  left: (keyLanes.item.from + f) * pxPerFrame,
                   width: 9, height: 9, transform: "rotate(45deg)",
                   background: "var(--ink-primary)",
                 }}

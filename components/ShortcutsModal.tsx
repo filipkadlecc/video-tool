@@ -25,58 +25,58 @@ export type TimelineKind = "doc" | "code";
 type Row = { label: string; keys: string[]; only?: TimelineKind };
 type Group = { title: string; rows: Row[] };
 
+/*
+ * Three groups, named for the three questions you arrive with: how do I move
+ * around, how do I change the cut, how do I move around the app.
+ *
+ * They used to be five — Playback, Editing, Selection & view, Canvas & panels,
+ * Anywhere in a project — which is a taxonomy of where the code lives rather
+ * than of what you are trying to do.
+ */
 const GROUPS: Group[] = [
   {
-    title: "Playback",
+    title: "Transport",
     rows: [
       { label: "Play / pause", keys: ["Space"] },
-      { label: "Move playhead 1 frame", keys: ["←", "→"] },
-      { label: "Jump 10 frames", keys: ["Shift", "~+", "←", "→"] },
+      { label: "Step one frame", keys: ["←", "→"] },
+      { label: "Step ten frames", keys: ["Shift", "~+", "←", "→"] },
       { label: "Jump to start / end", keys: ["Home", "End"] },
+      // Implemented since v0.1.100, used by the export dialog's own copy, and
+      // listed nowhere until now.
+      { label: "Set in / out", keys: ["I", "O"], only: "doc" },
+      { label: "Clear in / out", keys: ["⇧X"], only: "doc" },
       { label: "Scrub", keys: ["~click / drag the ruler"] },
+      { label: "Fit preview", keys: ["F"] },
     ],
   },
   {
     title: "Editing",
     rows: [
-      { label: "Split clip at playhead", keys: ["S", "~or", "⌘K"] },
+      { label: "Split at playhead", keys: ["S", "~or", "⌘K"] },
       { label: "Split where the cursor is", keys: ["Alt", "~+ click a clip"], only: "code" },
       { label: "Delete clip + close gap", keys: ["Delete"] },
       { label: "Copy / paste at playhead", keys: ["⌘C", "⌘V"], only: "doc" },
-      { label: "Duplicate", keys: ["⌘D"], only: "doc" },
+      { label: "Duplicate clip", keys: ["⌘D"], only: "doc" },
       { label: "Trim / move", keys: ["~drag a clip's edges or body"] },
       { label: "Move to another track", keys: ["~drag a clip up or down"], only: "doc" },
-      { label: "More actions", keys: ["~right-click a clip"], only: "code" },
-    ],
-  },
-  {
-    title: "Selection & view",
-    rows: [
       { label: "Select several clips", keys: ["Shift", "~or", "⌘", "~+ click"] },
       { label: "Deselect", keys: ["Esc"] },
-      { label: "Zoom", keys: ["⌘", "~+ scroll"] },
-      { label: "Fit to window", keys: ["F"] },
-      { label: "Snap on / off", keys: ["~the SNAP button, above"] },
-    ],
-  },
-  {
-    title: "Canvas & panels",
-    rows: [
       { label: "Edit a text layer in place", keys: ["~double-click it on the canvas"], only: "doc" },
       { label: "Set an entrance / exit", keys: ["~drag an effect onto a clip's left / right half"], only: "doc" },
-      { label: "Import footage", keys: ["~drop files on a track, or ⌘I in Footage"], only: "doc" },
+      { label: "More actions", keys: ["~right-click a clip"], only: "code" },
+      { label: "Undo / redo", keys: ["⌘Z", "⌘⇧Z"] },
     ],
   },
   {
-    // Registered on the project page, so they work in both editors — and were
-    // documented in neither sheet before.
-    title: "Anywhere in a project",
+    title: "Workspace",
     rows: [
+      { label: "Cut / Direct", keys: ["⌥1", "⌥2"], only: "doc" },
+      { label: "Code view", keys: ["⌥⌘C"], only: "doc" },
+      { label: "Zoom the timeline", keys: ["⌘", "~+ scroll"] },
+      { label: "Snap on / off", keys: ["~the Snap toggle, above"] },
+      { label: "Import footage", keys: ["~drop files on a track, or ⌘I in Footage"], only: "doc" },
       { label: "Save now", keys: ["⌘S"] },
       { label: "Export", keys: ["⌘E"] },
-      { label: "Undo / redo", keys: ["⌘Z", "⌘⇧Z"] },
-      { label: "Cut / Direct workspace", keys: ["⌥1", "⌥2"], only: "doc" },
-      { label: "Code view", keys: ["⌥⌘C"], only: "doc" },
       { label: "This sheet", keys: ["⌘/"] },
     ],
   },
@@ -121,24 +121,40 @@ export default function ShortcutsModal({
             {col.map((group) => (
               <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>{group.title}</span>
-                {group.rows.map((row, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                    <span style={{ fontSize: 13, color: "var(--ink-secondary)", flex: 1, minWidth: 0 }}>
-                      {row.label}
-                    </span>
-                    <span style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                      {row.keys.map((k, j) =>
-                        k.startsWith("~") ? (
-                          <span className="t-caption" key={j} style={{ color: "var(--ink-disabled)" }}>
-                            {k.slice(1)}
-                          </span>
-                        ) : (
-                          <Kbd key={j}>{k}</Kbd>
-                        ),
-                      )}
-                    </span>
-                  </div>
-                ))}
+                {group.rows.map((row, i) => {
+                  /*
+                   * A row whose "keys" are a sentence — a mouse gesture — puts
+                   * that sentence on its own line. Side by side in a 210px
+                   * column, a long label and a long sentence fought each other
+                   * down to one word per line.
+                   */
+                  const prose = row.keys.length === 1 && row.keys[0].startsWith("~");
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex", gap: prose ? 2 : 10,
+                        flexDirection: prose ? "column" : "row",
+                        alignItems: prose ? "stretch" : "baseline",
+                      }}
+                    >
+                      <span style={{ fontSize: 13, color: "var(--ink-secondary)", flex: prose ? undefined : 1, minWidth: 0 }}>
+                        {row.label}
+                      </span>
+                      <span style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0, flexWrap: "wrap" }}>
+                        {row.keys.map((k, j) =>
+                          k.startsWith("~") ? (
+                            <span className="t-caption" key={j} style={{ color: "var(--ink-disabled)" }}>
+                              {k.slice(1)}
+                            </span>
+                          ) : (
+                            <Kbd key={j}>{k}</Kbd>
+                          ),
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>

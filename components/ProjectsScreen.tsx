@@ -40,15 +40,27 @@ function sizeLabel(p: ProjectMeta): string {
 }
 
 export default function ProjectsScreen({
-  title, projects, collections, activeCollectionId, unfiledCount,
+  title, railTitle, projects, allProjects, collections, activeCollectionId, unfiledCount, unfiledActive, onSelectUnfiled,
   onOpen, onSelectCollection, onNewCollection, onNewProject,
   onAssign, onAssignNew, onDuplicate, onDelete,
 }: {
   title: string;
   projects: ProjectMeta[];
   collections: Collection[];
+  /** The rail's own top row, when it should not repeat the page title. */
+  railTitle?: string;
+  /**
+   * Everything the rail counts against. The grid shows a FILTERED list, and
+   * counting the collections from that made every count 0 in the Unfiled view
+   * — where, by definition, nothing has a collection.
+   */
+  allProjects?: ProjectMeta[];
   activeCollectionId: string | null;
   unfiledCount: number;
+  /** Whether the "Unfiled" row is the current view. */
+  unfiledActive?: boolean;
+  /** Show only projects in no collection. */
+  onSelectUnfiled?: () => void;
   onOpen: (id: string) => void;
   onSelectCollection: (c: Collection | null) => void;
   onNewCollection: () => void;
@@ -72,9 +84,9 @@ export default function ProjectsScreen({
 
   const countsByCollection = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const p of projects) if (p.collectionId) c[p.collectionId] = (c[p.collectionId] ?? 0) + 1;
+    for (const p of allProjects ?? projects) if (p.collectionId) c[p.collectionId] = (c[p.collectionId] ?? 0) + 1;
     return c;
-  }, [projects]);
+  }, [projects, allProjects]);
 
   const toggle = (id: string, additive: boolean) => {
     setSelected((prev) => {
@@ -102,8 +114,8 @@ export default function ProjectsScreen({
 
         <div className="vt-scroll" style={{ overflowY: "auto", flex: 1 }}>
           <RailRow
-            label={title}
-            count={projects.length}
+            label={railTitle ?? title}
+            count={railTitle ? (allProjects ?? projects).length : projects.length}
             active={activeCollectionId === null}
             onClick={() => onSelectCollection(null)}
           />
@@ -117,7 +129,14 @@ export default function ProjectsScreen({
             />
           ))}
           <div style={{ height: 1, background: "var(--border-hairline)", margin: "8px 0" }} />
-          <RailRow label="Unfiled" count={unfiledCount} active={false} onClick={() => onSelectCollection(null)} />
+          {/* Unfiled is a real filter now. It used to call the same handler as
+              the row above it, so it showed a count and then did nothing. */}
+          <RailRow
+            label="Unfiled"
+            count={unfiledCount}
+            active={Boolean(unfiledActive)}
+            onClick={() => (onSelectUnfiled ? onSelectUnfiled() : onSelectCollection(null))}
+          />
         </div>
       </aside>
 

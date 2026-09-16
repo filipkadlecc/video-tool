@@ -23,6 +23,16 @@ import { useToast } from "@/components/ui/Toast";
  * back button, a bookmark and a pasted link all work. The routes under app/ are
  * thin wrappers that pass what they matched; everything else lives here.
  */
+/**
+ * The id that means "in no collection".
+ *
+ * A reserved word rather than a new route, so Unfiled is addressable the same
+ * way every other screen is — `/collection/unfiled` — without inventing a
+ * second shape of URL for one filter. No real collection can claim it: ids are
+ * generated, not typed.
+ */
+const UNFILED = "unfiled";
+
 export default function Workspace({
   type = null,
   collectionId = null,
@@ -38,12 +48,19 @@ export default function Workspace({
   const selectedType = type;
   // Resolved from the id in the URL once collections land, so a deep link to a
   // collection works before anything has been clicked.
-  const selectedCollection = collectionId
+  const selectedCollection = collectionId && collectionId !== UNFILED
     ? collections.find((c) => c.id === collectionId) ?? null
     : null;
+  /** The "Unfiled" view — a filter with its own URL, like every other screen. */
+  const unfiledView = collectionId === UNFILED;
   const setSelectedType = (t: AnimationType | null) => router.push(t ? `/${t}` : "/");
+  /*
+   * Clearing the collection returns to the grid you were IN, not to Home.
+   * Inside /animation, the rail's own top row ("All animations") used to
+   * navigate home — out of the very list it was offering to show you all of.
+   */
   const setSelectedCollection = (c: Collection | null) =>
-    router.push(c ? `/collection/${c.id}` : "/");
+    router.push(c ? `/collection/${c.id}` : selectedType ? `/${selectedType}` : "/");
   const [modalOpen, setModalOpen] = useState(false);
   const [storageOpen, setStorageOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -266,7 +283,9 @@ export default function Workspace({
   );
 
   // ───── 4a — Home ─────
-  if (selectedType === null && !selectedCollection) {
+  // `unfiledView` has no collection object to point at, so it has to be
+  // excluded here or Home swallows it.
+  if (selectedType === null && !selectedCollection && !unfiledView) {
     return shell(
       <HomeScreen
         projects={projects.filter(matchesQuery)}
@@ -291,6 +310,47 @@ export default function Workspace({
     );
   }
 
+  // ───── 4b — everything in no collection ─────
+  if (unfiledView) {
+    const unfiled = projects.filter((p) => !p.collectionId).filter(matchesQuery);
+    return shell(
+      <ProjectsScreen
+        title="Unfiled"
+        railTitle="All projects"
+        projects={unfiled}
+        allProjects={projects}
+        collections={collections}
+        activeCollectionId={null}
+        unfiledCount={projects.filter((p) => !p.collectionId).length}
+        unfiledActive
+        onSelectUnfiled={() => router.push(`/collection/${UNFILED}`)}
+        onOpen={(id) => router.push(`/project/${id}`)}
+        onSelectCollection={(c) => setSelectedCollection(c)}
+        onNewCollection={() => { void createCollection(); }}
+        onNewProject={() => setModalOpen(true)}
+        onAssign={assignMany}
+        onAssignNew={assignManyNew}
+        onDuplicate={duplicateMany}
+        onDelete={deleteMany}
+      />,
+      <AppHeader
+        back={{ label: "Home", onClick: () => router.push("/") }}
+        search={{ value: query, onChange: setQuery, placeholder: "Search unfiled" }}
+        onSettings={undefined}
+        settingsMenu={[
+          { label: "Storage…", icon: "storage", onSelect: () => setStorageOpen(true) },
+          { separator: true as const },
+          { label: "About Video tool", icon: "info", onSelect: () => setAboutOpen(true) },
+        ]}
+        actions={
+          <Button size="form" variant="primary" icon="plus" onClick={() => setModalOpen(true)}>
+            New project
+          </Button>
+        }
+      />,
+    );
+  }
+
   // ───── 4b — one collection ─────
   if (selectedCollection) {
     const inCollection = projects.filter((p) => p.collectionId === selectedCollection.id).filter(matchesQuery);
@@ -301,6 +361,8 @@ export default function Workspace({
         collections={collections}
         activeCollectionId={selectedCollection.id}
         unfiledCount={projects.filter((p) => !p.collectionId).length}
+        unfiledActive={unfiledView}
+        onSelectUnfiled={() => router.push(`/collection/${UNFILED}`)}
         onOpen={(id) => router.push(`/project/${id}`)}
         onSelectCollection={(c) => setSelectedCollection(c)}
         onNewCollection={() => { void createCollection(); }}
@@ -356,6 +418,8 @@ export default function Workspace({
       collections={collections}
       activeCollectionId={null}
       unfiledCount={filtered.filter((p) => !p.collectionId).length}
+      unfiledActive={unfiledView}
+      onSelectUnfiled={() => router.push(`/collection/${UNFILED}`)}
       onOpen={(id) => router.push(`/project/${id}`)}
       onSelectCollection={(c) => setSelectedCollection(c)}
       onNewCollection={() => { void createCollection(); }}
