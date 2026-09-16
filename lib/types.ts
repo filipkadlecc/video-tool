@@ -135,7 +135,16 @@ export interface Project {
   updatedAt: string;
 }
 
-export type ProjectMeta = Omit<Project, "chatHistory" | "code" | "notionContent" | "scriptWithTimestamps" | "svgContents">;
+export type ProjectMeta = Omit<Project, "chatHistory" | "code" | "notionContent" | "scriptWithTimestamps" | "svgContents"> & {
+  /**
+   * How long the project is, in frames.
+   *
+   * Computed by listProjects so a list can show it without loading every
+   * project's code or document. Undefined only when neither source can say —
+   * an empty project, or legacy code that never declares `durationInFrames`.
+   */
+  durationInFrames?: number;
+};
 
 export interface Collection {
   id: string;

@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Icon from "@/components/ui/Icon";
 import { addItem, makeId, type Asset, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
 import { usePlayheadStore } from "@/hooks/usePlayhead";
+import Input from "@/components/ui/Input";
+import IconButton from "@/components/ui/IconButton";
 
 /**
  * Everything imported into this project, in one place — and the way to import
@@ -129,17 +131,30 @@ export default function FootageBrowser({ projectId, doc, onChange, onSelect }: P
   }, [doc, projectId, durations, playhead, onChange, onSelect]);
 
   const used = new Set(doc.assets.map((a) => a.src));
+  const [query, setQuery] = useState("");
+  const shown = query.trim()
+    ? files.filter((f) => f.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : files;
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
-        <button onClick={() => inputRef.current?.click()} style={btn}>Import…</button>
-        <span className="mono" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>⌘I</span>
-        {busy && <span className="mono" style={{ fontSize: 9, color: "var(--brand)" }}>uploading {busy}…</span>}
-        {error && <span className="mono" style={{ fontSize: 9, color: "#f87171" }}>{error}</span>}
-        <div style={{ flex: 1 }} />
-        <span className="mono" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>{files.length} files</span>
+      {/* Search over a rail of takes: with a dozen files off one shoot the names
+          differ by four digits, so filtering beats scrolling. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", flexShrink: 0 }}>
+        <Input
+          value={query}
+          onChange={setQuery}
+          placeholder="Search footage"
+          height={28}
+          prefix={<Icon name="search" size={13} style={{ color: "var(--ink-tertiary)" }} />}
+        />
+        <IconButton icon="plus" title="Import footage" shortcut="⌘I" onClick={() => inputRef.current?.click()} />
       </div>
+      {(busy || error) && (
+        <div className="t-data-s" style={{ padding: "0 8px 6px", color: error ? "var(--danger)" : "var(--live)" }}>
+          {error ?? `uploading ${busy}…`}
+        </div>
+      )}
 
       <input
         ref={inputRef}
@@ -154,15 +169,28 @@ export default function FootageBrowser({ projectId, doc, onChange, onSelect }: P
         }}
       />
 
-      <div style={{ flex: 1, overflowY: "auto", padding: 8, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(112px, 1fr))", gap: 8, alignContent: "start" }}>
-        {files.length === 0 && (
-          <div style={{ fontSize: 11, color: "var(--ink-disabled)", gridColumn: "1 / -1" }}>
+      {/*
+        A LIST, not a grid of tiles.
+        
+        The rail is 248px wide; a grid there gives two ~110px thumbnails per row
+        with the filename truncated to nothing underneath, so you cannot tell
+        two takes of the same shot apart. A row per file fits a 64x36 still
+        beside the name AND its meta, which is what you actually pick by.
+      */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 6, display: "flex", flexDirection: "column", gap: 8, alignContent: "start" }}>
+        {shown.length === 0 && (
+          <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
             Nothing imported yet — press Import or ⌘I, or drop files onto a track.
           </div>
         )}
-        {files.map((f) => {
+        {shown.map((f) => {
           const src = `/api/media/${projectId}/${f.path}`;
           const strip = `/api/media/${projectId}/filmstrip?file=${encodeURIComponent(f.path)}`;
+          const secs = durations[f.path];
+          const meta = [
+            f.type === "audio" ? "audio" : f.type,
+            secs ? `${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, "0")}` : null,
+          ].filter(Boolean).join(" · ");
           return (
             <button
               key={f.path}
@@ -170,18 +198,19 @@ export default function FootageBrowser({ projectId, doc, onChange, onSelect }: P
               draggable
               onDragStart={(e) => e.dataTransfer.setData("application/x-vt-media", JSON.stringify(f))}
               style={{
-                display: "flex", flexDirection: "column", gap: 4, padding: 0,
-                background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                display: "flex", alignItems: "center", gap: 8, padding: 6,
+                background: used.has(src) ? "var(--surface-raised)" : "transparent",
+                border: `1px solid ${used.has(src) ? "var(--border-edge)" : "transparent"}`,
+                borderRadius: "var(--r-control)",
+                cursor: "pointer", textAlign: "left", width: "100%",
               }}
             >
               <div
                 style={{
-                  width: "100%", aspectRatio: "16 / 9", borderRadius: "var(--r-panel)",
-                  border: `1px solid ${used.has(src) ? "var(--brand-tint-line)" : "var(--border-hairline)"}`,
+                  width: 64, height: 36, flexShrink: 0, borderRadius: "var(--r-frame)",
+                  border: "1px solid var(--border-hairline)",
                   overflow: "hidden", background: "var(--surface-void)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  // The filmstrip is already generated for the timeline; show its
-                  // first frame rather than decoding anything here.
                   ...(f.type === "video"
                     ? { backgroundImage: `url(${strip})`, backgroundSize: "auto 100%", backgroundRepeat: "no-repeat" }
                     : {}),
@@ -191,14 +220,39 @@ export default function FootageBrowser({ projectId, doc, onChange, onSelect }: P
                   // eslint-disable-next-line @next/next/no-img-element -- local project media, same as AssetBrowser
                   <img src={src} alt={f.name} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
                 )}
-                {f.type === "audio" && <Icon name="monitor" size={16} style={{ color: "var(--ink-disabled)" }} />}
+                {f.type === "audio" && <Icon name="speaker" size={14} style={{ color: "var(--ink-disabled)" }} />}
               </div>
-              <span className="mono" style={{ fontSize: 9, color: "var(--ink-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {f.name}
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span className="t-control" style={{ color: "var(--ink-primary)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {f.name}
+                </span>
+                <span className="t-data-s" style={{ color: "var(--ink-tertiary)", display: "block", marginTop: 2 }}>
+                  {meta}
+                </span>
               </span>
             </button>
           );
         })}
+      </div>
+
+      {/* Footer: what you have, and the way to get more. */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", height: 32, padding: "0 8px", flexShrink: 0,
+          borderTop: "1px solid var(--border-hairline)",
+        }}
+      >
+        <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
+          {files.length} {files.length === 1 ? "item" : "items"}
+        </span>
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="t-control"
+          style={{ background: "none", border: "none", color: "var(--ink-secondary)", cursor: "pointer", padding: 0 }}
+        >
+          Import…
+        </button>
       </div>
     </div>
   );

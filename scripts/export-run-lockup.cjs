@@ -13,8 +13,11 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const ROOT = path.join(__dirname, "..");
-const { scene, durationInFrames, START, TC, FPS, tc } = require("./build-run-lockup-scene.cjs");
-const OUT_DIR = process.argv[2] || "/Volumes/T7 Shield/Run_SF_Promo/Graphics/Texts/Animated";
+const { build, START, TC, FPS, tc } = require("./build-run-lockup-scene.cjs");
+const INTRO = process.argv.includes("--intro");
+const OUT_DIR = process.argv.slice(2).find((a) => !a.startsWith("--"))
+  || "/Volumes/T7 Shield/Run_SF_Promo/Graphics/Texts/Animated";
+const { source: scene, durationInFrames } = build({ intro: INTRO });
 const W = 3840, H = 2160;
 
 function run(cmd, args) {
@@ -36,7 +39,9 @@ function run(cmd, args) {
   const tag = `_lockup_${Date.now().toString(36)}`;
   const sp = path.join(scenesDir, `${tag}.tsx`);
   const ep = path.join(scenesDir, `${tag}.entry.tsx`);
-  const out = path.join(OUT_DIR, `RUN-SF_LOCKUP_TC${TC.run.replace(/:/g, "-")}.mov`);
+  const out = path.join(OUT_DIR, INTRO
+    ? "RUN-SF_LOCKUP-INTRO.mov"
+    : `RUN-SF_LOCKUP_TC${TC.run.replace(/:/g, "-")}.mov`);
 
   fs.writeFileSync(sp, scene);
   fs.writeFileSync(ep, `
@@ -48,8 +53,9 @@ registerRoot(() => (<Composition id="Lockup" component={Scene}
 `);
 
   try {
-    console.log(`RUN SF lockup — ${durationInFrames} frames (${(durationInFrames / FPS).toFixed(2)}s)`);
-    console.log(`place at ${TC.run}, runs to ${tc(START + durationInFrames)}`);
+    console.log(`RUN SF lockup${INTRO ? " (INTRO — idle beat only)" : ""} — ${durationInFrames} frames (${(durationInFrames / FPS).toFixed(2)}s)`);
+    console.log(INTRO ? "no build-on: present and at rest from frame 0"
+                      : `place at ${TC.run}, runs to ${tc(START + durationInFrames)}`);
     await run("npx", [
       "remotion", "render", ep, "Lockup", out,
       "--codec", "prores", "--prores-profile", "4444",
@@ -60,8 +66,9 @@ registerRoot(() => (<Composition id="Lockup" component={Scene}
       "--log", "error",
     ]);
     console.log(`    -> ${path.basename(out)}  (${(fs.statSync(out).size / 1024 / 1024).toFixed(1)} MB)`);
-    fs.writeFileSync(path.join(ROOT, "data/run-lockup/export.json"), JSON.stringify(
-      { file: out, startFrame: START, timecode: TC.run, durationInFrames, cues: TC }, null, 2));
+    fs.writeFileSync(path.join(ROOT, `data/run-lockup/export${INTRO ? "-intro" : ""}.json`), JSON.stringify(
+      INTRO ? { file: out, variant: "intro", durationInFrames }
+            : { file: out, startFrame: START, timecode: TC.run, durationInFrames, cues: TC }, null, 2));
   } finally {
     try { fs.unlinkSync(sp); } catch {}
     try { fs.unlinkSync(ep); } catch {}

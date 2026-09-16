@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import type { ProjectMeta, Collection } from "@/lib/types";
 import { docDuration } from "@/lib/editor-doc";
+import { getProjectSize } from "@/lib/types";
 import { relativeTime, shortDate } from "@/lib/format";
 import { timecode, needsHours } from "@/lib/timecode";
 import ParallaxCard from "@/components/ui/ParallaxCard";
@@ -23,11 +24,19 @@ import Menu from "@/components/ui/Menu";
 type SortKey = "edited" | "created" | "name";
 
 function durationLabel(p: ProjectMeta): string {
-  if (!p.doc) return "—";
   const fps = p.settings.fps || 25;
-  const total = docDuration(p.doc);
+  // The document knows exactly; otherwise listProjects has already read the
+  // duration out of the legacy code, so a list never has to evaluate anything.
+  const total = p.doc ? docDuration(p.doc) : p.durationInFrames ?? 0;
   if (!total) return "—";
   return timecode(total, fps, needsHours(total, fps));
+}
+
+/** Real pixels. settings.width/height are a bespoke override and are almost
+ *  never set — the size comes from the resolution/orientation pair. */
+function sizeLabel(p: ProjectMeta): string {
+  const { width, height } = getProjectSize(p.settings);
+  return `${width}×${height}`;
 }
 
 export default function ProjectsScreen({

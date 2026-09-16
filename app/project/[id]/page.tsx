@@ -21,11 +21,9 @@ import { normalizeAnimationType } from "@/lib/animation-types";
 import { getProjectSize } from "@/lib/types";
 import { buildTerminalExportPlan } from "@/lib/terminal-export";
 import { stripBackgroundsForTransparency } from "@/lib/transparent-bg";
-import Logo from "@/components/ui/Logo";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
-import TypeBadge from "@/components/ui/TypeBadge";
 import Segmented from "@/components/ui/Segmented";
 import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
@@ -39,6 +37,8 @@ import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
 import Tooltip from "@/components/ui/Tooltip";
 import ShortcutsModal from "@/components/ShortcutsModal";
+
+const titleCase = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
 const EditorPreview = dynamic(() => import("@/components/EditorPreview"), {
   ssr: false,
@@ -958,32 +958,33 @@ export default function ProjectEditor() {
           flexShrink: 0,
         }}
       >
-        {/* Back to the list this project came from, not the root — the type now
-            has a URL of its own, so "back" can mean what it looks like. */}
-        <Tooltip label={`Back to ${project ? normalizeAnimationType(project.animationType) : "projects"}`}>
-          <IconButton
-            icon="chevronLeft"
-            onClick={() => router.push(project ? `/${normalizeAnimationType(project.animationType)}` : "/")}
-            aria-label="Back to projects"
-          />
-        </Tooltip>
-        <Logo size={20} onClick={() => router.push("/")} />
-        <div style={{ width: 1, height: 20, background: "var(--border-hairline)", marginLeft: 4 }} />
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{project.name}</div>
-          {/* Frame pill — state, not an action, so it is a pill and never a button. */}
-          <span
-            className="t-data-s"
-            style={{
-              display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
-              background: "var(--surface-raised)", borderRadius: "var(--r-pill)",
-              color: "var(--ink-tertiary)", whiteSpace: "nowrap",
-            }}
-          >
-            {resLabel} · {project.settings.fps}fps
-          </span>
-        </div>
-        <TypeBadge type={project.animationType} />
+        {/* Back is chevron-left plus THE NAME OF WHERE YOU LAND, far left. The
+            app logo used to sit here; in the editor it earns nothing — you know
+            which app you are in — and it pushed the project's own name off the
+            place your eye starts. */}
+        <Button
+          variant="ghost"
+          size="chrome"
+          icon="chevronLeft"
+          onClick={() => router.push(project ? `/${normalizeAnimationType(project.animationType)}` : "/")}
+        >
+          {project ? titleCase(normalizeAnimationType(project.animationType)) : "Projects"}
+        </Button>
+        <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
+        <span className="t-heading" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap" }}>
+          {project.name}
+        </span>
+        {/* Frame pill — state, not an action, so it is a pill and never a button. */}
+        <span
+          className="t-data-s"
+          style={{
+            display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
+            background: "var(--surface-raised)", borderRadius: "var(--r-pill)",
+            color: "var(--ink-tertiary)", whiteSpace: "nowrap",
+          }}
+        >
+          {resLabel} · {project.settings.fps}fps
+        </span>
         <div style={{ flex: 1 }} />
 
         {/* Cut / Direct. Named for the job, not the furniture. The document does

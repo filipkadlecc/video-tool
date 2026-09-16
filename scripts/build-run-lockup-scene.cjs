@@ -23,6 +23,17 @@ const TC = {
 };
 const HOLD_AFTER_IDLE = 50; // frames of held lockup after the idle beat (2s)
 
+// Shape of the idle beat, shared by both variants.
+const SWEEP_FRAMES = 19;  // frames for the crest to cross the full lockup width
+const OFF_FRAMES = 1;     // integer, so every column goes dark for exactly one frame
+const RECOVER = 5;        // frames for a column to settle after relighting
+const BEAT_FRAMES = SWEEP_FRAMES + OFF_FRAMES + RECOVER;
+
+// Intro variant: no build-on at all. The lockup is simply present from frame 0 and
+// the only motion is the idle beat, with rest either side so it can be trimmed.
+const INTRO_IDLE_START = 12;
+const INTRO_TAIL = 38;
+
 const toFrames = (t) => {
   const [h, m, s, f] = t.split(":").map(Number);
   return ((h * 60 + m) * 60 + s) * FPS + f;
@@ -35,8 +46,19 @@ const tc = (f) => {
 
 const ABS = Object.fromEntries(Object.entries(TC).map(([k, v]) => [k, toFrames(v)]));
 const START = ABS.run;
-const CUES = Object.fromEntries(Object.entries(ABS).map(([k, v]) => [k, v - START]));
-const durationInFrames = CUES.idleEnd + HOLD_AFTER_IDLE;
+
+/** Cue frames and length for each variant. */
+function timing(intro) {
+  if (!intro) {
+    const CUES = Object.fromEntries(Object.entries(ABS).map(([k, v]) => [k, v - START]));
+    return { CUES, durationInFrames: CUES.idleEnd + HOLD_AFTER_IDLE, start: START };
+  }
+  const CUES = {
+    run: 0, divider: 0, symbol: 0, wordmark: 0,
+    idleStart: INTRO_IDLE_START, idleEnd: INTRO_IDLE_START + BEAT_FRAMES,
+  };
+  return { CUES, durationInFrames: CUES.idleEnd + INTRO_TAIL, start: 0 };
+}
 
 const geo = JSON.parse(fs.readFileSync(path.join(ROOT, "public/assets/run-lockup/lockup.json"), "utf8"));
 
@@ -53,7 +75,9 @@ const DATA = JSON.stringify({
   wordmark: geo.layers.wordmark,
 });
 
-const scene = `import React from "react";
+function build({ intro = false } = {}) {
+const { CUES, durationInFrames, start } = timing(intro);
+const source = `import React from "react";
 import {
   AbsoluteFill, useCurrentFrame, useVideoConfig, spring, interpolate, Easing,
 } from "remotion";
@@ -63,13 +87,15 @@ export const fps = ${FPS};
 export const durationInFrames = ${durationInFrames};
 
 // ─── CUES ────────────────────────────────────────────────────────────────────
-// This clip starts at ${TC.run} (absolute frame ${START}); everything below is
+${intro ? `// INTRO variant — no build-on. The lockup is present and at rest from frame 0;
+// the only motion is the idle beat over frames ${CUES.idleStart}-${CUES.idleEnd}, with rest
+// either side so it can be trimmed from either end.` : `// This clip starts at ${TC.run} (absolute frame ${START}); everything below is
 // clip-local. Drop the file at that timecode and the cues land on Filip's frames.
 //   RUN       ${TC.run}   frame ${CUES.run}
 //   divider   ${TC.divider}   frame ${CUES.divider}
 //   symbol    ${TC.symbol}   frame ${CUES.symbol}
 //   wordmark  ${TC.wordmark}   frame ${CUES.wordmark}
-//   idle beat ${TC.idleStart} -> ${TC.idleEnd}   frames ${CUES.idleStart}-${CUES.idleEnd}
+//   idle beat ${TC.idleStart} -> ${TC.idleEnd}   frames ${CUES.idleStart}-${CUES.idleEnd}`}
 const CUES = {
   run: ${CUES.run}, divider: ${CUES.divider}, symbol: ${CUES.symbol}, wordmark: ${CUES.wordmark},
   idleStart: ${CUES.idleStart}, idleEnd: ${CUES.idleEnd},
@@ -88,9 +114,17 @@ const LETTER_STAGGER = 2;  // frames between wordmark letters
 const TRI_STAGGER = 1.5;   // frames between symbol triangles
 const RULE_LEN = ${Math.round(geo.layers.divider.bbox[3] - geo.layers.divider.bbox[1])};
 
+// No build-on in the intro variant: every element is already at rest at frame 0.
+const INTRO = ${intro};
+
 const D = ${DATA};
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+/** Entrance progress — pinned to 1 (fully arrived) in the intro variant. */
+const entrance = (t: number, vfps: number, preset: "SNAPPY" | "LIQUID") =>
+  INTRO ? 1 : spring({ frame: t, fps: vfps, config: SPRINGS[preset] });
+/** True while an element has not reached its cue yet — never in the intro variant. */
+const notYet = (t: number) => !INTRO && t < 0;
 const mix = (a: number[], b: number[], t: number) =>
   \`rgb(\${a[0] + (b[0] - a[0]) * t | 0},\${a[1] + (b[1] - a[1]) * t | 0},\${a[2] + (b[2] - a[2]) * t | 0})\`;
 
@@ -103,9 +137,9 @@ const RULE_HOT = [255, 255, 255];
 // RUN is built from 16 dot columns ~121u apart. The crest no longer travels at a
 // constant rate — see revVel/crestFrame below — so the gap is widest and fastest
 // across RUN and narrows as the sweep decelerates through the mark.
-const SWEEP_FRAMES = 19;  // frames for the crest to cross the full lockup width
-const OFF_FRAMES = 1;     // integer, so every column goes dark for exactly one frame
-const RECOVER = 5;        // frames for a column to settle after relighting
+const SWEEP_FRAMES = ${SWEEP_FRAMES};  // frames for the crest to cross the full lockup width
+const OFF_FRAMES = ${OFF_FRAMES};     // integer, so every column goes dark for exactly one frame
+const RECOVER = ${RECOVER};        // frames for a column to settle after relighting
 
 // The brand mark never blinks — a logo dropping out for a frame reads as a
 // broadcast fault rather than an effect. It takes the sweep as a specular glint
@@ -189,8 +223,8 @@ const Run: React.FC<{ frame: number; vfps: number }> = ({ frame, vfps }) => {
       {D.run.map((dot: any, i: number) => {
         const u = (dot[1] - x0) / span;
         const t = frame - CUES.run - u * IGNITE_SPREAD;
-        if (t < 0) return null;
-        const p = spring({ frame: t, fps: vfps, config: SPRINGS.SNAPPY });
+        if (notYet(t)) return null;
+        const p = entrance(t, vfps, "SNAPPY");
         const bb = [dot[1], dot[2], dot[3], dot[4]];
         const fx = refresh(frame, dot[1] / VB_W);
         if (fx.off) return null;   // the dark frame of the refresh sweep
@@ -215,7 +249,7 @@ export default function RunLockup() {
 
   // Slow cinematic push, fully settled by PUSH_FRAMES and exactly 1.0 after it, so
   // the lockup is geometrically locked to the reference placement from then on.
-  const push = interpolate(frame, [0, PUSH_FRAMES], [1.02, 1], {
+  const push = INTRO ? 1 : interpolate(frame, [0, PUSH_FRAMES], [1.02, 1], {
     extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic),
   });
 
@@ -223,7 +257,7 @@ export default function RunLockup() {
   // there is already a visible sliver on the cue frame itself — a draw-on that
   // starts at zero length would make the line effectively arrive a frame late.
   // Opacity stays 1: the reveal is length, never a fade.
-  const ruleP = spring({ frame: frame - CUES.divider + 1, fps: vfps, config: SPRINGS.SNAPPY });
+  const ruleP = INTRO ? 1 : spring({ frame: frame - CUES.divider + 1, fps: vfps, config: SPRINGS.SNAPPY });
   const ruleFx = refresh(frame, D.divider.bbox[0] / VB_W);
 
   const w = VB_W * SCALE, h = VB_H * SCALE;
@@ -257,8 +291,8 @@ export default function RunLockup() {
           {/* Apify symbol — green, blue, then the orange base */}
           {D.symbol.map((tri: any, i: number) => {
             const t = frame - CUES.symbol - i * TRI_STAGGER;
-            if (t < 0) return null;
-            const p = spring({ frame: t, fps: vfps, config: SPRINGS.SNAPPY });
+            if (notYet(t)) return null;
+            const p = entrance(t, vfps, "SNAPPY");
             const fx = refresh(frame, cx(tri.bbox) / VB_W);
             const hot = fx.off ? 1 : fx.hot;   // the off frame is the impulse, not a blackout
             return (
@@ -274,8 +308,8 @@ export default function RunLockup() {
           {/* "apify" — letters rise in reading order */}
           {D.wordmark.map((letter: any, i: number) => {
             const t = frame - CUES.wordmark - i * LETTER_STAGGER;
-            if (t < 0) return null;
-            const p = spring({ frame: t, fps: vfps, config: SPRINGS.LIQUID });
+            if (notYet(t)) return null;
+            const p = entrance(t, vfps, "LIQUID");
             const fx = refresh(frame, cx(letter.bbox) / VB_W);
             const hot = fx.off ? 1 : fx.hot;   // as above: the mark reacts, it never drops out
             return (
@@ -295,18 +329,32 @@ export default function RunLockup() {
   );
 }
 `;
-
-const outDir = path.join(ROOT, "data/run-lockup");
-fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, "scene.tsx"), scene);
-
-if (require.main === module) {
-  console.log(`clip starts ${TC.run} (abs frame ${START})`);
-  for (const [k, v] of Object.entries(CUES)) {
-    console.log(`  ${k.padEnd(10)} clip frame ${String(v).padStart(3)}   ${tc(ABS[k])}`);
-  }
-  console.log(`duration ${durationInFrames} frames (${(durationInFrames / FPS).toFixed(2)}s) — ends ${tc(START + durationInFrames)}`);
-  console.log(`\nwrote ${path.join(outDir, "scene.tsx")} (${(scene.length / 1024).toFixed(1)} KB)`);
+  return { source, durationInFrames, CUES, start, intro };
 }
 
-module.exports = { scene, durationInFrames, CUES, ABS, START, TC, FPS, tc };
+const outDir = path.join(ROOT, "data/run-lockup");
+const main = build({});
+const introBuild = build({ intro: true });
+fs.mkdirSync(outDir, { recursive: true });
+fs.writeFileSync(path.join(outDir, "scene.tsx"), main.source);
+fs.writeFileSync(path.join(outDir, "scene-intro.tsx"), introBuild.source);
+
+if (require.main === module) {
+  console.log(`MAIN  — starts ${TC.run} (abs frame ${START})`);
+  for (const [k, v] of Object.entries(main.CUES)) {
+    console.log(`  ${k.padEnd(10)} clip frame ${String(v).padStart(3)}   ${tc(ABS[k])}`);
+  }
+  console.log(`  duration ${main.durationInFrames} frames (${(main.durationInFrames / FPS).toFixed(2)}s) — ends ${tc(START + main.durationInFrames)}`);
+  console.log(`\nINTRO — no build-on, lockup present and at rest from frame 0`);
+  console.log(`  idle beat  frames ${introBuild.CUES.idleStart}-${introBuild.CUES.idleEnd}`);
+  console.log(`  duration ${introBuild.durationInFrames} frames (${(introBuild.durationInFrames / FPS).toFixed(2)}s)`);
+  console.log(`\nwrote scene.tsx (${(main.source.length / 1024).toFixed(1)} KB) + scene-intro.tsx (${(introBuild.source.length / 1024).toFixed(1)} KB)`);
+}
+
+module.exports = {
+  build,
+  // the main clip keeps the original export shape so verify/export/still scripts
+  // carry on working unchanged
+  scene: main.source, durationInFrames: main.durationInFrames, CUES: main.CUES,
+  ABS, START, TC, FPS, tc,
+};

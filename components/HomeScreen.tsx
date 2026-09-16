@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import type { ProjectMeta, Collection } from "@/lib/types";
 import { docDuration } from "@/lib/editor-doc";
+import { getProjectSize } from "@/lib/types";
 import { getAnimationTypeMeta } from "@/lib/animation-types";
 import { relativeTime, shortDate, greeting } from "@/lib/format";
 import { timecode, needsHours } from "@/lib/timecode";
@@ -26,11 +27,19 @@ const RECENT_COUNT = 3;
 const EARLIER_ROWS = 5;
 
 function durationLabel(p: ProjectMeta): string {
-  if (!p.doc) return "—";
   const fps = p.settings.fps || 25;
-  const total = docDuration(p.doc);
+  // The document knows exactly; otherwise listProjects has already read the
+  // duration out of the legacy code, so a list never has to evaluate anything.
+  const total = p.doc ? docDuration(p.doc) : p.durationInFrames ?? 0;
   if (!total) return "—";
   return timecode(total, fps, needsHours(total, fps));
+}
+
+/** Real pixels. settings.width/height are a bespoke override and are almost
+ *  never set — the size comes from the resolution/orientation pair. */
+function sizeLabel(p: ProjectMeta): string {
+  const { width, height } = getProjectSize(p.settings);
+  return `${width}×${height}`;
 }
 
 export default function HomeScreen({
@@ -205,7 +214,7 @@ export default function HomeScreen({
 function RecentCard({ project, onClick }: { project: ProjectMeta; onClick: () => void }) {
   const [thumbFailed, setThumbFailed] = useState(false);
   const meta = getAnimationTypeMeta(project.animationType);
-  const dims = `${project.settings.width ?? ""}${project.settings.width ? "×" : ""}${project.settings.height ?? ""}`;
+  const dims = sizeLabel(project);
 
   return (
     <ParallaxCard max={2.5} glare={0.05}>
@@ -235,7 +244,7 @@ function RecentCard({ project, onClick }: { project: ProjectMeta; onClick: () =>
           )}
           <Depth z={6} style={{ position: "absolute", left: 10, bottom: 8 }}>
             <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
-              {durationLabel(project)}{dims ? ` · ${dims}` : ""}
+              {durationLabel(project)} · {dims}
             </span>
           </Depth>
         </Depth>

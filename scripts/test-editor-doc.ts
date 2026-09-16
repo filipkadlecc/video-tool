@@ -20,7 +20,7 @@ import {
 } from "../lib/editor-keys";
 import { ANIMATION_PRESETS, animationFrames, composeEffects, itemEffects, presetStyle, presetsFor, reorderEffects, setEffectEnabled, setEffectPreset, visibleCharacters, wordProgress } from "../lib/editor-effects";
 import { scrubValue } from "../components/ui/ScrubNumber";
-import { timecode } from "../components/EditorPlayerControls";
+import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
 import { sceneMeta } from "../lib/scene-eval";
 import {
@@ -879,14 +879,20 @@ head("a Smart-trim plan becomes an editable timeline");
 
 head("viewer timecode");
 {
-  a(timecode(0, 25) === "00:00:00:00", "zero");
-  a(timecode(24, 25) === "00:00:00:24", "last frame of the first second");
-  a(timecode(25, 25) === "00:00:01:00", "rolls over to seconds");
-  a(timecode(25 * 60, 25) === "00:01:00:00", "rolls over to minutes");
-  a(timecode(25 * 3600, 25) === "01:00:00:00", "rolls over to hours");
-  a(timecode(917, 25) === "00:00:36:17", `matches an editor's readout (got ${timecode(917, 25)})`);
-  a(timecode(-5, 25) === "00:00:00:00", "never negative");
-  a(timecode(30, 0) === "00:00:01:05", "survives a zero fps rather than dividing by it");
+  // MM:SS:FF is the format everywhere. Hours appear ONLY once a project passes
+  // an hour, and then in all four places at once, so a running timecode never
+  // changes width mid-session.
+  a(timecode(0, 25) === "00:00:00", "zero");
+  a(timecode(24, 25) === "00:00:24", "last frame of the first second");
+  a(timecode(25, 25) === "00:01:00", "rolls over to seconds");
+  a(timecode(25 * 60, 25) === "01:00:00", "rolls over to minutes");
+  a(timecode(917, 25) === "00:36:17", `matches an editor's readout (got ${timecode(917, 25)})`);
+  a(timecode(-5, 25) === "00:00:00", "never negative");
+  a(timecode(30, 0) === "00:01:05", "survives a zero fps rather than dividing by it");
+  a(timecode(25 * 3600, 25, true) === "01:00:00:00", "hours, when the project has them");
+  a(timecode(917, 25, true) === "00:00:36:17", "and then in all four fields at once");
+  a(needsHours(25 * 3599, 25) === false, "a 59-minute project needs no hours field");
+  a(needsHours(25 * 3600, 25) === true, "an hour-long one does");
 }
 
 head("a placed scene retimes; a windowed one keeps its authored timing");

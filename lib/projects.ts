@@ -3,6 +3,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import type { Project, ProjectMeta, AnimationType, Engine, ProjectSettings, SvgFile, StyleMode, TopicCardStyle, TransitionStyle } from "./types";
 import type { EditorDoc } from "./editor-doc";
+import { docDuration } from "./editor-doc";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -10,6 +11,27 @@ function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
+}
+
+/**
+ * A project's length in frames, from whichever source can say.
+ *
+ * A document knows exactly. Legacy code declares it as a module constant —
+ * `export const durationInFrames = 450` — which is the convention every
+ * generated scene follows, so a regex is enough and avoids evaluating 300
+ * modules to render a list.
+ */
+function projectDuration(raw: Project): number | undefined {
+  if (raw.doc) {
+    const d = docDuration(raw.doc);
+    if (d > 0) return d;
+  }
+  const m = /durationInFrames\s*=\s*(\d+)/.exec(raw.code ?? "");
+  if (m) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return undefined;
 }
 
 export function listProjects(): ProjectMeta[] {
@@ -33,6 +55,7 @@ export function listProjects(): ProjectMeta[] {
         initialPrompt: raw.initialPrompt,
         collectionId: raw.collectionId,
         useSfx: raw.useSfx,
+        durationInFrames: projectDuration(raw),
         createdAt: raw.createdAt,
         updatedAt: raw.updatedAt,
       });

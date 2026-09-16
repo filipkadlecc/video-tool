@@ -3,8 +3,10 @@ const fs = require("fs"), path = require("path");
 const { bundle } = require("@remotion/bundler");
 const { selectComposition, renderStill } = require("@remotion/renderer");
 const ROOT = path.join(__dirname, "..");
-const { scene, durationInFrames } = require("./build-run-lockup-scene.cjs");
-const OUT = path.join(ROOT, "data/run-lockup/check");
+const { build } = require("./build-run-lockup-scene.cjs");
+const INTRO = process.argv.includes("--intro");
+const { source: scene, durationInFrames } = build({ intro: INTRO });
+const OUT = path.join(ROOT, INTRO ? "data/run-lockup/check-intro" : "data/run-lockup/check");
 const frames = process.argv.slice(2).map(Number).filter((n) => !Number.isNaN(n));
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });

@@ -4,6 +4,10 @@ import React from "react";
 import type { PlayerRef } from "@remotion/player";
 import Icon from "@/components/ui/Icon";
 import Tooltip from "@/components/ui/Tooltip";
+import { needsHours, timecode } from "@/lib/timecode";
+
+/** Re-exported: this used to own a second, four-field timecode. There is one now. */
+export { timecode };
 
 /**
  * Transport bar for the editor's viewer.
@@ -14,15 +18,6 @@ import Tooltip from "@/components/ui/Tooltip";
  * intercepted, and they can show a proper timecode and frame stepping.
  */
 
-/** HH:MM:SS:FF, the format an editor expects. */
-export function timecode(frame: number, fps: number): string {
-  const safeFps = fps > 0 ? fps : 25;
-  const total = Math.max(0, Math.round(frame));
-  const frames = total % safeFps;
-  const seconds = Math.floor(total / safeFps);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}:${pad(frames)}`;
-}
 
 interface Props {
   playerRef?: React.RefObject<PlayerRef | null>;
@@ -104,8 +99,13 @@ export default function EditorPlayerControls({
       />
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 8px 6px" }}>
-        <span className="mono nums" style={{ fontSize: 10, color: "var(--ink-primary)", minWidth: 86 }}>
-          {timecode(currentFrame, fps)}
+        <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+          <span className="t-data-l" style={{ color: "var(--ink-primary)", fontVariantNumeric: "tabular-nums" }}>
+            {timecode(currentFrame, fps, needsHours(last, fps))}
+          </span>
+          <span className="t-data-m" style={{ color: "var(--ink-tertiary)" }}>
+            / {timecode(last, fps, needsHours(last, fps))}
+          </span>
         </span>
 
         <div style={{ flex: 1 }} />

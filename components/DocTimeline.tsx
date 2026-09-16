@@ -8,6 +8,7 @@ import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import { timecode, needsHours } from "@/lib/timecode";
 import { CHANNELS_BY_ID, type ChannelId } from "@/lib/editor-keys";
 import Tooltip from "@/components/ui/Tooltip";
+import Toggle from "@/components/ui/Toggle";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
 import {
@@ -26,7 +27,7 @@ import {
  * is no code to parse, no shape to refuse, and no read-only state to fall into.
  */
 
-const LABEL_W = 104;
+const LABEL_W = 168;
 const RULER_H = 26;
 /**
  * Track heights. The spec gives video 52 and audio 44.
@@ -85,15 +86,25 @@ interface Props {
   onShowShortcuts: () => void;
 }
 
-const ITEM_COLORS: Record<string, string> = {
-  video: "oklch(0.72 0.26 340)",
-  audio: "oklch(0.78 0.18 160)",
-  image: "oklch(0.82 0.14 210)",
-  gif: "oklch(0.82 0.14 210)",
-  text: "oklch(0.82 0.16 75)",
-  solid: "oklch(0.72 0.20 280)",
-  captions: "oklch(0.88 0.22 124)",
-  scene: "oklch(0.82 0.16 75)",
+/**
+ * Clips are NEUTRAL.
+ *
+ * They used to be saturated per-type hues, which made the timeline the
+ * loudest thing on screen and left the footage — the actual content — reading
+ * as background. In the handoff a footage clip is `surface-hover` and a title
+ * clip is `surface-raised`, both with an edge; what tells them apart is the
+ * filmstrip, the waveform and the label, which is information rather than
+ * decoration.
+ */
+const ITEM_SURFACE: Record<string, string> = {
+  video: "var(--surface-hover)",
+  gif: "var(--surface-hover)",
+  image: "var(--surface-hover)",
+  audio: "var(--surface-raised)",
+  text: "var(--surface-raised)",
+  scene: "var(--surface-raised)",
+  solid: "var(--surface-raised)",
+  captions: "var(--surface-raised)",
 };
 
 const ITEM_ICONS: Record<string, string> = {
@@ -584,6 +595,21 @@ export default function DocTimeline({
 
   const LANE_H = 28;
 
+  /**
+   * "V2" / "A1" — the editor convention. Video tracks count UP from the bottom
+   * because later tracks render in front, which is the order the eye reads a
+   * stack in.
+   */
+  const trackKindLabel = useCallback((t: Track, index: number) => {
+    const audio = t.items.length > 0 && t.items.every((i) => i.type === "audio");
+    const kind = audio ? "A" : "V";
+    const peers = doc.tracks.filter((x) => {
+      const a = x.items.length > 0 && x.items.every((i) => i.type === "audio");
+      return (a ? "A" : "V") === kind;
+    });
+    return `${kind}${peers.length - peers.indexOf(t)}`;
+  }, [doc.tracks]);
+
   /** A track's height, from what is on it. */
   const trackHeight = useCallback((t: Track) =>
     t.items.length > 0 && t.items.every((i) => i.type === "audio") ? TRACK_H_AUDIO : TRACK_H_VIDEO,
@@ -639,7 +665,13 @@ export default function DocTimeline({
           padding: "0 6px", borderRight: "1px solid var(--border-hairline)", background: "var(--surface-chrome)",
         }}
       >
-        <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {/* Kind then name — "V2  Footage" — so a glance down the column tells
+            you the stack order and what is on each layer. The kind is derived:
+            tracks render back to front, and an audio-only track is A. */}
+        <span className="t-section" style={{ color: "var(--ink-tertiary)", flexShrink: 0 }}>
+          {trackKindLabel(track, laneIndex)}
+        </span>
+        <span className="t-control" style={{ color: "var(--ink-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {track.name}
         </span>
         <button
@@ -763,9 +795,10 @@ export default function DocTimeline({
               style={{
                 position: "absolute", left: g.from * pxPerFrame, width: clipW,
                 top: CLIP_INSET, height: trackHeight(track) - CLIP_INSET * 2, borderRadius: "var(--r-item)", cursor: "grab",
-                background: ITEM_COLORS[item.type] ?? "var(--brand)",
+                background: ITEM_SURFACE[item.type] ?? "var(--surface-raised)",
+                border: "1px solid var(--border-edge)",
                 opacity: track.hidden ? 0.35 : 0.9,
-                outline: selected ? "2px solid var(--ink-primary)" : "none",
+                outline: selected ? "1px solid var(--ink-primary)" : "none",
                 display: "flex", alignItems: "center", gap: 4, padding: "0 6px", overflow: "hidden",
               }}
             >
@@ -805,14 +838,14 @@ export default function DocTimeline({
                       style={{
                         flex: "1 1 2px", maxWidth: 3, borderRadius: 1,
                         height: `${Math.min(100, Math.max(12, v * 100))}%`,
-                        background: "rgba(0,0,0,0.75)",
+                        background: "var(--ink-tertiary)",
                       }}
                     />
                   ))}
                 </div>
               )}
-              <Icon name={ITEM_ICONS[item.type] ?? "layers"} size={10} style={{ color: "rgba(0,0,0,0.6)", flexShrink: 0, position: "relative" }} />
-              <span className="mono" style={{ fontSize: 9, color: "rgba(0,0,0,0.75)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative", textShadow: "0 1px 2px rgba(255,255,255,0.4)" }}>
+              <Icon name={ITEM_ICONS[item.type] ?? "layers"} size={11} style={{ color: "var(--ink-tertiary)", flexShrink: 0, position: "relative" }} />
+              <span className="t-control" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative" }}>
                 {label}
               </span>
               <div
@@ -944,14 +977,17 @@ export default function DocTimeline({
       >
       {/* Status strip — the tools themselves live in the rail on the left. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
-        <span className="mono cap" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>Editor</span>
+        <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Timeline</span>
         {uploading && (
           <span className="mono" style={{ fontSize: 9, color: "var(--live)" }}>
             uploading {uploading}…
           </span>
         )}
         <div style={{ flex: 1 }} />
-        <button onClick={() => setSnapOn((v) => !v)} style={{ ...toolBtn, color: snapOn ? "var(--ink-primary)" : "var(--ink-disabled)" }}>SNAP</button>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Toggle size="chrome" checked={snapOn} onChange={setSnapOn} label="Snap to frames" />
+          <span className="t-control" style={{ color: snapOn ? "var(--ink-primary)" : "var(--ink-tertiary)" }}>Snap</span>
+        </span>
         <button onClick={() => setZoom(1)} style={toolBtn}>Fit</button>
         <IconButton icon="help" size={22} title="Keyboard shortcuts" shortcut="⌘/" onClick={onShowShortcuts} />
         <span className="mono nums" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
