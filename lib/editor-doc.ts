@@ -82,6 +82,8 @@ export interface ItemLayout {
   /** Transform origin, 0..1 of the item's own box. Defaults to the centre. */
   anchorX?: number;
   anchorY?: number;
+  /** CSS blend mode. NOT animatable — it gets no keyframe diamond. */
+  blend?: string;
 }
 
 export type AssetKind = "video" | "audio" | "image" | "gif";
@@ -131,6 +133,15 @@ interface ItemBase {
    * caption tokens are stored that way.
    */
   keys?: Keyframes;
+  /**
+   * Section ids that are switched OFF — "transform", "opacity".
+   *
+   * Bypass keeps the values: the section collapses, its title greys and it is
+   * marked bypassed, and everything it holds survives. That is what makes a
+   * switch an A/B rather than a delete, and it is why this is a list of what is
+   * off rather than the values being cleared.
+   */
+  bypass?: string[];
 }
 
 /** Fields shared by anything with a soundtrack or a source file to trim. */

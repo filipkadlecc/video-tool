@@ -251,11 +251,13 @@ export function keyframesAreValid(keys: Keyframes | undefined): boolean {
 export interface KeyHostLayout {
   x: number; y: number; width: number; height: number;
   rotation?: number; opacity?: number; cornerRadius?: number;
-  scale?: number; anchorX?: number; anchorY?: number;
+  scale?: number; anchorX?: number; anchorY?: number; blend?: string;
 }
 export interface KeyHost {
   layout: KeyHostLayout;
   keys?: Keyframes;
+  /** Section ids switched off. Their values survive; they just stop applying. */
+  bypass?: string[];
 }
 
 /** Every animatable property, settled for one frame. No optionals. */
@@ -264,6 +266,7 @@ export interface ResolvedLayout {
   rotation: number; opacity: number; scale: number;
   anchorX: number; anchorY: number;
   cornerRadius?: number;
+  blend?: string;
 }
 
 /** Whether a channel is animated (has at least one key). */
@@ -289,6 +292,28 @@ export function resolvedLayout(item: KeyHost, localFrame: number): ResolvedLayou
   const at = (ch: ChannelId, fallback: number) =>
     valueAt(k?.[ch], localFrame, fallback, CHANNELS_BY_ID[ch]);
 
+  // A bypassed section stops APPLYING without losing anything: its values are
+  // still on the item, they just resolve to their defaults for this frame.
+  const off = (section: string) => item.bypass?.includes(section) ?? false;
+  const transformOff = off("transform");
+  const opacityOff = off("opacity");
+
+  if (transformOff || opacityOff) {
+    return {
+      x: transformOff ? 0 : at("x", l.x),
+      y: transformOff ? 0 : at("y", l.y),
+      width: l.width,
+      height: l.height,
+      rotation: transformOff ? 0 : at("rotation", l.rotation ?? 0),
+      opacity: opacityOff ? 1 : at("opacity", l.opacity ?? 1),
+      scale: transformOff ? 1 : at("scale", l.scale ?? 1),
+      anchorX: transformOff ? 0.5 : at("anchorX", l.anchorX ?? 0.5),
+      anchorY: transformOff ? 0.5 : at("anchorY", l.anchorY ?? 0.5),
+      cornerRadius: l.cornerRadius,
+      blend: opacityOff ? undefined : l.blend,
+    };
+  }
+
   return {
     x: at("x", l.x),
     y: at("y", l.y),
@@ -300,5 +325,6 @@ export function resolvedLayout(item: KeyHost, localFrame: number): ResolvedLayou
     anchorX: at("anchorX", l.anchorX ?? 0.5),
     anchorY: at("anchorY", l.anchorY ?? 0.5),
     cornerRadius: l.cornerRadius,
+    blend: l.blend,
   };
 }

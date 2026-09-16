@@ -15,8 +15,8 @@ import {
   type TextItem, type VideoItem,
 } from "@/lib/editor-doc";
 import {
-  itemEffects, presetsFor, reorderEffects, setEffectEnabled, setEffectOpen,
-  setEffectPreset, type AnimationPreset, type Effect,
+  itemEffects, presetsFor, setEffectPreset,
+  type AnimationPreset, type Effect,
 } from "@/lib/editor-effects";
 import { timecode, needsHours, frameCount } from "@/lib/timecode";
 import {
@@ -453,6 +453,47 @@ export default function EditorInspector({
     );
   };
 
+  /** The value a channel actually has at the playhead. */
+  const valueNow = (ch: ChannelId, fallback: number) =>
+    valueAt(item.keys?.[ch], localFrame, fallback, CHANNELS_BY_ID[ch]);
+
+  /**
+   * Write a channel.
+   *
+   * The same branch the canvas makes: if the property is animated its scalar is
+   * dormant, so typing in the field has to set a KEY at the playhead or the
+   * edit would silently do nothing.
+   */
+  const writeChannel = (ch: ChannelId, value: number, opts?: { transient?: boolean }) => {
+    if (isAnimated(item, ch)) onChange(setItemKey(doc, item.id, ch, localFrame, value), opts);
+    else onChange(setLayout(doc, item.id, { [ch]: value }), opts);
+  };
+
+  const bypassed = (section: string) => item.bypass?.includes(section) ?? false;
+  const setBypass = (section: string, off: boolean) => {
+    const cur = item.bypass ?? [];
+    const next = off ? [...new Set([...cur, section])] : cur.filter((x) => x !== section);
+    onChange(updateItem(doc, item.id, { bypass: next.length ? next : undefined } as Partial<EditorItem>));
+  };
+
+  /** "2 keys" on a section header — the count is what you check at a glance. */
+  const keyCount = (channels: ChannelId[]) => {
+    const n = channels.reduce((acc, c) => acc + (item.keys?.[c]?.length ?? 0), 0);
+    if (n === 0) return undefined;
+    return (
+      <span
+        className="t-data-s"
+        style={{
+          display: "inline-flex", alignItems: "center", height: 16, padding: "0 6px",
+          background: "var(--surface-void)", borderRadius: "var(--r-pill)",
+          color: "var(--ink-tertiary)",
+        }}
+      >
+        {n} {n === 1 ? "key" : "keys"}
+      </span>
+    );
+  };
+
   /**
    * Reset a row.
    *
@@ -497,12 +538,17 @@ export default function EditorInspector({
 
       {showVideo && (
         <>
+          {/* TRANSFORM — switchable, resettable, every row keyframable.
+              Bypass keeps the values; it just stops them applying. */}
           <Section
             title="Transform"
             open={isOpen("transform")}
             onOpenChange={(v) => setOpen("transform", v)}
-            onReset={() => patchLayout({ rotation: 0 })}
-            canReset={Boolean(l.rotation)}
+            enabled={!bypassed("transform")}
+            onEnabledChange={(v) => setBypass("transform", !v)}
+            subtitle={keyCount(["x", "y", "scale", "rotation", "anchorX", "anchorY"])}
+            onReset={() => resetRow(["x", "y", "scale", "rotation", "anchorX", "anchorY"], { x: 0, y: 0, scale: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5 })}
+            canReset={Boolean(l.x || l.y || l.rotation || (l.scale ?? 1) !== 1)}
           >
             <Row
               label="Position"
@@ -512,62 +558,41 @@ export default function EditorInspector({
               isDefault={l.x === 0 && l.y === 0 && !isAnimated(item, "x") && !isAnimated(item, "y")}
             >
               <Vector
-                x={l.x} y={l.y}
-                onX={(n, o) => patchLayout({ x: n }, o)}
-                onY={(n, o) => patchLayout({ y: n }, o)}
+                x={valueNow("x", l.x)} y={valueNow("y", l.y)}
+                onX={(n, o) => writeChannel("x", n, o)}
+                onY={(n, o) => writeChannel("y", n, o)}
               />
             </Row>
-            {strip(["x", "y"])}
-            <Row label="Size">
-              <Vector
-                x={l.width} y={l.height}
-                onX={(n, o) => patchLayout({ width: Math.max(8, n) }, o)}
-                onY={(n, o) => patchLayout({ height: Math.max(8, n) }, o)}
-              />
-            </Row>
+
             <Row
               label="Scale"
               diamond={dia(["scale"])}
               animated={isAnimated(item, "scale")}
-              onReset={() => {
-                const width = doc.size.width;
-                const height = Math.max(8, Math.round(width * (l.height / l.width)));
-                patchLayout({ width, height });
-              }}
-              isDefault={Math.round((l.width / doc.size.width) * 100) === 100}
+              onReset={() => resetRow(["scale"], { scale: 1 })}
+              isDefault={(l.scale ?? 1) === 1 && !isAnimated(item, "scale")}
             >
               <Scalar
-                value={Math.round((l.width / doc.size.width) * 100)}
-                min={1} max={200} suffix="%"
-                onChange={(pct, o) => {
-                  // Scale about the centre, so resizing doesn't shove the item
-                  // across the frame — which is what makes a percentage usable.
-                  const ratio = l.height / l.width;
-                  const width = Math.max(8, Math.round((pct / 100) * doc.size.width));
-                  const height = Math.max(8, Math.round(width * ratio));
-                  patchLayout({
-                    width, height,
-                    x: Math.round(l.x + (l.width - width) / 2),
-                    y: Math.round(l.y + (l.height - height) / 2),
-                  }, o);
-                }}
+                value={Math.round(valueNow("scale", l.scale ?? 1) * 100)}
+                min={1} max={400}
+                onChange={(pct, o) => writeChannel("scale", pct / 100, o)}
               />
             </Row>
-            {strip(["scale"])}
+
+            {/* The linked sub-row: visible so you know where the numbers came
+                from, dimmed because Scale governs them — the way Premiere dims
+                Scale Width under Uniform Scale. No diamond: not animatable. */}
             <Row
               label={<span style={{ display: "inline-flex", alignItems: "center", gap: 4, justifyContent: "flex-end" }}>
                 <Icon name="link" size={11} /> W · H
               </span>}
               linked
             >
-              {/* Visible, so you can see where the number came from. Dimmed,
-                  because Scale governs it — the way Premiere dims Scale Width
-                  under Uniform Scale. */}
               <div style={{ display: "flex", gap: 4 }}>
-                <ReadOnly dim>{l.width}</ReadOnly>
-                <ReadOnly dim>{l.height}</ReadOnly>
+                <ReadOnly dim>{Math.round(l.width * valueNow("scale", l.scale ?? 1))}</ReadOnly>
+                <ReadOnly dim>{Math.round(l.height * valueNow("scale", l.scale ?? 1))}</ReadOnly>
               </div>
             </Row>
+
             <Row
               label="Rotation"
               diamond={dia(["rotation"])}
@@ -576,19 +601,42 @@ export default function EditorInspector({
               isDefault={!l.rotation && !isAnimated(item, "rotation")}
             >
               <Scalar
-                value={l.rotation ?? 0} min={-180} max={180} suffix="°"
-                onChange={(n, o) => patchLayout({ rotation: n }, o)}
+                value={valueNow("rotation", l.rotation ?? 0)} min={-180} max={180} suffix="°"
+                onChange={(n, o) => writeChannel("rotation", n, o)}
               />
             </Row>
-            {strip(["rotation"])}
+
+            <Row
+              label="Anchor"
+              diamond={dia(["anchorX", "anchorY"])}
+              animated={isAnimated(item, "anchorX") || isAnimated(item, "anchorY")}
+              onReset={() => resetRow(["anchorX", "anchorY"], { anchorX: 0.5, anchorY: 0.5 })}
+              isDefault={(l.anchorX ?? 0.5) === 0.5 && (l.anchorY ?? 0.5) === 0.5}
+            >
+              <Vector
+                x={Math.round(valueNow("anchorX", l.anchorX ?? 0.5) * l.width)}
+                y={Math.round(valueNow("anchorY", l.anchorY ?? 0.5) * l.height)}
+                onX={(n, o) => writeChannel("anchorX", l.width ? n / l.width : 0.5, o)}
+                onY={(n, o) => writeChannel("anchorY", l.height ? n / l.height : 0.5, o)}
+              />
+            </Row>
+
+            <Row label="Corner" onReset={() => patchLayout({ cornerRadius: 0 })} isDefault={!l.cornerRadius}>
+              <Scalar value={l.cornerRadius ?? 0} min={0} max={200} onChange={(n, o) => patchLayout({ cornerRadius: n }, o)} />
+            </Row>
           </Section>
 
+          {/* OPACITY — carries the key count, because opacity is the property
+              most often animated and the count is the thing you check. */}
           <Section
             title="Opacity"
             open={isOpen("opacity")}
             onOpenChange={(v) => setOpen("opacity", v)}
-            onReset={() => patchLayout({ opacity: 1, cornerRadius: 0 })}
-            canReset={(l.opacity ?? 1) !== 1 || Boolean(l.cornerRadius)}
+            enabled={!bypassed("opacity")}
+            onEnabledChange={(v) => setBypass("opacity", !v)}
+            subtitle={keyCount(["opacity"])}
+            onReset={() => resetRow(["opacity"], { opacity: 1, blend: undefined })}
+            canReset={(l.opacity ?? 1) !== 1 || Boolean(l.blend)}
           >
             <Row
               label="Opacity"
@@ -598,72 +646,83 @@ export default function EditorInspector({
               isDefault={(l.opacity ?? 1) === 1 && !isAnimated(item, "opacity")}
             >
               <Scalar
-                value={Math.round((l.opacity ?? 1) * 100)} min={0} max={100} suffix="%"
-                onChange={(n, o) => patchLayout({ opacity: n / 100 }, o)}
+                value={Math.round(valueNow("opacity", l.opacity ?? 1) * 100)} min={0} max={100}
+                onChange={(n, o) => writeChannel("opacity", n / 100, o)}
               />
             </Row>
+
+            {/* Blend gets NO diamond rather than a dead one — it cannot be
+                animated, and an inert diamond would say it could. */}
+            <Row
+              label="Blend"
+              onReset={() => patchLayout({ blend: undefined })}
+              isDefault={!l.blend || l.blend === "normal"}
+            >
+              <Select
+                height={24}
+                value={l.blend ?? "normal"}
+                onChange={(v) => patchLayout({ blend: v === "normal" ? undefined : v })}
+                options={[
+                  { value: "normal", label: "Normal" },
+                  { value: "screen", label: "Screen" },
+                  { value: "multiply", label: "Multiply" },
+                  { value: "overlay", label: "Overlay" },
+                  { value: "lighten", label: "Lighten" },
+                  { value: "darken", label: "Darken" },
+                ]}
+              />
+            </Row>
+
             {strip(["opacity"])}
-            <Row label="Corner" onReset={() => patchLayout({ cornerRadius: 0 })} isDefault={!l.cornerRadius}>
-              <Scalar
-                value={l.cornerRadius ?? 0} min={0} max={200}
-                onChange={(n, o) => patchLayout({ cornerRadius: n }, o)}
-              />
-            </Row>
           </Section>
 
-          {/* ── the effect stack ── */}
-          {effects.map((fx, i) => {
-            const label = fx.kind === "animateIn" ? "Arrives" : "Leaves";
-            const presets = presetsFor(item.type);
-            return (
-              <Section
-                key={fx.id}
-                title={label}
-                open={isOpen(fx.id, fx.open ?? true) && fx.enabled}
-                onOpenChange={(v) => writeEffects(setEffectOpen(effects, fx.id, v))}
-                enabled={fx.enabled}
-                onEnabledChange={(v) => writeEffects(setEffectEnabled(effects, fx.id, v))}
-                subtitle={!fx.enabled
-                  ? <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>bypassed</span>
-                  : <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>{frameCount(fx.durationInFrames)}</span>}
-                added={justAdded === fx.id}
-                onReset={() => writeEffects(effects.filter((e) => e.id !== fx.id))}
-                canReset
-              >
-                <Row label="Preset">
-                  <Select
-                    height={24}
-                    value={fx.preset}
-                    onChange={(v) => writeEffects(setEffectPreset({ ...item, effects }, fx.kind, v as AnimationPreset, fx.durationInFrames))}
-                    options={presets.filter((p) => p.id !== "none").map((p) => ({ value: p.id, label: p.label }))}
-                  />
-                </Row>
-                <Row label="Length">
-                  <Scalar
-                    value={fx.durationInFrames} min={1} max={120}
-                    onChange={(n) => writeEffects(setEffectPreset({ ...item, effects }, fx.kind, fx.preset, Math.max(1, Math.round(n))))}
-                  />
-                </Row>
-                {i > 0 && (
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <button
-                      onClick={() => writeEffects(reorderEffects(effects, i, i - 1))}
-                      className="t-caption"
-                      style={{ background: "transparent", border: "none", color: "var(--ink-tertiary)", cursor: "pointer", padding: 0 }}
-                    >
-                      Move up
-                    </button>
+          {/* ARRIVES · LEAVES — ONE section with a row per edge, not two
+              sections. They are two ends of the same idea. */}
+          {effects.length > 0 && (
+            <Section
+              title="Arrives · Leaves"
+              open={isOpen("edges")}
+              onOpenChange={(v) => setOpen("edges", v)}
+              enabled={effects.some((e) => e.enabled)}
+              onEnabledChange={(v) => writeEffects(effects.map((e) => ({ ...e, enabled: v })))}
+              subtitle={effects.every((e) => e.enabled) ? undefined
+                : <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>bypassed</span>}
+              added={effects.some((e) => e.id === justAdded)}
+              onReset={() => writeEffects([])}
+              canReset
+            >
+              {effects.map((fx) => (
+                <Row
+                  key={fx.id}
+                  label={fx.kind === "animateIn" ? "Arrives" : "Leaves"}
+                  onReset={() => writeEffects(effects.filter((e) => e.id !== fx.id))}
+                  isDefault={false}
+                >
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ width: 64, flexShrink: 0 }}>
+                      <ScrubNumber
+                        value={fx.durationInFrames}
+                        min={1}
+                        suffix="f"
+                        onChange={(n) => writeEffects(setEffectPreset({ ...item, effects }, fx.kind, fx.preset, Math.max(1, Math.round(n))))}
+                      />
+                    </div>
+                    <Select
+                      height={24}
+                      value={fx.preset}
+                      onChange={(v) => writeEffects(setEffectPreset({ ...item, effects }, fx.kind, v as AnimationPreset, fx.durationInFrames))}
+                      options={presetsFor(item.type).filter((pp) => pp.id !== "none").map((pp) => ({ value: pp.id, label: pp.label }))}
+                    />
                   </div>
-                )}
-              </Section>
-            );
-          })}
+                </Row>
+              ))}
+            </Section>
+          )}
 
           {item.type === "video" && projectId && (
             <GradeSection doc={doc} item={item as VideoItem} projectId={projectId} onChange={onChange} />
           )}
 
-          {/* ── add effect ── */}
           <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ position: "relative" }}>
               <button
@@ -698,7 +757,7 @@ export default function EditorInspector({
               )}
             </div>
             <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
-              Effects apply top to bottom. Switching one off keeps its values.
+              Drag a section by its header to reorder the stack — effects apply top to bottom.
             </div>
           </div>
         </>

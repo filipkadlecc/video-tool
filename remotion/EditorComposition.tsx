@@ -65,6 +65,9 @@ function layoutStyle(layout: ResolvedLayout): React.CSSProperties {
     transform: t || undefined,
     // Anchor is what makes rotation AND scale mean anything; both share it.
     transformOrigin: `${layout.anchorX * 100}% ${layout.anchorY * 100}%`,
+    mixBlendMode: (layout.blend && layout.blend !== "normal"
+      ? layout.blend
+      : undefined) as React.CSSProperties["mixBlendMode"],
   };
 }
 
