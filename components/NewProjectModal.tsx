@@ -370,6 +370,17 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [snippetQuery, setSnippetQuery] = useState("");
   const [shapeOpen, setShapeOpen] = useState(true);
   const [lookOpen, setLookOpen] = useState(true);
+  /**
+   * Extra notes — the box the old b-roll flow had, back for every source.
+   *
+   * The brief says what to make; notes say what to know while making it (the
+   * brand line to hit, a name to spell right, a thing to avoid). They reach the
+   * model as reference content, not as part of the brief, so they don't get
+   * read as a second instruction.
+   */
+  const [notesText, setNotesText] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+
   /** Frame overridden by hand — so an imported clip stops seeding it. */
   const [frameTouched, setFrameTouched] = useState(false);
   const [customSize, setCustomSize] = useState<{ width: number; height: number } | null>(null);
@@ -502,6 +513,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     setPrompt("");
     setNotionUrl("");
     setNotionContent(undefined);
+    setNotesText("");
+    setNotesOpen(false);
     setScriptWithTimestamps("");
     setSvgFiles([]);
     setMediaFiles([]);
@@ -608,9 +621,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             return renderSnippet(selectedSnippet.code, schema, snippetValues);
           })()
         : undefined,
-      // The fetched page is the brief (it went in as `initialPrompt` above), so
-      // it is also kept as the project's notes for later reference.
-      notionContent: notionContent || undefined,
+      /*
+       * Reference content — what the model is told to KNOW rather than to do.
+       * A fetched Notion page and the notes box both land here (the page is
+       * also the brief); joined, so neither silently wins.
+       */
+      notionContent: [notionContent, notesText.trim() ? `Extra notes:\n${notesText.trim()}` : ""]
+        .filter(Boolean).join("\n\n") || undefined,
       scriptWithTimestamps: scriptWithTimestamps.trim() || undefined,
       svgContents: svgFiles.length > 0 ? svgFiles : undefined,
       styleMode: isTerminal || isVideo ? undefined : styleMode,
@@ -1134,6 +1151,48 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             </div>
           )}
 
+          {/*
+            Extra notes — one box, every source.
+
+            Collapsed by default because it is an addition, not a question: the
+            screen asks one thing, and a second always-open textarea under it
+            would read as two. It says when it has something in it.
+          */}
+          {!isFootage && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+              <button
+                onClick={() => setNotesOpen((v) => !v)}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start",
+                  height: 24, padding: 0, background: "none", border: "none", cursor: "pointer",
+                  color: "var(--ink-secondary)", fontSize: 13, fontWeight: 500,
+                }}
+              >
+                <Icon name={notesOpen ? "chevronDown" : "chevronRight"} size={13} />
+                Extra notes
+                <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>
+                  {notesText.trim()
+                    ? `${notesText.trim().split(/\s+/).length} words`
+                    : "brand rules, names to spell right, things to avoid"}
+                </span>
+              </button>
+              {notesOpen && (
+                <>
+                  <Textarea
+                    value={notesText}
+                    onChange={setNotesText}
+                    rows={4}
+                    placeholder="e.g. it's “Apify”, never “apify”. Use the orange only on the wordmark. No stock-photo people."
+                  />
+                  <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                    Passed as reference, not as the brief — the assistant keeps these in mind while it
+                    builds rather than treating them as another instruction.
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
           {/* F · from footage — no source switcher, because there is no brief
               to source. */}
           {isFootage && (
@@ -1241,6 +1300,35 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   </span>
                 </div>
               )}
+
+              {/* The same notes box. On a cut these are the editorial
+                  instructions the old flow asked for in its own field. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={() => setNotesOpen((v) => !v)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start",
+                    height: 24, padding: 0, background: "none", border: "none", cursor: "pointer",
+                    color: "var(--ink-secondary)", fontSize: 13, fontWeight: 500,
+                  }}
+                >
+                  <Icon name={notesOpen ? "chevronDown" : "chevronRight"} size={13} />
+                  Extra notes
+                  <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>
+                    {notesText.trim()
+                      ? `${notesText.trim().split(/\s+/).length} words`
+                      : "what the cut is for, what to keep, what to drop"}
+                  </span>
+                </button>
+                {notesOpen && (
+                  <Textarea
+                    value={notesText}
+                    onChange={setNotesText}
+                    rows={4}
+                    placeholder="e.g. keep the demo, drop the intro rambling. It's for the launch page, so under 90 seconds."
+                  />
+                )}
+              </div>
             </div>
           )}
         </div>
