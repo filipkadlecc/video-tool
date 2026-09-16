@@ -2,13 +2,14 @@
 
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import type { ChatMessage, SvgFile } from "@/lib/types";
-import type { EditorDoc } from "@/lib/editor-doc";
+import { findItem, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
+import { timecode, needsHours } from "@/lib/timecode";
 import Icon from "@/components/ui/Icon";
 import Kbd from "@/components/ui/Kbd";
 import Button from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import { normalizeTapeQuotes } from "@/lib/tape-parser";
-import { usePlayheadStore } from "@/hooks/usePlayhead";
+import { usePlayheadStore, usePlayheadFrame } from "@/hooks/usePlayhead";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import type { DocChange } from "@/lib/editor-agent";
 
@@ -37,6 +38,53 @@ function extractCodeFromResponse(text: string, animationType?: string): string {
   if (animationType === "terminal") extracted = normalizeTapeQuotes(extracted);
   return extracted;
 }
+
+/** What a clip is called in a chip: its words, its file, or its kind. */
+function chipLabel(doc: EditorDoc, item: EditorItem): string {
+  if (item.type === "text") return (item as { text?: string }).text?.slice(0, 32) || "Text";
+  if (item.type === "scene" && "snippet" in item && item.snippet) return String(item.snippet.id);
+  // A footage clip is its file, never "video" — the chip has to name the clip
+  // you picked, and every clip on the track answers to "video".
+  const assetId = (item as { assetId?: string }).assetId;
+  const asset = assetId ? doc.assets.find((a) => a.id === assetId) : undefined;
+  return asset?.name ?? item.type;
+}
+
+/** The 10px swatch. A clip that HAS a colour shows it; everything else is neutral. */
+function chipSwatch(item: EditorItem): string {
+  if (item.type === "solid") return (item as { color?: string }).color ?? "var(--ink-tertiary)";
+  if (item.type === "text") return (item as { style?: { color?: string } }).style?.color ?? "var(--ink-tertiary)";
+  return "var(--ink-tertiary)";
+}
+
+/**
+ * The playhead as a chip.
+ *
+ * Its own component because it is the only thing here that changes 25 times a
+ * second — subscribing the whole chat panel to the playhead would re-render
+ * every message in the conversation on every frame of playback.
+ */
+function TimecodeChip({ fps }: { fps: number }) {
+  const frame = usePlayheadFrame();
+  return (
+    <span style={chipStyle} className="t-data-s">
+      @{timecode(frame, fps, needsHours(frame, fps))}
+    </span>
+  );
+}
+
+const chipStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  height: 24,
+  padding: "0 8px",
+  borderRadius: "var(--r-pill)",
+  background: "var(--surface-raised)",
+  border: "1px solid var(--border-edge)",
+  color: "var(--ink-secondary)",
+  fontSize: 11,
+};
 
 interface SvgAttachment {
   path: string;
@@ -96,6 +144,17 @@ interface ChatPanelProps {
   onUndoEdit?: () => void;
   /** Select the clips an AI edit touched. */
   onSelectItems?: (ids: string[]) => void;
+  /**
+   * The last AI edit, OWNED BY THE PAGE.
+   *
+   * It used to be state in here, which meant switching to Cut unmounted this
+   * panel and threw the receipt away — the one moment you most want to see what
+   * the model did is when you go and look at the timeline it just changed.
+   */
+  receipt?: DocChange[] | null;
+  onReceipt?: (receipt: DocChange[] | null) => void;
+  /** Drop a context chip — the clip stops being sent with the next message. */
+  onDeselectItem?: (id: string) => void;
 }
 
 const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel(
@@ -128,6 +187,9 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     onDocChanged,
     onUndoEdit,
     onSelectItems,
+    receipt,
+    onReceipt,
+    onDeselectItem,
   },
   ref,
 ) {
@@ -139,8 +201,11 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
    * It stays on screen until you Keep or Undo it, because "you must never lose
    * track of what the model did" is the whole reason it exists — a sentence
    * claiming what changed is not the same as being able to check it.
+   *
+   * The page owns it (see the `receipt` prop); this is only the setter so the
+   * stream can report what it landed.
    */
-  const [receipt, setReceipt] = useState<DocChange[] | null>(null);
+  const setReceipt = onReceipt ?? (() => {});
   const [input, setInput] = useState("");
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
@@ -156,6 +221,18 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
   // can't rely on the React state to gate re-entry inside sendMessage when
   // runWithPrompt fires while a stream is already in flight.
   const generatingRef = useRef(false);
+
+  /** The one clip this receipt is about, or null when it spans several. */
+  const oneClip = receipt?.length
+    ? (new Set(receipt.map((c) => c.itemId)).size === 1 ? receipt[0].label : null)
+    : null;
+
+  /** The selected clips, named and coloured, for the composer's context chips. */
+  const contextClips = (selectedIds ?? []).flatMap((id) => {
+    const found = doc ? findItem(doc, id) : null;
+    if (!found) return [];
+    return [{ id, label: chipLabel(doc!, found.item), swatch: chipSwatch(found.item) }];
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -255,6 +332,13 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     generatingRef.current = true;
     setIsGenerating(true);
     setStreamingContent("");
+    /*
+     * The old receipt belongs to the old edit. Leaving it up while a new turn
+     * runs was the bug: if the new edit produced no recognised change the panel
+     * simply kept showing the previous one, and its Undo — which steps history
+     * back once — then undid the NEW edit while claiming to undo the old.
+     */
+    setReceipt(null);
 
     let messageForAI = text.trim();
     if (sceneError) {
@@ -285,6 +369,17 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
       if (doc && onDocChanged) {
         await editDocument(messagesForAI, updatedHistory, controller);
         return;
+      }
+      /*
+       * A project WITH a document must never fall through to /api/generate.
+       * That route writes a TSX scene, which for a timeline project means the
+       * chat quietly stops editing the thing on screen and starts overwriting a
+       * file instead. If the document is here but the commit handler isn't,
+       * that is a wiring mistake, and failing loudly beats editing the wrong
+       * artefact.
+       */
+      if (doc) {
+        throw new Error("This project is a timeline — chat can't write a scene file for it.");
       }
 
       const res = await fetch("/api/generate", {
@@ -617,85 +712,101 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           </div>
         </div>
 
-        {chatHistory.map((msg, i) => {
-          const isUser = msg.role === "user";
-          return (
+        {/*
+          The two roles are drawn differently ON PURPOSE.
+
+          They used to share one layout — same avatar, same label, same
+          left-aligned prose — so a long conversation read as one voice talking
+          to itself and you had to read the words to find your own question. A
+          bubble on the right is the fastest "you said this" there is, and the
+          assistant, which writes the long answers, gets the full width.
+        */}
+        {chatHistory.map((msg, i) => (
+          msg.role === "user" ? (
+            <div key={i} style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+              <div
+                className="t-body"
+                style={{
+                  maxWidth: "88%",
+                  background: "var(--surface-hover)",
+                  borderRadius: "6px 6px 2px 6px",
+                  padding: "10px 12px",
+                  color: "var(--ink-primary)",
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ) : (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <div
                   style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: 4,
-                    background: isUser ? "var(--surface-hover)" : "var(--brand)",
-                    color: isUser ? "var(--ink-primary)" : "var(--brand-ink)",
-                    display: "grid",
-                    placeItems: "center",
-                    fontSize: 9,
-                    fontWeight: 700,
+                    width: 18, height: 18, borderRadius: 4,
+                    background: "var(--brand)", color: "var(--brand-ink)",
+                    display: "grid", placeItems: "center",
                   }}
                 >
-                  {isUser ? "Y" : <Icon name="sparkle" size={10} />}
+                  <Icon name="sparkle" size={10} />
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--ink-secondary)" }}>
-                  {isUser ? "You" : "Studio"}
-                </span>
+                <span className="t-caption" style={{ fontWeight: 600, color: "var(--ink-secondary)" }}>Assistant</span>
               </div>
               <div
-                style={{
-                  fontSize: 12.5,
-                  lineHeight: 1.55,
-                  color: "var(--ink-primary)",
-                  paddingLeft: 24,
-                  whiteSpace: "pre-wrap",
-                }}
+                className="t-body"
+                style={{ color: "var(--ink-primary)", paddingLeft: 24, whiteSpace: "pre-wrap" }}
               >
-                {msg.role === "assistant" ? <MessageContent content={msg.content} /> : msg.content}
+                <MessageContent content={msg.content} />
               </div>
             </div>
-          );
-        })}
+          )
+        ))}
 
+        {/*
+          Working, as a state rather than as punctuation.
+
+          Three pulsing dots say "something is happening" and nothing else. The
+          pill says the assistant has the turn, and the skeleton bars say an
+          answer of roughly this size is coming — which is the difference
+          between waiting and wondering whether it has wedged. The bars give way
+          the moment there are real words to show.
+        */}
         {isGenerating && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginTop: 4,
-              paddingLeft: 24,
-              fontSize: 12,
-              color: "var(--ink-tertiary)",
-            }}
-          >
-            <span
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: "50%",
-                background: "var(--brand)",
-                animation: "vt-dot-fade 1.4s ease-in-out infinite",
-              }}
-            />
-            <span
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: "50%",
-                background: "var(--brand)",
-                animation: "vt-dot-fade 1.4s ease-in-out .2s infinite",
-              }}
-            />
-            <span
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: "50%",
-                background: "var(--brand)",
-                animation: "vt-dot-fade 1.4s ease-in-out .4s infinite",
-              }}
-            />
-            <span style={{ marginLeft: 4 }}>{streamingContent.trim() ? "Working…" : "Thinking…"}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4, marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div
+                style={{
+                  width: 18, height: 18, borderRadius: 4,
+                  background: "var(--brand)", color: "var(--brand-ink)",
+                  display: "grid", placeItems: "center",
+                }}
+              >
+                <Icon name="sparkle" size={10} />
+              </div>
+              <span className="t-caption" style={{ fontWeight: 600, color: "var(--ink-secondary)" }}>Assistant</span>
+              <span
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                  height: 18, padding: "0 7px", borderRadius: "var(--r-pill)",
+                  background: "rgba(52,208,107,0.12)",
+                }}
+              >
+                <span
+                  style={{
+                    width: 5, height: 5, borderRadius: "50%", background: "var(--live)",
+                    animation: "vt-dot-fade 1.4s ease-in-out infinite",
+                  }}
+                />
+                <span className="t-caption" style={{ color: "var(--live)" }}>
+                  {streamingContent.trim() ? "Working" : "Thinking"}
+                </span>
+              </span>
+            </div>
+            {!streamingContent.trim() && (
+              <div style={{ paddingLeft: 24 }}>
+                <SkeletonList rows={2} />
+              </div>
+            )}
           </div>
         )}
 
@@ -735,10 +846,18 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
               padding: 12,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Changed</span>
+              {/* When every row is about the same clip, name it ONCE up here.
+                  Repeating it on each row spent the width that the values
+                  themselves need, and a wrapped value is unreadable. */}
+              {oneClip && (
+                <span className="t-caption" style={{ color: "var(--ink-disabled)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {oneClip}
+                </span>
+              )}
               <div style={{ flex: 1 }} />
-              <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+              <span className="t-caption" style={{ color: "var(--ink-tertiary)", flexShrink: 0 }}>
                 {receipt.length} {receipt.length === 1 ? "edit" : "edits"}
               </span>
             </div>
@@ -746,17 +865,23 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
               {receipt.slice(0, 6).map((c, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                  <span className="t-data-m" style={{ color: "var(--ink-tertiary)", minWidth: 52 }}>{c.field}</span>
+                  <span className="t-data-m" style={{ color: "var(--ink-tertiary)", minWidth: 52, flexShrink: 0 }}>{c.field}</span>
                   {c.before && (
-                    <span className="t-data-m" style={{ color: "var(--ink-tertiary)", textDecoration: "line-through" }}>
+                    <span className="t-data-m" style={{ color: "var(--ink-tertiary)", textDecoration: "line-through", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {c.before}
                     </span>
                   )}
-                  {c.before && c.after && <Icon name="arrowRight" size={11} style={{ color: "var(--ink-disabled)" }} />}
-                  {c.after && <span className="t-data-m" style={{ color: "var(--ink-primary)" }}>{c.after}</span>}
-                  <span className="t-caption" style={{ color: "var(--ink-disabled)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {c.label}
-                  </span>
+                  {c.before && c.after && <Icon name="arrowRight" size={11} style={{ color: "var(--ink-disabled)", flexShrink: 0 }} />}
+                  {c.after && (
+                    <span className="t-data-m" style={{ color: "var(--ink-primary)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.after}
+                    </span>
+                  )}
+                  {!oneClip && (
+                    <span className="t-caption" style={{ color: "var(--ink-disabled)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.label}
+                    </span>
+                  )}
                 </div>
               ))}
               {receipt.length > 6 && (
@@ -785,6 +910,41 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
 
       {/* Input */}
       <div style={{ padding: 10, borderTop: "1px solid var(--border-hairline)" }}>
+        {/*
+          Context chips: what this message will carry besides the words.
+
+          The selected clips and the playhead frame were ALREADY being posted
+          with every message — they were just invisible, so "make it shorter"
+          silently meant a different thing depending on what you had clicked
+          last. Showing them makes the context checkable, and the ✕ makes it
+          correctable.
+        */}
+        {doc && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+            {contextClips.map((c) => (
+              <span key={c.id} style={chipStyle}>
+                <span
+                  aria-hidden
+                  style={{ width: 10, height: 10, borderRadius: 2, background: c.swatch, flexShrink: 0 }}
+                />
+                <span style={{ maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {c.label}
+                </span>
+                {onDeselectItem && (
+                  <button
+                    onClick={() => onDeselectItem(c.id)}
+                    aria-label={`Stop sending ${c.label}`}
+                    style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, display: "grid", placeItems: "center" }}
+                  >
+                    <Icon name="close" size={10} />
+                  </button>
+                )}
+              </span>
+            ))}
+            <TimecodeChip fps={doc.size.fps} />
+          </div>
+        )}
+
         {/* SVG attachment chips */}
         {attachedSvgs.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>

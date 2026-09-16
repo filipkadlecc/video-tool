@@ -1429,6 +1429,21 @@ const tc = (frame: number, fps: number) => {
   return `${p(Math.floor(f / safe / 60))}:${p(Math.floor((f / safe) % 60))}:${p(f % safe)}`;
 };
 
+/** The edge effects on an item, as `"arrives"`/`"leaves"` → a readable value. */
+function edgeSummary(item: EditorItem): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const fx of itemEffects(item)) {
+    if (!fx.enabled) continue;
+    out[fx.kind === "animateIn" ? "arrives" : "leaves"] = `${fx.preset} · ${fx.durationInFrames}f`;
+  }
+  return out;
+}
+
+/** Which track an item is on, by name, so a move between tracks can be named. */
+function trackOf(doc: EditorDoc, itemId: string): string | undefined {
+  return doc.tracks.find((t) => t.items.some((i) => i.id === itemId))?.name;
+}
+
 /**
  * What the model actually did, as a list you can read.
  *
@@ -1437,9 +1452,20 @@ const tc = (frame: number, fps: number) => {
  * sentence claiming what changed, with no way to check one against the other —
  * and no way to put it back except undo-and-hope.
  *
- * Deliberately shallow: moves, trims, adds, removes and keyframe counts. A
- * field-by-field diff of every layout property would be noise, and the point is
- * to be readable at a glance.
+ * ── Why this covers everything, and why it ends in a catch-all ───────────────
+ *
+ * It used to report only moves, trims, adds, removes and keyframe counts, on
+ * the theory that a full field diff would be noise. The consequence was worse
+ * than noise: an edit to text, colour, position or an effect changed the
+ * document and produced an EMPTY list, the panel kept showing the PREVIOUS
+ * edit's receipt, and that receipt's Undo stepped back over the new edit while
+ * "Show in timeline" selected clips from two turns ago. A receipt that is
+ * silent about an edit is worse than no receipt, because it is read as "nothing
+ * happened".
+ *
+ * So every field that can change is named, and anything unrecognised still
+ * produces a row. `summariseDocChange` returning `[]` now means, and only
+ * means, that the document did not change.
  */
 export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChange[] {
   const fps = after.size.fps || 25;
@@ -1456,18 +1482,55 @@ export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChan
       out.push({ itemId: id, label: clipLabel(item), field: "added", after: tc(item.from, fps) });
       continue;
     }
-    if (prev.from !== item.from) {
-      out.push({ itemId: id, label: clipLabel(item), field: "in", before: tc(prev.from, fps), after: tc(item.from, fps) });
-    }
+    if (prev === item) continue;
+
+    const before0 = out.length;
+    const push = (field: string, b?: string, a?: string) =>
+      out.push({ itemId: id, label: clipLabel(item), field, before: b, after: a });
+
+    if (prev.from !== item.from) push("in", tc(prev.from, fps), tc(item.from, fps));
+
     const prevEnd = prev.from + prev.durationInFrames;
     const end = item.from + item.durationInFrames;
-    if (prevEnd !== end) {
-      out.push({ itemId: id, label: clipLabel(item), field: "out", before: tc(prevEnd, fps), after: tc(end, fps) });
+    if (prevEnd !== end) push("out", tc(prevEnd, fps), tc(end, fps));
+
+    // Text is the field most often edited and was the one least likely to be
+    // reported — a rewritten headline used to show as nothing at all.
+    const textOf = (i: EditorItem) => (i.type === "text" ? (i as { text?: string }).text : undefined);
+    if (textOf(prev) !== textOf(item)) push("text", textOf(prev), textOf(item));
+
+    const pl = prev.layout;
+    const nl = item.layout;
+    const xy = (l: typeof pl) => `${Math.round(l.x)}, ${Math.round(l.y)}`;
+    const wh = (l: typeof pl) => `${Math.round(l.width)} × ${Math.round(l.height)}`;
+    if (pl.x !== nl.x || pl.y !== nl.y) push("position", xy(pl), xy(nl));
+    if (pl.width !== nl.width || pl.height !== nl.height) push("size", wh(pl), wh(nl));
+    if ((pl.opacity ?? 1) !== (nl.opacity ?? 1)) {
+      push("opacity", `${Math.round((pl.opacity ?? 1) * 100)}%`, `${Math.round((nl.opacity ?? 1) * 100)}%`);
     }
+    if ((pl.rotation ?? 0) !== (nl.rotation ?? 0)) push("rotation", `${pl.rotation ?? 0}°`, `${nl.rotation ?? 0}°`);
+    if ((pl.scale ?? 1) !== (nl.scale ?? 1)) {
+      push("scale", (pl.scale ?? 1).toFixed(2), (nl.scale ?? 1).toFixed(2));
+    }
+
+    const edgeBefore = edgeSummary(prev);
+    const edgeAfter = edgeSummary(item);
+    for (const edge of ["arrives", "leaves"]) {
+      if (edgeBefore[edge] !== edgeAfter[edge]) push(edge, edgeBefore[edge] ?? "none", edgeAfter[edge] ?? "none");
+    }
+
     const keysBefore = Object.values(prev.keys ?? {}).reduce((n, k) => n + (k?.length ?? 0), 0);
     const keysAfter = Object.values(item.keys ?? {}).reduce((n, k) => n + (k?.length ?? 0), 0);
-    if (keysBefore !== keysAfter) {
-      out.push({ itemId: id, label: clipLabel(item), field: "keys", before: String(keysBefore), after: String(keysAfter) });
+    if (keysBefore !== keysAfter) push("keys", String(keysBefore), String(keysAfter));
+
+    const trackBefore = trackOf(before, id);
+    const trackAfter = trackOf(after, id);
+    if (trackBefore !== trackAfter) push("track", trackBefore, trackAfter);
+
+    // The catch-all. Something about this clip differs and none of the named
+    // fields caught it — say so rather than letting the edit go unreported.
+    if (out.length === before0 && JSON.stringify(prev) !== JSON.stringify(item)) {
+      push("changed");
     }
   }
 

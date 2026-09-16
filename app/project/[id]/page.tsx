@@ -5,6 +5,7 @@ import GeneratingOverlay from "@/components/GeneratingOverlay";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import ChatPanel, { type ChatPanelHandle } from "@/components/ChatPanel";
+import type { DocChange } from "@/lib/editor-agent";
 import AssetBrowser from "@/components/AssetBrowser";
 import PromptAnimationDialog from "@/components/PromptAnimationDialog";
 import SnippetBrowser from "@/components/SnippetBrowser";
@@ -176,6 +177,17 @@ export default function ProjectEditor() {
    * survives a reload, the same way the workspace is.
    */
   const [range, setRange] = useState<{ in: number | null; out: number | null }>({ in: null, out: null });
+
+  /**
+   * The last AI edit, as a reviewable list.
+   *
+   * It lives HERE, not in ChatPanel, because the chat column is unmounted the
+   * moment you switch to Cut or open Properties — and the moment you most want
+   * to know what the model changed is when you go and look at the timeline it
+   * changed. Held by the page, the same receipt survives the trip and arrives
+   * in Cut as a toast with the same three actions.
+   */
+  const [aiEdit, setAiEdit] = useState<DocChange[] | null>(null);
   const rangeKey = `vt:range:${projectId}`;
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -691,6 +703,19 @@ export default function ProjectEditor() {
    * the final value commits, so a whole drag is one edit.
    */
   const preDragDocRef = useRef<EditorDoc | null>(null);
+  /**
+   * Put the last AI edit back, and take the receipt down with it.
+   *
+   * One history step, because a whole assistant turn is committed as one entry
+   * (see useDocHistory's dedupe) — so Undo here means "that edit", not "the
+   * last tool call the model happened to make".
+   */
+  const undoAiEdit = useCallback(() => {
+    const prev = docHistory.undo();
+    if (prev !== null) setDoc(prev);
+    setAiEdit(null);
+  }, [docHistory]);
+
   const commitDoc = useCallback((next: EditorDoc, opts?: { transient?: boolean }) => {
     setDoc((prev) => {
       if (opts?.transient) {
@@ -903,6 +928,42 @@ export default function ProjectEditor() {
       else window.localStorage.setItem(rangeKey, JSON.stringify(range));
     } catch { /* ignore */ }
   }, [range, rangeKey]);
+
+  /*
+   * The receipt follows you out of the chat.
+   *
+   * In Cut the chat column is replaced by the inspector, so a receipt rendered
+   * only inside ChatPanel would be invisible exactly when you have gone to look
+   * at the timeline it describes. The same three actions arrive as a toast
+   * instead, and it stays up until you answer it (`duration: 0`).
+   */
+  const chatOnScreen = !(doc && !showCodeEditor && rightTab === "properties");
+  useEffect(() => {
+    if (!aiEdit?.length || chatOnScreen) return;
+    const first = aiEdit[0];
+    const id = toast.show({
+      tone: "neutral",
+      duration: 0,
+      text: `${aiEdit.length} ${aiEdit.length === 1 ? "edit" : "edits"} from the assistant`,
+      // "Headline · in 00:01:08 → 00:02:00" — the arrow is the separator
+      // between the two values, so it must not get a dot as well.
+      detail: [
+        first.label,
+        [first.field, [first.before, first.after].filter(Boolean).join(" → ")].filter(Boolean).join(" "),
+      ].filter(Boolean).join(" · "),
+      actions: [
+        { label: "Keep", onClick: () => setAiEdit(null) },
+        { label: "Undo", onClick: undoAiEdit },
+        {
+          label: "Show in timeline",
+          onClick: () => { setSelectedItemIds(new Set(aiEdit.map((c) => c.itemId))); setAiEdit(null); },
+        },
+      ],
+    });
+    return () => toast.dismiss(id);
+    // `toast` is a stable context value; listing it here re-fires the effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiEdit, chatOnScreen, undoAiEdit]);
 
   // Restore the last workspace for THIS project.
   useEffect(() => {
@@ -1480,8 +1541,15 @@ export default function ProjectEditor() {
                 doc={docView}
                 selectedIds={[...selectedItemIds]}
                 onDocChanged={commitDoc}
-                onUndoEdit={() => { const prev = docHistory.undo(); if (prev !== null) setDoc(prev); }}
+                onUndoEdit={undoAiEdit}
                 onSelectItems={(ids) => setSelectedItemIds(new Set(ids))}
+                receipt={aiEdit}
+                onReceipt={setAiEdit}
+                onDeselectItem={(id) => setSelectedItemIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(id);
+                  return next;
+                })}
               />
               )}
             </div>

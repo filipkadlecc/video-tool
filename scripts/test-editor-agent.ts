@@ -12,7 +12,8 @@
  * model can act on.
  */
 import {
-  addAsset, setItemKey, removeItem, trimItem, moveItem, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
+  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
+  moveItem, moveItemToTrack, removeItem, setItemKey, setLayout, trimItem, updateItem,
   type Asset, type EditorDoc, type SolidItem, type TextItem, type VideoItem,
 } from "../lib/editor-doc";
 import {
@@ -742,6 +743,47 @@ head("the edit receipt says what actually moved");
   const keyed = setItemKey(before, "r1", "opacity", 0, 0);
   a(summariseDocChange(before, keyed).some((c) => c.field === "keys" && c.after === "1"),
     "and keyframes are counted, since they are the hardest change to spot");
+
+  /*
+   * The receipt used to report ONLY the five fields above. Everything else —
+   * rewriting the text, moving the box, changing an effect — changed the
+   * document and reported nothing, so the panel went on showing the previous
+   * turn's receipt and its Undo stepped over the wrong edit.
+   *
+   * These assertions exist so that can never come back: a changed document
+   * always produces at least one row.
+   */
+  const retitled = updateItem<TextItem>(before, "r1", { text: "Ship it in a week" });
+  const rt = summariseDocChange(before, retitled);
+  a(rt.some((c) => c.field === "text" && c.before === "Ship it" && c.after === "Ship it in a week"),
+    "rewriting the text is reported, with both versions");
+
+  const nudged = setLayout(before, "r1", { x: 40, y: 12 });
+  a(summariseDocChange(before, nudged).some((c) => c.field === "position" && c.after === "40, 12"),
+    "moving the box on the canvas is reported");
+
+  const resized = setLayout(before, "r1", { width: 300, height: 80 });
+  a(summariseDocChange(before, resized).some((c) => c.field === "size" && c.after === "300 × 80"),
+    "resizing it is reported");
+
+  const faded = setLayout(before, "r1", { opacity: 0.5 });
+  a(summariseDocChange(before, faded).some((c) => c.field === "opacity" && c.after === "50%"),
+    "opacity is reported as a percentage");
+
+  const twoTracks = addTrack(before, "V2");
+  const other = twoTracks.tracks[twoTracks.tracks.length - 1].id;
+  const shifted = moveItemToTrack(twoTracks, "r1", other, 50);
+  a(summariseDocChange(twoTracks, shifted).some((c) => c.field === "track" && c.after === "V2"),
+    "moving a clip to another track is reported, by track name");
+
+  // The catch-all: a field this function knows nothing about still shows up.
+  const oddball = updateItem<TextItem>(before, "r1", { style: { fontSize: 96 } } as Partial<TextItem>);
+  a(summariseDocChange(before, oddball).length > 0,
+    "a change to a field the receipt has no name for still reports SOMETHING");
+
+  // And the contract that makes an empty list safe to act on.
+  a(summariseDocChange(before, { ...before, tracks: [...before.tracks] }).length === 0,
+    "an equal document still reports nothing, so empty means empty");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
