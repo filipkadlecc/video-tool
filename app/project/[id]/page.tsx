@@ -1515,6 +1515,7 @@ export default function ProjectEditor() {
           doc={doc}
           selectedIds={selectedItemIds}
           onSelectionChange={setSelectedItemIds}
+          onChange={commitDoc}
           saveLabel={SAVE_LABEL[saveState].toLowerCase()}
           preview={docPreview}
           strip={

@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import Icon from "@/components/ui/Icon";
 import CodeEditor from "@/components/CodeEditor";
 import { sceneJsonText, sceneProblems } from "@/lib/scene-json";
-import { findItem, type EditorDoc } from "@/lib/editor-doc";
+import { findItem, updateItem, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
 import { timecode, needsHours } from "@/lib/timecode";
 
 /**
@@ -35,6 +35,8 @@ interface Props {
   doc: EditorDoc;
   selectedIds: Set<string>;
   onSelectionChange: (next: Set<string>) => void;
+  /** Editing a scene's source changes the document, so the page commits it. */
+  onChange: (doc: EditorDoc) => void;
   /** The live preview — passed in so the page keeps its player wiring. */
   preview: React.ReactNode;
   /** The collapsed timeline along the bottom. */
@@ -44,8 +46,33 @@ interface Props {
 }
 
 export default function CodeModeScreen({
-  doc, selectedIds, onSelectionChange, preview, strip, saveLabel,
+  doc, selectedIds, onSelectionChange, onChange, preview, strip, saveLabel,
 }: Props) {
+  /*
+   * WHICH code you are looking at.
+   *
+   * An animation in this editor is a `scene` block holding its own TSX, and for
+   * most projects the whole composition IS one such block. Showing those the
+   * composition JSON meant showing a wrapper — "one clip, 0 to 529" — and
+   * hiding the only thing you would open a code view to change. So: if the
+   * selection (or the document) comes down to a single scene, this is that
+   * scene's source, and it is editable. That is the point of a code view.
+   *
+   * A real cut — footage, titles, several tracks — has no hand-written source
+   * to show, and the composition remains the honest readout.
+   */
+  const scenes = useMemo(
+    () => doc.tracks.flatMap((t) => t.items.filter((i): i is SceneItem => i.type === "scene")),
+    [doc],
+  );
+  const selectedScene = useMemo(() => {
+    if (selectedIds.size === 1) {
+      const found = findItem(doc, [...selectedIds][0]);
+      if (found?.item.type === "scene") return found.item as SceneItem;
+    }
+    return scenes.length === 1 ? scenes[0] : null;
+  }, [doc, selectedIds, scenes]);
+
   const { text, lines } = useMemo(() => sceneJsonText(doc), [doc]);
   const problems = useMemo(() => sceneProblems(doc, lines), [doc, lines]);
 
@@ -71,14 +98,17 @@ export default function CodeModeScreen({
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRight: "1px solid var(--border-hairline)" }}>
           <div style={{ flex: 1, minHeight: 0 }}>
             <CodeEditor
-              code={text}
-              onChange={() => {}}
-              language="json"
-              filename="scene.json"
-              readOnly
-              highlight={highlight}
-              warnLines={problems.map((p) => p.line)}
-              onLineClick={(line) => {
+              code={selectedScene ? selectedScene.code : text}
+              onChange={(next) => {
+                if (!selectedScene) return;
+                onChange(updateItem<SceneItem>(doc, selectedScene.id, { code: next }));
+              }}
+              language={selectedScene ? "typescript" : "json"}
+              filename={selectedScene ? "scene.tsx" : "scene.json"}
+              readOnly={!selectedScene}
+              highlight={selectedScene ? null : highlight}
+              warnLines={selectedScene ? [] : problems.map((p) => p.line)}
+              onLineClick={selectedScene ? undefined : (line) => {
                 const id = clipAtLine(line);
                 onSelectionChange(id ? new Set([id]) : new Set());
               }}
@@ -90,9 +120,20 @@ export default function CodeModeScreen({
                     background: "var(--surface-chrome)",
                   }}
                 >
-                  <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Composition</span>
-                  <span className="t-data-s" style={{ color: "var(--ink-secondary)" }}>scene.json</span>
-                  <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>read-only</span>
+                  <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>
+                    {selectedScene ? "Scene" : "Composition"}
+                  </span>
+                  <span className="t-data-s" style={{ color: "var(--ink-secondary)" }}>
+                    {selectedScene ? "scene.tsx" : "scene.json"}
+                  </span>
+                  {!selectedScene && (
+                    <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>read-only</span>
+                  )}
+                  {selectedScene && scenes.length > 1 && (
+                    <span className="t-caption" style={{ color: "var(--ink-disabled)" }}>
+                      the selected block
+                    </span>
+                  )}
                   <div style={{ flex: 1 }} />
                   {problems.length > 0 && (
                     <span
@@ -195,9 +236,9 @@ export default function CodeModeScreen({
               </span>
             )}
             <span className="t-caption" style={{ color: "var(--ink-disabled)", lineHeight: 1.5 }}>
-              Selecting a clip in the timeline scrolls the code to it, and clicking a line selects the
-              clip — one selection, two views. The text is a readout: edits happen on the timeline,
-              where a malformed one can&apos;t cost you the composition.
+              {selectedScene
+                ? "This is the animation's own source. Edit it and the preview follows — it is the same file the assistant writes, so anything you change here survives the next thing it does."
+                : "Selecting a clip in the timeline scrolls the code to it, and clicking a line selects the clip — one selection, two views. A cut has no hand-written source, so the composition is a readout: edits happen on the timeline."}
             </span>
           </div>
         </div>
