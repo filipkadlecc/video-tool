@@ -6,9 +6,9 @@ import IconButton from "@/components/ui/IconButton";
 import { useToast } from "@/components/ui/Toast";
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import { timecode, needsHours } from "@/lib/timecode";
-import { CHANNELS_BY_ID, channelsFor, type ChannelId } from "@/lib/editor-keys";
-import Tooltip from "@/components/ui/Tooltip";
+import { CHANNELS_BY_ID, channelsFor, resolvedLayout, type ChannelId, type ChannelInfo } from "@/lib/editor-keys";
 import Toggle from "@/components/ui/Toggle";
+import Slider from "@/components/ui/Slider";
 import { snapFrame } from "@/lib/editor-doc";
 import type { AnimationPreset } from "@/lib/editor-effects";
 import {
@@ -79,7 +79,7 @@ interface Props {
   onSelectionChange: (next: Set<string>) => void;
   /**
    * Opens the "prompt an animation" dialog. Owned by the page, which has the
-   * project's settings and commits the result; the rail only asks for it.
+   * project's settings and commits the result; the header only asks for it.
    */
   onPromptAnimation?: () => void;
   /** The shortcuts sheet is owned by the page, so Cmd+/ works without a timeline. */
@@ -109,6 +109,16 @@ const ITEM_SURFACE: Record<string, string> = {
   captions: "var(--surface-raised)",
 };
 
+/** A channel value as the inspector writes it — "100%", "1.00x", "0deg", "480". */
+function channelText(info: ChannelInfo | undefined, v: number | undefined): string {
+  if (!info || v === undefined) return "—";
+  if (info.unit === "pct") return `${Math.round(v * 100)}%`;
+  if (info.unit === "deg") return `${v.toFixed(info.precision)}°`;
+  if (info.unit === "x") return `${v.toFixed(info.precision)}x`;
+  if (info.unit === "norm") return v.toFixed(info.precision);
+  return String(Math.round(v));
+}
+
 const ITEM_ICONS: Record<string, string> = {
   video: "film", audio: "monitor", image: "layers", gif: "layers",
   text: "layers", solid: "layers", captions: "layers", scene: "layers",
@@ -123,6 +133,8 @@ export default function DocTimeline({
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [snapOn, setSnapOn] = useState(true);
+  /** Track-head controls show on hover; at 168px they crowd the name otherwise. */
+  const [hoverHead, setHoverHead] = useState<string | null>(null);
   /** Expanded shows the selected clip's property lanes. */
   const [expanded, setExpanded] = useState(false);
   const [containerWidth, setContainerWidth] = useState(900);
@@ -134,11 +146,9 @@ export default function DocTimeline({
   // The same file list serves two jobs: dropping a clip on a track, and turning
   // a clip's speech into subtitles. Captions used to be reachable only as a
   // secondary button inside "Add media", which is not where anyone looks for
-  // subtitles — so the rail asks for them directly and the list follows.
+  // subtitles — so the header asks for them directly and the list follows.
   const [pickerMode, setPickerMode] = useState<"insert" | "captions">("insert");
   const [clipboard, setClipboard] = useState<EditorItem | null>(null);
-  /** Tool the pointer is over, so the rail can name it without a delay. */
-  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
   /** Track lane the pointer is over mid-drag, so a clip can be dropped onto another. */
   const [hoverTrack, setHoverTrack] = useState<number | null>(null);
   const hoverRef = useRef<number | null>(null);
@@ -600,6 +610,17 @@ export default function DocTimeline({
     return { trackId: found.track.id, item: found.item, channels };
   }, [doc, selectedIds, expanded]);
 
+  /**
+   * The selected clip's settled values at the playhead, so a lane with no keys
+   * can say WHICH value it is holding. Separate from `keyLanes` on purpose:
+   * this changes every frame during playback and that must not rebuild the
+   * lane list itself.
+   */
+  const laneValues = useMemo(
+    () => (keyLanes ? resolvedLayout(keyLanes.item, currentFrame - keyLanes.item.from) : null),
+    [keyLanes, currentFrame],
+  );
+
   const LANE_H = 28;
 
   /**
@@ -663,13 +684,21 @@ export default function DocTimeline({
     <div
       style={{
         display: "flex", height: trackHeight(track), borderBottom: "1px solid var(--border-hairline)",
-        background: hoverTrack === laneIndex && dragState?.mode === "move" ? "var(--surface-raised)" : undefined,
+        // The track holding the selection is washed, so the row the inspector is
+        // talking about is findable without reading the clips.
+        background: hoverTrack === laneIndex && dragState?.mode === "move"
+          ? "var(--surface-raised)"
+          : track.items.some((i) => selectedIds.has(i.id))
+            ? "rgba(244,244,245,0.03)"
+            : undefined,
       }}
     >
       <div
+        onMouseEnter={() => setHoverHead(track.id)}
+        onMouseLeave={() => setHoverHead(null)}
         style={{
-          width: LABEL_W, flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
-          padding: "0 6px", borderRight: "1px solid var(--border-hairline)", background: "var(--surface-chrome)",
+          width: LABEL_W, flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          padding: "0 10px", borderRight: "1px solid var(--border-hairline)", background: "var(--surface-chrome)",
         }}
       >
         {/* Kind then name — "V2  Footage" — so a glance down the column tells
@@ -681,10 +710,15 @@ export default function DocTimeline({
         <span className="t-control" style={{ color: "var(--ink-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {track.name}
         </span>
+        {/* Hidden and muted are states you must be able to SEE without hovering
+            — a silent track that looks like every other track is a bug report
+            waiting to happen. So a toggle that is off stays visible; the rest
+            of the controls appear on hover. */}
+        <span style={{ display: "flex", alignItems: "center", gap: 2, transition: "opacity var(--dur-state) var(--ease)" }}>
         <button
           aria-label={track.hidden ? "Show track" : "Hide track"}
           onClick={() => commit({ ...doc, tracks: doc.tracks.map((t) => (t.id === track.id ? { ...t, hidden: !t.hidden } : t)) })}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 1, opacity: hoverHead === track.id || track.hidden ? 1 : 0 }}
         >
           <Icon
             name={track.hidden ? "eyeOff" : "eye"}
@@ -695,7 +729,7 @@ export default function DocTimeline({
         <button
           aria-label={track.muted ? "Unmute track" : "Mute track"}
           onClick={() => commit({ ...doc, tracks: doc.tracks.map((t) => (t.id === track.id ? { ...t, muted: !t.muted } : t)) })}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 1, opacity: hoverHead === track.id || track.muted ? 1 : 0 }}
         >
           <Icon
             name={track.muted ? "speakerOff" : "speaker"}
@@ -707,11 +741,12 @@ export default function DocTimeline({
           <button
             aria-label="Remove track"
             onClick={() => commit(removeTrack(doc, track.id))}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 1 }}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 1, opacity: hoverHead === track.id ? 1 : 0 }}
           >
             <Icon name="trash" size={11} style={{ color: "var(--ink-disabled)" }} />
           </button>
         )}
+        </span>
       </div>
 
       <div
@@ -804,16 +839,22 @@ export default function DocTimeline({
                 top: CLIP_INSET, height: trackHeight(track) - CLIP_INSET * 2, borderRadius: "var(--r-item)", cursor: "grab",
                 background: ITEM_SURFACE[item.type] ?? "var(--surface-raised)",
                 border: "1px solid var(--border-edge)",
-                opacity: track.hidden ? 0.35 : 0.9,
+                // A hidden track's clips are dimmed. Everything else is drawn at
+                // full strength: a clip at 0.9 reads as slightly switched off,
+                // which is a meaning this timeline already spends on `hidden`.
+                opacity: track.hidden ? 0.35 : 1,
                 outline: selected ? "1px solid var(--ink-primary)" : "none",
-                display: "flex", alignItems: "center", gap: 4, padding: "0 6px", overflow: "hidden",
+                display: "flex", alignItems: "center", gap: 6, padding: "0 8px", overflow: "hidden",
               }}
             >
               {strip && (
                 <div
                   aria-hidden
                   style={{
-                    position: "absolute", inset: 0, borderRadius: 3, opacity: 0.8,
+                    // Texture, not content. At full strength the strip won the
+                    // clip and the label — the thing you actually read a
+                    // timeline by — became unreadable over it.
+                    position: "absolute", inset: 0, borderRadius: "var(--r-item)", opacity: 0.22,
                     backgroundImage: `url(${strip.url})`,
                     backgroundRepeat: "no-repeat",
                     // The strip covers the WHOLE source file; show only the window
@@ -851,17 +892,38 @@ export default function DocTimeline({
                   ))}
                 </div>
               )}
-              <Icon name={ITEM_ICONS[item.type] ?? "layers"} size={11} style={{ color: "var(--ink-tertiary)", flexShrink: 0, position: "relative" }} />
-              <span className="t-control" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", position: "relative" }}>
-                {label}
+              {/* Two lines: what the clip is, then when it runs. A timeline is
+                  read by name and by range, and one line could only ever carry
+                  the first. */}
+              <span style={{ position: "relative", minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center" }}>
+                <span className="t-control" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {label}
+                </span>
+                {clipW > 90 && (
+                  <span className="t-data-s" style={{ color: "var(--ink-tertiary)", whiteSpace: "nowrap" }}>
+                    {timecode(g.from, fps, hoursNeeded)} → {timecode(g.from + g.dur, fps, hoursNeeded)}
+                    {item.type === "text" ? ` · ${g.dur}f` : ""}
+                  </span>
+                )}
               </span>
+              {/* Trim handles. Invisible until the clip is selected, then 4px
+                  of solid ink on each edge — the spec's handles, and the same
+                  strip that was already the drag target. */}
               <div
                 onPointerDown={(e) => beginDrag(e, item, "trim-left")}
-                style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 6, cursor: "ew-resize" }}
+                style={{
+                  position: "absolute", left: 0, top: 0, bottom: 0, width: selected ? 4 : 6, cursor: "ew-resize",
+                  background: selected ? "var(--ink-primary)" : undefined,
+                  borderRadius: selected ? "2px 0 0 2px" : undefined,
+                }}
               />
               <div
                 onPointerDown={(e) => beginDrag(e, item, "trim-right")}
-                style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 6, cursor: "ew-resize" }}
+                style={{
+                  position: "absolute", right: 0, top: 0, bottom: 0, width: selected ? 4 : 6, cursor: "ew-resize",
+                  background: selected ? "var(--ink-primary)" : undefined,
+                  borderRadius: selected ? "0 2px 2px 0" : undefined,
+                }}
               />
             </div>
           );
@@ -889,11 +951,13 @@ export default function DocTimeline({
           </div>
           <div style={{ position: "relative", width: contentW, background: "rgba(244,244,245,0.02)" }}>
             {keys.length === 0 && (
+              // An empty lane says nothing; an empty lane that states the value
+              // it is holding says "this property exists, it just isn't moving".
               <span
                 className="t-data-s"
                 style={{ position: "absolute", left: 8, top: "50%", marginTop: -7, color: "var(--ink-disabled)" }}
               >
-                no keys
+                no keys · {channelText(info, laneValues?.[ch])}
               </span>
             )}
             {keys.length > 1 && (
@@ -940,46 +1004,16 @@ export default function DocTimeline({
     { id: "delete", icon: "trash", label: "Delete selected", shortcut: "⌫", onClick: () => deleteSelected(true), disabled: selectedIds.size === 0 },
   ];
 
-  const rail = (
-    // Tools down the left, as in Premiere: icon only, named on hover. Keeping
-    // them out of the timeline's own header means the header can be about the
-    // timeline's state (snap, zoom, playhead) rather than a row of buttons.
-    //
-    // The naming uses the shared Tooltip; this used to be a fourth hand-rolled
-    // hover label, which is three too many.
-    <div
-      style={{
-        width: 34, flexShrink: 0, display: "flex", flexDirection: "column",
-        alignItems: "center", gap: 2, padding: "6px 0",
-        borderRight: "1px solid var(--border-hairline)", background: "var(--surface-chrome)",
-        position: "relative", zIndex: 6,
-      }}
-      onPointerLeave={() => setHoveredTool(null)}
-    >
-      {tools.map((t) => (
-        <Tooltip key={t.id} label={t.label} shortcut={t.shortcut} placement="bottom">
-          <button
-            onClick={t.onClick}
-            disabled={t.disabled}
-            aria-label={t.label}
-            onPointerEnter={() => setHoveredTool(t.id)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, borderRadius: "var(--r-control)", padding: 0,
-              background: hoveredTool === t.id && !t.disabled ? "var(--surface-hover)" : "transparent",
-              border: "none", cursor: t.disabled ? "default" : "pointer",
-            }}
-          >
-            <Icon
-              name={t.icon}
-              size={14}
-              style={{ color: t.disabled ? "var(--ink-disabled)" : "var(--ink-secondary)" }}
-            />
-          </button>
-        </Tooltip>
-      ))}
-    </div>
-  );
+  /**
+   * Zoom as a slider, the way the header spec has it: 0 is fit-to-width, 100 is
+   * as close as this project's length allows. The mapping is logarithmic
+   * because zoom is multiplicative — a linear slider spends its first third
+   * getting off the ground and its last third doing nothing.
+   */
+  const zoomPct = Math.round((Math.log(Math.min(zoom, maxZoom)) / Math.log(maxZoom)) * 100);
+  const setZoomPct = (pct: number) =>
+    setZoom(Math.exp((Math.max(0, Math.min(100, pct)) / 100) * Math.log(maxZoom)));
+  const divider = <span style={{ width: 1, height: 14, background: "var(--border-hairline)", flexShrink: 0 }} />;
 
   return (
     // `user-select: none` matters here: the ruler's tick labels are ordinary
@@ -987,16 +1021,36 @@ export default function DocTimeline({
     // globals.css paints ::selection with the accent colour, that read as the
     // timeline lighting up green rather than as a stray selection.
     <div style={{ display: "flex", height: "100%", minHeight: 0, background: "var(--surface-void)", userSelect: "none" }}>
-      {rail}
       <div
         ref={wrapRef}
         style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}
       >
-      {/* Status strip — the tools themselves live in the rail on the left. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderBottom: "1px solid var(--border-hairline)" }}>
+      {/*
+        36px header: the label, then the tools, then — pushed right — the state
+        of the timeline itself: snapping and zoom.
+
+        The tools used to live in a 34px rail down the left side. That rail cost
+        the track-head column 34px it could not spare and appeared nowhere in
+        the design, which puts the same buttons in this row.
+      */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, height: 36, flexShrink: 0, padding: "0 8px", borderBottom: "1px solid var(--border-hairline)" }}>
         <span className="t-section" style={{ color: "var(--ink-tertiary)" }}>Timeline</span>
+        {divider}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+          {tools.map((t) => (
+            <IconButton
+              key={t.id}
+              icon={t.icon}
+              size={28}
+              title={t.label}
+              shortcut={t.shortcut}
+              disabled={t.disabled}
+              onClick={t.onClick}
+            />
+          ))}
+        </span>
         {uploading && (
-          <span className="mono" style={{ fontSize: 9, color: "var(--live)" }}>
+          <span className="t-data-s" style={{ color: "var(--live)" }}>
             uploading {uploading}…
           </span>
         )}
@@ -1005,20 +1059,29 @@ export default function DocTimeline({
           <Toggle size="chrome" checked={snapOn} onChange={setSnapOn} label="Snap to frames" />
           <span className="t-control" style={{ color: snapOn ? "var(--ink-primary)" : "var(--ink-tertiary)" }}>Snap</span>
         </span>
-        <button onClick={() => setZoom(1)} style={toolBtn}>Fit</button>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          style={{ ...toolBtn, color: expanded ? "var(--ink-primary)" : "var(--ink-secondary)" }}
+        {divider}
+        <IconButton
+          icon="zoomOut" size={24} title="Zoom out" disabled={zoom <= 1}
+          onClick={() => setZoom((z) => Math.max(1, z / 1.5))}
+        />
+        <Slider
+          value={zoomPct} min={0} max={100}
+          onChange={setZoomPct}
+          style={{ flex: "0 0 96px", width: 96 }}
+        />
+        <IconButton
+          icon="zoomIn" size={24} title="Zoom in" disabled={zoom >= maxZoom}
+          onClick={() => setZoom((z) => Math.min(maxZoom, z * 1.5))}
+        />
+        {divider}
+        <IconButton
+          icon={expanded ? "collapse" : "expand"}
+          size={24}
+          active={expanded}
           title={expanded ? "Hide property lanes" : "Show the selected clip's property lanes"}
-        >
-          {expanded ? "Collapse" : "Expand"}
-        </button>
-        <IconButton icon="help" size={22} title="Keyboard shortcuts" shortcut="⌘/" onClick={onShowShortcuts} />
-        <span className="mono nums" style={{ fontSize: 9, color: "var(--ink-disabled)" }}>
-          {Math.floor(currentFrame / fps / 60).toString().padStart(2, "0")}:
-          {Math.floor((currentFrame / fps) % 60).toString().padStart(2, "0")}.
-          {Math.floor(currentFrame % fps).toString().padStart(2, "0")}
-        </span>
+          onClick={() => setExpanded((v) => !v)}
+        />
+        <IconButton icon="help" size={24} title="Keyboard shortcuts" shortcut="⌘/" onClick={onShowShortcuts} />
       </div>
 
       {pickerOpen && (
@@ -1063,7 +1126,18 @@ export default function DocTimeline({
         </div>
       )}
 
-      <div ref={scrollRef} style={{ flex: 1, overflowX: "auto", overflowY: "auto", minHeight: 0, position: "relative" }}>
+      {/* The head column is painted as a background band so it continues below
+          the last track, the way the design's does — a column that stops
+          halfway makes the panel look unfinished. `local` attachment ties it
+          to the content, so it scrolls with the heads rather than past them. */}
+      <div
+        ref={scrollRef}
+        style={{
+          flex: 1, overflowX: "auto", overflowY: "auto", minHeight: 0, position: "relative",
+          background: `linear-gradient(to right, var(--surface-chrome) 0 ${LABEL_W}px, var(--border-hairline) ${LABEL_W}px ${LABEL_W + 1}px, transparent ${LABEL_W + 1}px)`,
+          backgroundAttachment: "local",
+        }}
+      >
         <div style={{ display: "flex", width: LABEL_W + contentW }}>
           <div style={{ width: LABEL_W, flexShrink: 0, height: RULER_H, borderRight: "1px solid var(--border-hairline)", borderBottom: "1px solid var(--border-hairline)", background: "var(--surface-chrome)" }} />
           <div
@@ -1071,9 +1145,15 @@ export default function DocTimeline({
             onPointerDown={startScrub}
             style={{ position: "relative", width: contentW, height: RULER_H, borderBottom: "1px solid var(--border-hairline)", cursor: "ew-resize", background: "var(--surface-chrome)" }}
           >
+            {/* A tick is a label with a 6px mark under it — not a full-height
+                rule. Full-height rules turned the ruler into a table of cells,
+                which is a grid competing with the clips for attention. */}
             {ticks.map((f) => (
-              <div key={f} style={{ position: "absolute", left: f * pxPerFrame, top: 0, bottom: 0, borderLeft: "1px solid var(--border-hairline)", paddingLeft: 3 }}>
-                <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>{timecode(f, fps, hoursNeeded)}</span>
+              <div key={f} style={{ position: "absolute", left: f * pxPerFrame, top: 0, bottom: 0, paddingLeft: 4 }}>
+                <span className="t-data-s" style={{ color: "var(--ink-disabled)", lineHeight: "16px" }}>
+                  {timecode(f, fps, hoursNeeded)}
+                </span>
+                <span style={{ position: "absolute", left: 0, bottom: 0, width: 1, height: 6, background: "var(--border-hairline)" }} />
               </div>
             ))}
           </div>

@@ -38,10 +38,26 @@ try {
   await page.setViewport({ width: 1600, height: 1000 });
   await page.goto(`${base}/api/projects`, { waitUntil: "networkidle2", timeout: 60000 });
   const projects = JSON.parse(await page.evaluate(() => document.body.innerText));
+
+  // The LISTING does not carry `doc` — it is too big to send 314 times — so
+  // asking `p.doc` here quietly matched nothing and the document editor, the
+  // screen most of this redesign lives in, went untested while the run still
+  // printed "6 usable". Ask the project endpoint instead, newest first.
+  const isDoc = async (id) => {
+    await page.goto(`${base}/api/projects/${id}`, { waitUntil: "networkidle2", timeout: 60000 });
+    try {
+      return Boolean(JSON.parse(await page.evaluate(() => document.body.innerText)).doc);
+    } catch { return false; }
+  };
+  const recent = [...projects].sort((a, b) => (b.updatedAt ?? 0) < (a.updatedAt ?? 0) ? -1 : 1).slice(0, 40);
+  let docId;
+  for (const p of recent) if (await isDoc(p.id)) { docId = p.id; break; }
+  if (!docId) { failures++; console.log("  FAIL /project/<doc> — no document project found to test"); }
+
   const pick = (fn) => projects.find(fn)?.id;
   const kinds = [
-    ["doc", pick((p) => p.doc)],
-    ["legacy", pick((p) => !p.doc && p.animationType !== "terminal")],
+    ["doc", docId],
+    ["legacy", pick((p) => p.id !== docId && p.animationType !== "terminal")],
     ["terminal", pick((p) => p.animationType === "terminal")],
   ];
   for (const [kind, id] of kinds) if (id) ROUTES.push({ path: `/project/${id}`, expect: null, kind });
