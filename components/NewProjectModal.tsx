@@ -600,6 +600,22 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </p>
             </div>
 
+            <div>
+              <FieldLabel>Name</FieldLabel>
+              <Input
+                value={name}
+                onChange={setName}
+                placeholder="e.g. Product Launch Teaser"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && name.trim()) {
+                    e.preventDefault();
+                    setStep(2);
+                  }
+                }}
+              />
+            </div>
+
             {!typeLocked && (
               <div style={{ display: "grid", gridTemplateColumns: `repeat(${KINDS.length}, minmax(0,1fr))`, gap: 12 }}>
                 {KINDS.map((k) => (
@@ -640,21 +656,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               </div>
             )}
 
-            <div>
-              <FieldLabel>Name</FieldLabel>
-              <Input
-                value={name}
-                onChange={setName}
-                placeholder="e.g. Product Launch Teaser"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && name.trim()) {
-                    e.preventDefault();
-                    setStep(2);
-                  }
-                }}
-              />
-            </div>
           </div>
         )}
 
