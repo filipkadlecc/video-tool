@@ -462,6 +462,12 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const ratioForOrientation = (o: Orientation) =>
     o === "horizontal" ? "16:9" : o === "vertical" ? "9:16" : "1:1";
 
+  // This is a fixed, full-screen overlay. <Modal> used to return null when it
+  // was closed, and taking Modal away took that guard with it — so the wizard
+  // rendered over the whole app, permanently, with no way past it. The guard
+  // has to live here now.
+  if (!open) return null;
+
   /*
    * 4c / 4d — a full-screen flow, not a dialog.
    *
