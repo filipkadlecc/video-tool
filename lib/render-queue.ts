@@ -28,8 +28,26 @@ export interface RenderJob {
   totalFrames?: number;
   /** When the render actually started, for an honest "about N left". */
   startedAt?: number;
+  finishedAt?: number;
+  /** Size of the finished file, so the result can state what it produced. */
+  bytes?: number;
   outputPath?: string;
   error?: string;
+  /**
+   * The tail of the renderer's own output, kept for a failure.
+   *
+   * A failure has to say what happened, what it cost you, and what to do next.
+   * The first two come from the error; the log is what makes the third
+   * possible, and pasting it into a bug report beats describing it.
+   */
+  log?: string;
+}
+
+export interface RenderOptions {
+  /** h264 only. Lower is better: Draft 28, Standard 23, Master 18. */
+  crf?: number;
+  /** Inclusive frame range, for exporting in-to-out rather than the whole thing. */
+  frameRange?: [number, number];
 }
 
 /**
@@ -189,7 +207,7 @@ function escapeForFiltergraph(p: string): string {
 
 // `lut` is an absolute path to a .cube file (already resolved + traversal-guarded by
 // the caller), or undefined for no grade. Applied only to the opaque h264 export.
-export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264", svgContents?: { filename: string; content: string }[], lut?: string): RenderJob {
+export function enqueueRender(sceneId: string, code: string, durationInFrames = 250, fps = 25, width = 3840, height = 2160, codec: RenderCodec = "h264", svgContents?: { filename: string; content: string }[], lut?: string, opts: RenderOptions = {}): RenderJob {
   const jobId = generateJobId();
   const job: RenderJob = {
     id: jobId,
@@ -210,6 +228,8 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       `_render_${jobId}.tsx`
     );
     let entryPath = "";
+    // Declared outside the try so a failure's handler can still read it.
+    let stderrLog = "";
 
     try {
       let fixedCode = fixImportPaths(code);
@@ -241,8 +261,6 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-      let stderrLog = "";
-
       const remotionCodec =
         codec === "prores-xq" ? "prores" :
         codec === "uncompressed" ? "prores" :
@@ -258,6 +276,15 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         "--codec",
         remotionCodec,
       ];
+      // Quality, for the codec that has a quality knob.
+      if (codec === "h264" && typeof opts.crf === "number") {
+        renderArgs.push("--crf", String(opts.crf));
+      }
+      // Export in-to-out rather than the whole composition.
+      if (opts.frameRange) {
+        const [a, b] = opts.frameRange;
+        renderArgs.push("--frames", `${Math.max(0, Math.round(a))}-${Math.max(0, Math.round(b))}`);
+      }
       if (codec === "prores") {
         renderArgs.push("--prores-profile", "4444", "--image-format", "png", "--pixel-format", "yuva444p10le");
       } else if (codec === "prores-xq") {
@@ -427,9 +454,17 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       job.status = "done";
       job.progress = 100;
       job.outputPath = `/renders/${jobId}.${ext}`;
+      job.finishedAt = Date.now();
+      // What it actually produced, so the result can say so rather than
+      // pointing at a file and leaving you to go and look.
+      try { job.bytes = fs.statSync(outputPath).size; } catch { /* size is a nicety */ }
     } catch (err) {
       job.status = "error";
       job.error = err instanceof Error ? err.message : "Unknown error";
+      job.finishedAt = Date.now();
+      // The last of the renderer's output — the thing worth pasting into a bug
+      // report, and the only way the dialog can say what to do next.
+      job.log = stderrLog.trim().split("\n").slice(-12).join("\n");
     } finally {
       try { fs.unlinkSync(scenePath); } catch {}
       try { if (entryPath) fs.unlinkSync(entryPath); } catch {}

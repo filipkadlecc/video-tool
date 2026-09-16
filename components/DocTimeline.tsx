@@ -84,6 +84,8 @@ interface Props {
   onPromptAnimation?: () => void;
   /** The shortcuts sheet is owned by the page, so Cmd+/ works without a timeline. */
   onShowShortcuts: () => void;
+  /** In / out points, drawn on the ruler as the export range. */
+  range?: { in: number | null; out: number | null };
 }
 
 /**
@@ -115,7 +117,7 @@ const ITEM_ICONS: Record<string, string> = {
 export default function DocTimeline({
   doc, onChange, onSeek, onScrubStart, onTogglePlay,
   mediaFiles, mediaDurations, projectId, selectedIds, onSelectionChange,
-  onPromptAnimation, onShowShortcuts,
+  onPromptAnimation, onShowShortcuts, range,
 }: Props) {
   const [zoom, setZoom] = useState(1);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -1060,6 +1062,25 @@ export default function DocTimeline({
         </div>
 
         {/* playhead + snap guide, spanning ruler and tracks */}
+        {/* The in/out range, as a bar on the ruler. 3px and ink-primary, so it
+            reads as a bracket around the part you mean rather than competing
+            with the playhead. */}
+        {range && (range.in !== null || range.out !== null) && (() => {
+          const a = range.in ?? 0;
+          const b = range.out ?? total;
+          if (b <= a) return null;
+          return (
+            <div
+              style={{
+                position: "absolute", top: RULER_H - 3, height: 3,
+                left: LABEL_W + a * pxPerFrame,
+                width: Math.max(1, (b - a) * pxPerFrame),
+                background: "var(--ink-primary)", pointerEvents: "none", zIndex: 6,
+              }}
+            />
+          );
+        })()}
+
         {/* The playhead: 1px live line, with a 9x9 square head on the ruler.
             The head is what you aim at when scrubbing — a bare 1px line is
             almost impossible to grab. */}

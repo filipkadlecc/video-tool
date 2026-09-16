@@ -11,7 +11,7 @@ import SnippetBrowser from "@/components/SnippetBrowser";
 import SmartTrimDialog from "@/components/SmartTrimDialog";
 import AnalyzeDialog from "@/components/AnalyzeDialog";
 import FirstPassProgress, { type FirstPassState } from "@/components/FirstPassProgress";
-import ExportDialog from "@/components/ExportDialog";
+import ExportFlow from "@/components/ExportFlow";
 import TerminalPreview from "@/components/TerminalPreview";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
 import { evalSceneCode } from "@/remotion/DynamicScene";
@@ -164,6 +164,18 @@ export default function ProjectEditor() {
    */
   const [workspace, setWorkspace] = useState<"cut" | "direct">("cut");
   const workspaceKey = `vt:workspace:${projectId}`;
+
+  /**
+   * In / out points — the range you actually want out of a longer edit.
+   *
+   * Editorial state rather than document state: it changes what you EXPORT and
+   * what the transport reads out, but it is not part of the composition, and
+   * putting it in the document would mean a schema change and a migration for
+   * something that is really a view preference. Persisted per project so it
+   * survives a reload, the same way the workspace is.
+   */
+  const [range, setRange] = useState<{ in: number | null; out: number | null }>({ in: null, out: null });
+  const rangeKey = `vt:range:${projectId}`;
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
   const railPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -533,6 +545,15 @@ export default function ProjectEditor() {
             if (prev !== null) { setCode(prev.code); setChatHistory(prev.chat); }
           }
         }
+      } else if (!mod && !e.altKey && !typing && (e.key === "i" || e.key === "I")) {
+        e.preventDefault();
+        setRange((r) => ({ ...r, in: playhead.getFrame() }));
+      } else if (!mod && !e.altKey && !typing && (e.key === "o" || e.key === "O")) {
+        e.preventDefault();
+        setRange((r) => ({ ...r, out: playhead.getFrame() }));
+      } else if (!mod && !e.altKey && !typing && e.shiftKey && (e.key === "X" || e.key === "x")) {
+        e.preventDefault();
+        setRange({ in: null, out: null });
       } else if (e.altKey && (e.key === "1" || e.key === "\u00a1")) {
         // Alt+1 / Alt+2. macOS gives the alt glyph for the digit, so accept both.
         e.preventDefault();
@@ -557,7 +578,7 @@ export default function ProjectEditor() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [forceSave, code, codeHistory, doc, docHistory]);
+  }, [forceSave, code, codeHistory, doc, docHistory, playhead]);
 
   const docView = doc && !showCodeEditor ? doc : undefined;
 
@@ -865,6 +886,23 @@ export default function ProjectEditor() {
           key: () => null,
           length: 0,
         } as Storage);
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(rangeKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { in: number | null; out: number | null };
+        if (parsed && typeof parsed === "object") setRange(parsed);
+      }
+    } catch { /* private window — no range is fine */ }
+  }, [rangeKey]);
+
+  useEffect(() => {
+    try {
+      if (range.in === null && range.out === null) window.localStorage.removeItem(rangeKey);
+      else window.localStorage.setItem(rangeKey, JSON.stringify(range));
+    } catch { /* ignore */ }
+  }, [range, rangeKey]);
+
   // Restore the last workspace for THIS project.
   useEffect(() => {
     try {
@@ -1353,6 +1391,7 @@ export default function ProjectEditor() {
                   )}
                   {docView ? (
                     <EditorPreview
+                      range={range}
                       doc={docView}
                       playerRef={playerRef}
                       selectedIds={selectedItemIds}
@@ -1465,6 +1504,7 @@ export default function ProjectEditor() {
                         onSelectionChange={setSelectedItemIds}
                         onPromptAnimation={() => setPromptAnimOpen(true)}
                         onShowShortcuts={() => setShortcutsOpen(true)}
+                        range={range}
                       />
                       )}
                     </div>
@@ -1605,7 +1645,7 @@ export default function ProjectEditor() {
           exportHeight = plan.height;
         }
         return (
-          <ExportDialog
+          <ExportFlow
             open={exportOpen}
             onClose={() => setExportOpen(false)}
             code={exportCode}
@@ -1616,6 +1656,7 @@ export default function ProjectEditor() {
             projectName={project.name}
             projectId={projectId}
             doc={doc}
+            range={range}
           />
         );
       })()}

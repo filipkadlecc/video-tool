@@ -26,6 +26,7 @@ export default function EditorPreview({
   onChange,
   onSeek,
   onTogglePlay,
+  range,
 }: {
   doc: EditorDoc;
   playerRef?: React.RefObject<PlayerRef | null>;
@@ -34,6 +35,7 @@ export default function EditorPreview({
   onChange?: (next: EditorDoc, opts?: { transient?: boolean }) => void;
   onSeek?: (frame: number) => void;
   onTogglePlay?: () => void;
+  range?: { in: number | null; out: number | null };
 }) {
   // Subscribes: the selection box must sit on the item as RENDERED, and the
   // transport's timecode ticks. Both genuinely change every frame.
@@ -152,6 +154,7 @@ export default function EditorPreview({
         isPlaying={isPlaying}
         onSeek={onSeek}
         onTogglePlay={onTogglePlay}
+        range={range}
         loop={loop}
         onLoopChange={setLoop}
       />

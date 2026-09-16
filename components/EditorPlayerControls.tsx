@@ -29,11 +29,14 @@ interface Props {
   onTogglePlay?: () => void;
   loop: boolean;
   onLoopChange: (next: boolean) => void;
+  /** In / out points, when set. Read-only here — I and O set them. */
+  range?: { in: number | null; out: number | null };
 }
 
 export default function EditorPlayerControls({
   playerRef, currentFrame, durationInFrames, fps, isPlaying,
   onSeek, onTogglePlay, loop, onLoopChange,
+  range,
 }: Props) {
   const last = Math.max(0, durationInFrames - 1);
   const progress = last > 0 ? (Math.min(currentFrame, last) / last) * 100 : 0;
@@ -107,6 +110,14 @@ export default function EditorPlayerControls({
             / {timecode(last, fps, needsHours(last, fps))}
           </span>
         </span>
+
+        {(range?.in !== null && range?.in !== undefined) || (range?.out !== null && range?.out !== undefined) ? (
+          <span className="t-data-s" style={{ color: "var(--ink-tertiary)", marginLeft: 12 }}>
+            {range?.in !== null && range?.in !== undefined ? `in ${timecode(range.in, fps, needsHours(last, fps))}` : ""}
+            {range?.in !== null && range?.in !== undefined && range?.out !== null && range?.out !== undefined ? " · " : ""}
+            {range?.out !== null && range?.out !== undefined ? `out ${timecode(range.out, fps, needsHours(last, fps))}` : ""}
+          </span>
+        ) : null}
 
         <div style={{ flex: 1 }} />
 
