@@ -56,6 +56,9 @@ export function listProjects(): ProjectMeta[] {
         collectionId: raw.collectionId,
         useSfx: raw.useSfx,
         durationInFrames: projectDuration(raw),
+        // One stat here saves a request per card. Without it every project
+        // without a poster frame fetched one and 404'd.
+        hasThumbnail: fs.existsSync(path.join(PROJECTS_DIR, entry.name, "thumbnail.png")),
         createdAt: raw.createdAt,
         updatedAt: raw.updatedAt,
       });

@@ -233,7 +233,10 @@ function RecentCard({ project, onClick }: { project: ProjectMeta; onClick: () =>
         }}
       >
         <Depth z={4} style={{ position: "relative", aspectRatio: "16 / 9", background: "var(--surface-void)" }}>
-          {!thumbFailed && (
+          {/* Only ask for a poster frame that exists. The listing says so, and
+              without that check every project that has never been rendered
+              fetched one and got a 404 — 129 of them on one grid load. */}
+          {project.hasThumbnail !== false && !thumbFailed && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={`/api/projects/${project.id}/thumbnail?t=${project.updatedAt}`}

@@ -144,6 +144,14 @@ export type ProjectMeta = Omit<Project, "chatHistory" | "code" | "notionContent"
    * an empty project, or legacy code that never declares `durationInFrames`.
    */
   durationInFrames?: number;
+  /**
+   * Whether a poster frame has been rendered for this project.
+   *
+   * Computed by listProjects, for the same reason as the duration: so a grid
+   * can decide what to draw without asking the server 129 times and being told
+   * "no" 129 times. Most projects have never had one rendered.
+   */
+  hasThumbnail?: boolean;
 };
 
 export interface Collection {
