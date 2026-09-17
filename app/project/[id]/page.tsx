@@ -777,7 +777,7 @@ export default function ProjectEditor() {
    * which renders identically to the old preview, because it IS the old scene.
    * Nothing is lost on the way in: `project.code` stays exactly where it was.
    */
-  const importToDoc = useCallback(async () => {
+  const importCodeToDoc = useCallback(async (code: string) => {
     // Terminal projects are a tape, not a Remotion scene — they keep their own
     // recorder view, which is the one place a second layout still earns itself.
     if (!project || project.animationType === "terminal") return;
@@ -842,16 +842,58 @@ export default function ProjectEditor() {
     // Nothing to cut on — a continuous move, say. One block is then the
     // honest answer, not a failure.
     commitDoc(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name));
-  }, [project, code, projectId, commitDoc]);
+  }, [project, projectId, commitDoc]);
+
+  /** Import whatever is in the editor right now. */
+  const importToDoc = useCallback(() => importCodeToDoc(code), [importCodeToDoc, code]);
+
+  /**
+   * This project writes its first animation by itself the moment the chat
+   * mounts — the same test ChatPanel's `autoSend` makes below.
+   */
+  const willAutoGenerate = Boolean(
+    project &&
+      !project.code &&
+      project.chatHistory.length === 0 &&
+      // For Smart Trim projects the dialog generates the composition, not the
+      // AI chat — captured from the URL once on mount before the
+      // ?action=smartTrim param gets cleaned.
+      initialAutoAction !== "smartTrim" &&
+      // Video projects must be Analyzed first, then edited via chat — never
+      // auto-generate blind on load.
+      project.animationType !== "video",
+  );
 
   /*
    * Every project opens in the editor now, so a project without a document
    * gets one the moment it is opened rather than when a button is found.
+   *
+   * Except while its first animation is still being written. A brand-new
+   * project has no code YET, so importing now would hand it an EMPTY timeline —
+   * and an empty timeline is still a document, which is the one thing this
+   * effect waits for. The scene that arrives minutes later would then never be
+   * imported: you sit through a long generation and land on "Drop a clip onto a
+   * track to start", with the whole finished animation in `project.code` and
+   * nothing on screen drawing it. Generation does the import when it finishes.
    */
+  const docSettledRef = useRef(false);
   useEffect(() => {
-    if (!project || doc || project.animationType === "terminal" || loading) return;
+    // Asked and answered for this project — so emptying the timeline by hand
+    // later never drags the old animation back in over your work.
+    if (docSettledRef.current) return;
+    if (!project || project.animationType === "terminal" || loading) return;
+    if (isGenerating || willAutoGenerate) return;
+
+    const docIsEmpty = !doc || doc.tracks.every((t) => t.items.length === 0);
+    // Already has clips, or is a timeline deliberately started empty (compose,
+    // manual) with nothing written to import into it. Either way, hands off.
+    if (!docIsEmpty || (doc && !code.trim())) {
+      docSettledRef.current = true;
+      return;
+    }
+    docSettledRef.current = true;
     void importToDoc();
-  }, [project, doc, loading, importToDoc]);
+  }, [project, doc, code, loading, importToDoc, isGenerating, willAutoGenerate]);
 
   /**
    * Use a snippet. In the code editor that replaces the whole project, which is
@@ -1018,9 +1060,23 @@ export default function ProjectEditor() {
         }
       } else {
         autoRetryRef.current = 0;
+        /*
+         * Put the finished animation on the timeline.
+         *
+         * Generation writes `project.code`, and the editor draws the DOCUMENT —
+         * so until this runs, the scene exists in a field nothing renders. The
+         * import is normally the mount effect's job, but it only fires while
+         * there is no document at all, which is never true again once one has
+         * been born empty. Hence the emptiness test rather than a null test: an
+         * empty timeline is an absence, not a decision, and code arriving after
+         * it should still land.
+         */
+        if (!doc || doc.tracks.every((t) => t.items.length === 0)) {
+          void importCodeToDoc(finalCode);
+        }
       }
     }
-  }, [projectId, codeHistory, terminalAnnotations, styleMode, project?.animationType]);
+  }, [projectId, codeHistory, terminalAnnotations, styleMode, project?.animationType, doc, importCodeToDoc]);
 
   const isTerminalProject = project?.animationType === "terminal";
   const layoutKind = project?.animationType === "video" ? "video" : project?.animationType === "terminal" ? "terminal" : "still";
@@ -1733,17 +1789,7 @@ export default function ProjectEditor() {
                 useSfx={useSfx}
                 onUseSfxChange={handleUseSfxChange}
                 currentCode={code}
-                autoSend={
-                  !project.code &&
-                  project.chatHistory.length === 0 &&
-                  // For Smart Trim projects the dialog generates the composition,
-                  // not the AI chat — captured from the URL once on mount before
-                  // the ?action=smartTrim param gets cleaned.
-                  initialAutoAction !== "smartTrim" &&
-                  // Video projects must be Analyzed first, then edited via chat —
-                  // never auto-generate blind on load.
-                  !isVideoProject
-                }
+                autoSend={willAutoGenerate}
                 onGenerationComplete={handleGenerationComplete}
                 sceneError={sceneError}
                 doc={docView}
