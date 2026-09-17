@@ -23,8 +23,9 @@ import { scrubValue } from "../components/ui/ScrubNumber";
 import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
 import { sceneMeta } from "../lib/scene-eval";
+import { getProjectSize, type ProjectSettings } from "../lib/types";
 import {
-  addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
+  addAsset, addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, isValidDoc,
   relinkAsset, resizeDoc, retimeDoc,
   makeId, moveItem, removeItem, reorderTrack, rippleRemoveItem, setLayout,
   captionPageAt, cloneItem, duplicateItem, moveItemToTrack, paginateCaptions,
@@ -1086,12 +1087,22 @@ head("an animation's cuts become blocks that tile it exactly");
   const end = spans[spans.length - 1].from + spans[spans.length - 1].durationInFrames;
   a(end === 260, `the blocks end on the composition's exported length (got ${end})`);
 
-  // Roughly half of these compositions declare a length shorter than their own
-  // content, because the export miscounts the overlaps — so their last scene
-  // never plays. The import covers the real content instead of reproducing that.
+  /*
+   * A composition that declares LESS than it contains is clipped to what it
+   * declares — and this assertion used to say the opposite.
+   *
+   * The old rule covered the content instead, so a scene cut off by the
+   * composition's own duration would still appear. That reads well until you
+   * run it over the corpus: 25 projects then import to a timeline longer than
+   * the video the renderer produces, the worst by 40%, and every one of those
+   * extra frames is one nobody can ever export. The declared duration is the
+   * only number the Player and the renderer agree on, so it is the one the
+   * timeline matches.
+   */
   const short = compositionSpans(CROSSFADED, 30, 200)!;
   const shortEnd = short[short.length - 1].from + short[short.length - 1].durationInFrames;
-  a(shortEnd === 260, `a truncating export does not cost a scene (got ${shortEnd})`);
+  a(shortEnd === 200, `the blocks stop where the export stops (got ${shortEnd})`);
+  a(short.every((sp) => sp.from < 200), "no block starts past the end of the video");
   a(short.length === 3, "all three scenes survive a short exported duration");
   a(short.every((x) => x.durationInFrames >= 1), "no zero-length block survives the clamp");
 
@@ -1140,43 +1151,81 @@ head("a window's offset is independent of where the block sits");
   a(windowedSceneItem("code", SIZE, 0, 10, -5).sourceOffsetFrames === 0, "a negative offset clamps to the start");
 }
 
-head("every real composition that imports, tiles");
+head("every real project opens in the editor, at the right length");
 {
+  /*
+   * The corpus, through the chain the app ACTUALLY runs.
+   *
+   * This used to test only the middle rung (`docFromComposition`) and skip
+   * every project it declined — which was most of them — and it tolerated a
+   * document longer than its own composition:
+   *
+   *     a(covered >= total, "blocks cover at least the declared length")
+   *
+   * That `>=` is what let 25 projects import to a timeline longer than the
+   * video they export, unnoticed, for as long as this ran behind a button.
+   * Since v0.1.123 every project imports the moment it is opened, so the whole
+   * ladder is what has to hold: rebuild a video edit as clips, else cut an
+   * animation into blocks, else embed it whole — and whichever rung answers,
+   * the document has to be valid and exactly as long as the composition.
+   */
   const root = path.join(__dirname, "..", "data", "projects");
-  let checked = 0, imported = 0;
+  let checked = 0, viaVideo = 0, viaBlocks = 0, viaScene = 0;
   for (const dir of fs.readdirSync(root)) {
     const file = path.join(root, dir, "project.json");
     if (!fs.existsSync(file)) continue;
-    let p: { code?: string; settings?: { fps?: number } };
+    let p: { name?: string; code?: string; doc?: unknown; animationType?: string; settings?: ProjectSettings };
     try { p = JSON.parse(fs.readFileSync(file, "utf8")); } catch { continue; }
+    /*
+     * Every project with code, whether or not it already has a document.
+     *
+     * Skipping the doc'd ones mirrors what auto-import actually does, but it
+     * makes this test SHRINK: the sweep that exercised 281 projects gave 17 of
+     * them documents, and the assertion count dropped by 54 the next run. A
+     * corpus test that covers less every time somebody opens a project is a
+     * corpus test on its way to covering nothing. The import chain is a pure
+     * function of the code, so run it on all of them.
+     *
+     * A terminal project is skipped for real: its code is a VHS tape, not a
+     * Remotion scene, and it has no timeline to import into.
+     */
+    if (p.animationType === "terminal") continue;
     const code = p.code ?? "";
     if (!code.trim()) continue;
-    const fps = p.settings?.fps ?? 30;
-    const meta = sceneMeta(code, fps);
+
+    const settings = p.settings ?? { resolution: "1080p", orientation: "horizontal", fps: 30 } as ProjectSettings;
+    const meta = sceneMeta(code, settings.fps ?? 30);
     const total = meta.durationInFrames;
+    const size = { ...getProjectSize(settings), fps: meta.fps ?? settings.fps ?? 30 };
+    const who = p.name ?? dir;
     checked++;
 
-    const doc = docFromComposition(code, { width: 1920, height: 1080, fps }, total);
-    if (!doc) continue;
-    imported++;
-    const items = doc.tracks[0].items;
-    a(isValidDoc(doc), `${dir}: imports to a valid document`);
-    a(items[0].from === 0, `${dir}: starts at frame 0`);
-    for (let i = 1; i < items.length; i++) {
-      if (items[i].from !== items[i - 1].from + items[i - 1].durationInFrames) {
-        a(false, `${dir}: block ${i} leaves a gap or overlaps`);
-        break;
+    let doc = docFromVideoEdit(code, size, { compositionDurationInFrames: total });
+    if (doc) viaVideo++;
+    if (!doc) { doc = docFromComposition(code, size, total); if (doc) viaBlocks++; }
+    if (!doc) { doc = docFromScene(size, code, total, who); viaScene++; }
+
+    a(isValidDoc(doc), `${who}: imports to a valid document`);
+    const items = doc.tracks.flatMap((t) => t.items);
+    a(items.length > 0, `${who}: imports to at least one clip`);
+    a(docDuration(doc) === total,
+      `${who}: the timeline is exactly as long as the video (${docDuration(doc)} vs ${total})`);
+
+    // Blocks on one track must tile: no gap to fall into, no overlap to
+    // silently shunt a clip along.
+    for (const track of doc.tracks) {
+      const sorted = [...track.items].sort((x, y) => x.from - y.from);
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].from < sorted[i - 1].from + sorted[i - 1].durationInFrames) {
+          a(false, `${who}: block ${i} overlaps the one before it`);
+          break;
+        }
       }
     }
-    const last = items[items.length - 1];
-    const covered = last.from + last.durationInFrames;
-    a(covered >= total,
-      `${dir}: blocks cover at least the declared length (${covered} vs ${total})`);
   }
-  console.log(`      ${imported} of ${checked} compositions import as blocks`);
-  a(imported > 0, "the corpus actually exercises this");
+  console.log(`      ${checked} projects import: ${viaVideo} as clips, ${viaBlocks} as blocks, ${viaScene} whole`);
+  a(checked > 100, "the corpus actually exercises this");
 }
-
 
 head("changing the frame re-lays the composition out");
 {

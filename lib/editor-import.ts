@@ -253,32 +253,47 @@ export function compositionSpans(
   // for the overlap a crossfade steals from the preceding slot.
   const ts = parseTransitionSeries(code, fps);
   let starts: number[] | null = null;
-  let contentEnd = 0;
 
   if (ts && ts.children.length > 0) {
     starts = ts.children.map((c) => c.from);
-    contentEnd = ts.totalDurationInFrames;
   } else {
     // A <Series> lays its children out implicitly; flattening gives them the
     // explicit positions this needs. Only the POSITIONS come from the flattened
     // source — the blocks still embed the original, unflattened composition.
     const flat = normalizeSeriesToSequences(code, fps) ?? code;
     const blocks = parseSequenceBlocks(flat, fps);
-    if (blocks.length > 0) {
-      starts = blocks.map((b) => b.from);
-      contentEnd = Math.max(...blocks.map((b) => b.from + b.durationInFrames));
-    }
+    if (blocks.length > 0) starts = blocks.map((b) => b.from);
   }
   // Deliberately NOT parseTimeline: it drops a TransitionSeries.Sequence whose
   // body is a bare <HeroScene />, because it insists on finding markup inside.
   if (!starts || starts.length === 0) return null;
 
-  // Roughly half of these compositions declare a durationInFrames shorter than
-  // their own content, because the export miscounts the transition overlaps —
-  // which means their last scene never plays. Cover the real content rather
-  // than reproducing that: a scene you cannot see is a scene you cannot fix.
-  const end = Math.max(exportedDurationInFrames, contentEnd);
-  const spans = spansFromStarts(starts, end);
+  /*
+   * THE EXPORT'S LENGTH WINS.
+   *
+   * This used to be `Math.max(exportedDurationInFrames, contentEnd)`, on the
+   * reasoning that a composition declaring less than it contains would lose its
+   * last scene, and "a scene you cannot see is a scene you cannot fix".
+   *
+   * That held while this ran behind a button, on one project at a time. Run
+   * over the corpus it is wrong on 25 projects — worst case a timeline of 625
+   * frames for a video the renderer produces 445 of, so 40% of that timeline is
+   * frames nobody will ever see. `exportedDurationInFrames` is the only number
+   * here that is checkable: it is what the Player plays and what the renderer
+   * writes. One composition in the corpus disagrees with itself three ways —
+   * its comment says 580, its declared duration says 445, the parser reads 625
+   * — and only one of those three ever becomes a file.
+   *
+   * The old worry does not disappear; it becomes visible. A composition whose
+   * tail is cut off by its own declared duration now ends in a block that stops
+   * at the boundary, on a timeline you can see and fix, rather than in a tail
+   * that silently never renders.
+   *
+   * The parser's cut points are kept — those are the real scene boundaries and
+   * they were never in question. Only the end moves.
+   */
+  const end = exportedDurationInFrames;
+  const spans = spansFromStarts(starts.filter((f) => f < end), end);
   // One span is just the whole composition — that is docFromScene's job, and
   // saying so here keeps the caller's fallback meaningful.
   return spans.length >= 2 ? spans : null;
