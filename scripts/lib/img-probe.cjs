@@ -161,7 +161,10 @@ function erode(mask, width, height) {
       for (let dy = -1; dy <= 1 && keep; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const yy = y + dy, xx = x + dx;
-          if (yy < 0 || xx < 0 || yy >= height || xx >= width) continue;
+          // Off-canvas counts as background. Treating it as "keep" would make
+          // every border pixel survive erosion, which is how a 1px edge sliver
+          // ends up being sampled as if it were a region interior.
+          if (yy < 0 || xx < 0 || yy >= height || xx >= width) { keep = 0; break; }
           if (!mask[yy * width + xx]) { keep = 0; break; }
         }
       }
@@ -212,7 +215,21 @@ async function compare(refFile, ourFile, opts = {}) {
   const { width, height } = ref;
 
   // Probe 2 — geometry. Translation shows up here and nowhere else.
-  const mRef = inkMask(ref), mOur = inkMask(our);
+  //
+  // The mask is OPENED (eroded then dilated) before measuring. Text boxes hug
+  // their content, and two rasterisers disagree on a string's width by a
+  // fraction of a pixel, so a box can land 1px narrower and half a pixel off
+  // centre. Against a crop positioned by Figma's coordinates that leaves a 1px
+  // hairline of background down one edge — which is invisible in the rendered
+  // frame but drags the raw ink bbox by dozens of pixels. Opening removes
+  // structures 1px thin and leaves everything a viewer could actually see; a
+  // real translation still moves the whole shape and is still caught.
+  const mRefRaw = inkMask(ref), mOurRaw = inkMask(our);
+  const open = (m) => ({
+    mask: dilate(erode(m.mask, m.width, m.height), m.width, m.height),
+    width: m.width, height: m.height,
+  });
+  const mRef = open(mRefRaw), mOur = open(mOurRaw);
   const bRef = inkBBox(mRef), bOur = inkBBox(mOur);
   const pRef = profiles(mRef), pOur = profiles(mOur);
   const rowShift = bestShift(pRef.rows, pOur.rows);
@@ -281,8 +298,8 @@ async function compare(refFile, ourFile, opts = {}) {
   //
   // Probe 4 erodes both masks by 1px and compares what is left; probe 5 checks
   // total ink so a uniformly bolder cut cannot hide inside the edge band.
-  const iRef = erode(mRef.mask, width, height);
-  const iOur = erode(mOur.mask, width, height);
+  const iRef = erode(mRefRaw.mask, width, height);
+  const iOur = erode(mOurRaw.mask, width, height);
   let inter = 0, union = 0;
   for (let p = 0; p < width * height; p++) {
     if (iRef[p] || iOur[p]) union++;
@@ -305,7 +322,7 @@ async function compare(refFile, ourFile, opts = {}) {
   };
 
   let inkRef = 0, inkOur = 0;
-  for (let p = 0; p < width * height; p++) { inkRef += mRef.mask[p]; inkOur += mOur.mask[p]; }
+  for (let p = 0; p < width * height; p++) { inkRef += mRefRaw.mask[p]; inkOur += mOurRaw.mask[p]; }
   probes.coverage = {
     pass: inkRef === 0 || Math.abs(inkOur - inkRef) / inkRef < 0.08,
     ref: inkRef, ours: inkOur,

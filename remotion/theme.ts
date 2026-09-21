@@ -55,6 +55,17 @@ export const BRAND_FONT_FACE_CSS = `
  */
 export const VERTICAL_DESIGN = { width: 1080, height: 1920 } as const;
 
+/**
+ * The horizontal axis the kit's centred content actually sits on.
+ *
+ * Not 540. Every centred frame in the Figma page lands on 539.5 —
+ * 230 + 619/2, 231 + 617/2 and 223.5 + 632/2 all agree — so centring on the
+ * true middle of a 1080px canvas puts everything half a pixel right of the
+ * design. Half a pixel is invisible; it is also the difference between a
+ * verified port and an approximate one.
+ */
+export const VERTICAL_CENTRE_X = 539.5;
+
 export type PlaneAnchor = "top" | "bottom" | "center";
 
 /**

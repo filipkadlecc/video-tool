@@ -29,9 +29,9 @@
 import * as React from "react";
 import type { Orientation } from "./types";
 import { transform } from "sucrase";
-import { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, figmaPlane } from "../remotion/theme";
+import { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, VERTICAL_CENTRE_X, figmaPlane } from "../remotion/theme";
 
-const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, figmaPlane };
+const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, VERTICAL_CENTRE_X, figmaPlane };
 
 /**
  * Stands in for a module a scene imports but never touches at module scope.

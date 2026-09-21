@@ -105,9 +105,14 @@ registerRoot(() => (
   for (const [i, c] of cases.entries()) {
     const src = fs.readFileSync(path.join(BRANDED, `${c.scene}.tsx`), "utf-8");
     const schema = SNIPPET_SCHEMAS[c.scene];
-    const code = schema && Object.keys(c.values).length
-      ? renderSnippet(src, schema, c.values)
-      : src;
+    // A case whose values cannot be applied would silently diff the scene's
+    // DEFAULTS against a reference for some other variant, and report a
+    // mismatch that has nothing to do with the thing under test.
+    if (Object.keys(c.values).length && !schema) {
+      console.error(`${c.id}: case sets ${Object.keys(c.values).join(", ")} but ${c.scene} has no entry in SNIPPET_SCHEMAS`);
+      process.exit(1);
+    }
+    const code = schema ? renderSnippet(src, schema, c.values) : src;
     const meta = sceneMeta(code);
     if (meta.holdFrame === undefined) {
       console.error(`${c.id}: scene exports no holdFrame — the harness has no settled frame to diff`);
@@ -152,7 +157,10 @@ registerRoot(() => (
         ours = path.join(OUT_DIR, `${c.id}.crop.png`);
         await sharp(full)
           .extract({
-            left: Math.round(c.bbox.x), top: Math.round(c.bbox.y),
+            // floor, not round: a node whose origin is y=687.5 straddles two
+            // rows, and the containing pixel is the honest sample. Rounding up
+            // lands a full pixel below the reference's first row.
+            left: Math.floor(c.bbox.x), top: Math.floor(c.bbox.y),
             width: m.width!, height: m.height!,
           })
           .png().toFile(ours);

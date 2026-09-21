@@ -8,7 +8,54 @@
       "id": "ShortLogoOutro",
       "scene": "ShortLogoOutro",
       "values": {},
-      "frame": { "nodeId": "2704:7902", "png": "2704-7902.png" }
+      "frame": {
+        "nodeId": "2704:7902",
+        "png": "2704-7902.png"
+      }
+    },
+    {
+      "id": "ShortTitle@plain",
+      "scene": "ShortTitle",
+      "values": {
+        "STYLE": "plain"
+      },
+      "bbox": {
+        "nodeId": "2545:564",
+        "png": "2545-564.png",
+        "x": 230,
+        "y": 687.5,
+        "w": 619,
+        "h": 280
+      }
+    },
+    {
+      "id": "ShortTitle@boxed-orange",
+      "scene": "ShortTitle",
+      "values": {},
+      "bbox": {
+        "nodeId": "2545:565",
+        "png": "2545-565.png",
+        "x": 231,
+        "y": 712,
+        "w": 617,
+        "h": 266
+      }
+    },
+    {
+      "id": "ShortTitle@boxed-blue",
+      "scene": "ShortTitle",
+      "values": {
+        "ACCENT": "blue",
+        "HEADLINE_LINE2": "Two lines"
+      },
+      "bbox": {
+        "nodeId": "2545:567",
+        "png": "2545-567.png",
+        "x": 223.5,
+        "y": 705,
+        "w": 632,
+        "h": 451
+      }
     }
   ]
 }

@@ -17,6 +17,7 @@ export async function GET() {
   const snippets: Snippet[] = [];
   for (const file of files.sort()) {
     if (!file.endsWith(".tsx")) continue;
+    if (file.startsWith("_")) continue; // harness scratch — see snippet-catalog
     const id = file.replace(".tsx", "");
     const meta = META[id];
     if (!meta) continue;

@@ -40,6 +40,11 @@ export const SNIPPET_META: Record<string, { name: string; subtitle: string }> = 
   AiChat: { name: "AI chat", subtitle: "Prompt bubble + typed answer or screenshots → Apify wordmark" },
   Years: { name: "Years", subtitle: "White year counter slides 2004 → 2014, then holds (transparent)" },
   ActorCard: { name: "Actor card", subtitle: "Apify Store Actor card — search the Store, auto-fills icon + details" },
+
+  // Short-form (9:16) kit. These declare `orientation` in their own source, so
+  // the browser hides them outside a vertical project — see SceneMeta.
+  ShortTitle: { name: "Short — title", subtitle: "TikTok/Shorts title: highlight boxes or plain, orange or blue" },
+  ShortLogoOutro: { name: "Short — logo outro", subtitle: "Centred Apify lockup on black, for the end of a vertical cut" },
 };
 
 export interface SnippetEntry {
@@ -71,6 +76,11 @@ export function loadSnippetCatalog(): SnippetEntry[] {
   const entries: SnippetEntry[] = [];
   for (const file of fs.readdirSync(dir).sort()) {
     if (!file.endsWith(".tsx")) continue;
+    // Scratch, not library. scripts/figma-diff.ts writes temp scenes here
+    // (they have to live at this depth for their ../../theme imports to
+    // resolve), and a crashed run leaves them behind — without this they would
+    // show up in the Snippets browser.
+    if (file.startsWith("_")) continue;
     const id = file.replace(/\.tsx$/, "");
     const code = fs.readFileSync(path.join(dir, file), "utf-8");
     const meta = sceneMeta(code);

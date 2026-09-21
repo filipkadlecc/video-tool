@@ -96,6 +96,52 @@ const ALIGN_OPTIONS = [
 ];
 
 export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
+  // --- Short-form (9:16) kit, ported 1:1 from the Figma page
+  // "Vertical format assets 9:16". Defaults are the Figma sample strings on
+  // purpose: scripts/figma-diff.ts then verifies the snippet AS INSERTED,
+  // rather than verifying a fixture nobody ships.
+  ShortTitle: {
+    params: {
+      STYLE: {
+        kind: "enum", label: "Treatment", default: "boxed",
+        options: [
+          { value: "boxed", label: "Highlight boxes" },
+          { value: "plain", label: "Plain text" },
+        ],
+      },
+      ACCENT: {
+        kind: "enum", label: "Box colour", default: "orange",
+        options: [
+          { value: "orange", label: "Orange" },
+          { value: "blue", label: "Blue" },
+        ],
+      },
+      SUBHEAD: { kind: "string", label: "Sub-headline", default: "Sub-headline" },
+      HEADLINE: { kind: "string", label: "Headline", default: "Headline" },
+      HEADLINE_LINE2: {
+        kind: "string", label: "Headline — second line", default: "",
+        placeholder: "leave empty for a one-line headline",
+      },
+      Y: {
+        kind: "number", label: "Vertical position (0 = as designed)", default: 0,
+        min: 0, max: 1920, step: 1,
+      },
+    },
+    showIf: { ACCENT: (v) => v.STYLE === "boxed" },
+  },
+
+  ShortLogoOutro: {
+    params: {
+      MARK: {
+        kind: "enum", label: "Logo", default: "colour",
+        options: [
+          { value: "colour", label: "Full colour" },
+          { value: "white", label: "Monochrome white" },
+        ],
+      },
+    },
+  },
+
   IntroCard: {
     params: {
       HEADLINE_LEAD: { kind: "string", label: "Headline — lead text", default: "Real-time web data for" },
