@@ -81,17 +81,20 @@ text field — so layers are simply named for the editor instead.
 | Lower third (place, boxed) | Place or event, Box colour |
 | End card | Headline, Button label |
 | Watch the full video | Message, Button label |
+| Funky title (3 words) | Word 1-3, Box colour |
+| Funky title (5 words) | Word 1-5, Box colour |
 | Logo outro | Monochrome white |
 
 Boxes keep Figma's height and grow in width to fit what is typed — to the right
 for the left-aligned lower thirds, symmetrically for the centred titles.
 
-## Deliberately not templates
+The funky titles keep Figma's angles and centres — those are hand-placed per
+word with no rule behind them — while each box grows around whatever is typed.
+Emptying a word hides its box, so a five-slot template can carry fewer words.
+The two layouts are separate templates because Figma's 5-word arrangement is its
+own composition, not the 3-word one scaled.
 
-**Funky title** — the rotated word boxes are hand-placed per word in Figma, with
-no rule behind the angles. As a template an editor could only retype words into
-fixed slots, and any change of length breaks the arrangement. Use the tool for
-these.
+## Deliberately not templates
 
 **Collab + case study** — needs a partner logo, so it wants a media-replacement
 slot and a monochrome treatment; worth doing, but it is its own piece of work.

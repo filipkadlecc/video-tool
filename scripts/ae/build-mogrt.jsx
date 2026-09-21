@@ -350,6 +350,67 @@
     return comp;
   }
 
+  /**
+   * One word of a funky title: a rotated box that grows around whatever is
+   * typed. The angle and centre are fixed (Figma places each word by hand, with
+   * no rule behind the angles); only the width follows the word.
+   *
+   * The box hides itself when its word is emptied, so one template covers a
+   * title with fewer words than it has slots.
+   */
+  function funkyWord(comp, label, str, size, accent, cx, cy, rot) {
+    var padX = size * (24 / 143.145);
+    var padY = size * (15 / 143.145);
+    var boxH = size + padY * 2;
+
+    var b = comp.layers.addShape();
+    b.name = label + " box";
+    var grp = b.property("ADBE Root Vectors Group").addProperty("ADBE Vector Group");
+    grp.property("ADBE Vectors Group").addProperty("ADBE Vector Shape - Rect");
+    grp.property("ADBE Vectors Group").addProperty("ADBE Vector Graphic - Fill");
+    var contents = b.property("ADBE Root Vectors Group").property(1).property("ADBE Vectors Group");
+    contents.property("ADBE Vector Graphic - Fill").property("ADBE Vector Fill Color")
+      .setValue(accent.concat([1]));
+    contents.property("ADBE Vector Graphic - Fill").property("ADBE Vector Fill Color").expression =
+      'thisComp.layer("Controls").effect("Box colour")("Color")';
+    contents.property("ADBE Vector Shape - Rect").property("ADBE Vector Rect Size").expression =
+      '[thisComp.layer("' + label + '").sourceRectAtTime(time, false).width + ' + (padX * 2) + ', ' + boxH + '];';
+    xf(b, "ADBE Position").setValue([cx, cy]);
+    xf(b, "ADBE Rotate Z").setValue(rot);
+    xf(b, "ADBE Opacity").expression =
+      'thisComp.layer("' + label + '").text.sourceText.toString().length > 0 ? 100 : 0;';
+
+    var t = text(comp, label, str, FONT.medium, size, C.white, ParagraphJustification.CENTER_JUSTIFY);
+    anchorAt(t, 0.5, 0.5, cx, cy);
+    xf(t, "ADBE Rotate Z").setValue(rot);
+    return { box: b, text: t };
+  }
+
+  /** The rotated word stack. Words listed top-most first, as Figma layers read. */
+  function funkyTitle(name, size, accent, words) {
+    var comp = newComp(name, 5);
+    var ctrl = controlsLayer(comp);
+    var swatch = colourControl(ctrl, "Box colour", accent);
+
+    // Built back to front: AE puts each new layer on top, so creating the last
+    // word first leaves the first word above the rest — which is the order
+    // Figma's layer list has, and it decides which word wins where they overlap.
+    var made = [];
+    for (var i = words.length - 1; i >= 0; i--) {
+      var w = words[i];
+      made[i] = funkyWord(comp, w.label, w.value, size, accent, w.cx, w.cy, w.rot);
+    }
+    for (var j = 0; j < made.length; j++) {
+      popIn(made[j].box, j * 0.12, 0.35);
+      popIn(made[j].text, j * 0.12, 0.35);
+    }
+
+    comp.motionGraphicsTemplateName = comp.name;
+    for (var k = 0; k < made.length; k++) expose(comp, made[k].text.property("Source Text"));
+    expose(comp, swatch);
+    return comp;
+  }
+
   function statement() {
     var comp = newComp("Apify — Statement box", 5);
     var LEFT = 230, TOP = 858.5, WIDTH = 620, PAD = 31.097, TEXT_W = 557.806;
@@ -470,6 +531,25 @@
       function () { return titleBoxed(); },
       function () { return titlePlain(); },
       function () { return statement(); },
+      function () {
+        // Figma Title 4 (2546:726). Centres from get_design_context, checked
+        // against the rendered frame — get_metadata's y is up to 75px out here.
+        return funkyTitle("Apify — Funky title (3 words)", 143.145, C.orange, [
+          { label: "Word 1", value: "More", cx: 432.2, cy: 680.1875, rot: -11.62 },
+          { label: "Word 2", value: "funky", cx: 628.18, cy: 849.2085, rot: 7.88 },
+          { label: "Word 3", value: "titles", cx: 520.03, cy: 1019.8125, rot: -8.26 }
+        ]);
+      },
+      function () {
+        // Figma Title 5 (2546:774) — its own layout, not the 3-word one scaled.
+        return funkyTitle("Apify — Funky title (5 words)", 112.763, C.blue, [
+          { label: "Word 1", value: "When", cx: 367.49, cy: 682.5015, rot: -11.62 },
+          { label: "Word 2", value: "there\u2019s", cx: 655.10, cy: 777.3295, rot: 7.04 },
+          { label: "Word 3", value: "lots", cx: 377.44, cy: 940.672, rot: -17.65 },
+          { label: "Word 4", value: "of", cx: 546.79, cy: 993.5425, rot: 7.04 },
+          { label: "Word 5", value: "text", cx: 655.01, cy: 1157.9745, rot: 7.04 }
+        ]);
+      },
       function () { return lowerThirdBoxed(); },
       function () { return lowerThirdPlain(); },
       function () { return lowerThirdPlace(); },
