@@ -35,11 +35,24 @@ const OUT_DIR = path.join(ROOT, "data/figma-vertical/check");
 const BRANDED = path.join(ROOT, "remotion/scenes/branded");
 const DESIGN = { width: 1080, height: 1920 };
 
+/**
+ * Nearest pixel, breaking an exact tie downward.
+ *
+ * Figma node origins are fractional (687.5, 326.9948), and the crop has to land
+ * on the pixel the node actually occupies. Plain floor puts a node at x=326.995
+ * almost a whole pixel off; plain round sends one at y=687.5 a pixel past where
+ * Figma's own export starts. Nearest-with-ties-down is right for both, and
+ * agrees with treating a straddling node as belonging to the lower row.
+ */
+const nearestPx = (v: number) => -Math.round(-v);
+
 interface Case {
   id: string;
   scene: string;
   values: Record<string, unknown>;
   rotated?: boolean;
+  /** Scene background, for compositing a node export's transparent surround. */
+  bg?: string;
   /** Whole-frame reference: verifies content AND placement in one. */
   frame?: { nodeId: string; png: string };
   /** Content-node reference, for frames that carry the safe-zone Union overlay. */
@@ -146,7 +159,7 @@ registerRoot(() => (
       const settled = fs.readFileSync(full).equals(fs.readFileSync(settle));
 
       let ours = full;
-      let ref: string;
+      let ref = full;
       if (c.bbox) {
         // Frames carrying the safe-zone Union overlay are diffed by content
         // node instead. Cropping OUR render to Figma's own absolute coordinates
@@ -154,22 +167,37 @@ registerRoot(() => (
         const sharp = require_("sharp");
         const refPath = path.join(REF_DIR, c.bbox.png);
         const m = await sharp(refPath).metadata();
+        // Figma pads an export symmetrically around the node bounds when the
+        // content bleeds (a centred stroke, a rotated box's corners), so a
+        // 620x202 node can come back 624x207. Crop BOTH images down to the node
+        // itself: leaving the pad on compares a ~2.4px ring in the reference
+        // against a ~2.5px ring in ours, and morphological opening erases one
+        // but not the other.
+        const w = Math.round(c.bbox.w);
+        const h = Math.round(c.bbox.h);
+        const padX = Math.round((m.width! - c.bbox.w) / 2);
+        const padY = Math.round((m.height! - c.bbox.h) / 2);
+        if (m.width !== w || m.height !== h) {
+          const trimmed = path.join(OUT_DIR, `${c.id}.ref.png`);
+          await sharp(refPath).extract({ left: padX, top: padY, width: w, height: h }).png().toFile(trimmed);
+          ref = trimmed;
+        } else {
+          ref = refPath;
+        }
         ours = path.join(OUT_DIR, `${c.id}.crop.png`);
         await sharp(full)
           .extract({
-            // floor, not round: a node whose origin is y=687.5 straddles two
-            // rows, and the containing pixel is the honest sample. Rounding up
-            // lands a full pixel below the reference's first row.
-            left: Math.floor(c.bbox.x), top: Math.floor(c.bbox.y),
-            width: m.width!, height: m.height!,
+            left: nearestPx(c.bbox.x), top: nearestPx(c.bbox.y),
+            width: w, height: h,
           })
           .png().toFile(ours);
-        ref = refPath;
       } else {
         ref = path.join(REF_DIR, c.frame!.png);
       }
 
-      const result = await compare(ref, ours, { rotated: c.rotated });
+      const hex = c.bg ?? "#000000";
+      const bgRGB = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+      const result = await compare(ref, ours, { rotated: c.rotated, bg: bgRGB });
       result.probes.settled = { pass: settled, holdFrame: hold, comparedWith: hold + 3 };
       const pass = result.pass && settled;
       if (!pass) {

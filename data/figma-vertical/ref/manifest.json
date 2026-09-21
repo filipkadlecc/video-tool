@@ -131,6 +131,123 @@
         "w": 378,
         "h": 72
       }
+    },
+    {
+      "id": "ShortStatement",
+      "scene": "ShortStatement",
+      "values": {},
+      "bbox": {
+        "nodeId": "2546:1071",
+        "png": "2546-1071.png",
+        "x": 230,
+        "y": 858.4999,
+        "w": 620,
+        "h": 202.194
+      }
+    },
+    {
+      "id": "ShortFunkyTitle@orange-1",
+      "scene": "ShortFunkyTitle",
+      "values": {
+        "ACCENT": "orange",
+        "SIZE": 143.145,
+        "WORDS": [
+          {
+            "value": "More",
+            "cx": 432.1998,
+            "cy": 755.107,
+            "rot": -11.62
+          }
+        ]
+      },
+      "rotated": true,
+      "bbox": {
+        "nodeId": "2546:736",
+        "png": "2546-736.png",
+        "x": 232.5902,
+        "y": 632.9196,
+        "w": 399.2193,
+        "h": 244.3748
+      },
+      "note": "single word; the composite z-order is covered by the frame-level check"
+    },
+    {
+      "id": "ShortFunkyTitle@orange-2",
+      "scene": "ShortFunkyTitle",
+      "values": {
+        "ACCENT": "orange",
+        "SIZE": 143.145,
+        "WORDS": [
+          {
+            "value": "funky",
+            "cx": 651.9169,
+            "cy": 849.2112,
+            "rot": 7.88
+          }
+        ]
+      },
+      "rotated": true,
+      "bbox": {
+        "nodeId": "2546:755",
+        "png": "2546-755.png",
+        "x": 435.0078,
+        "y": 735.1328,
+        "w": 433.8182,
+        "h": 228.1569
+      },
+      "note": "single word; the composite z-order is covered by the frame-level check"
+    },
+    {
+      "id": "ShortFunkyTitle@orange-3",
+      "scene": "ShortFunkyTitle",
+      "values": {
+        "ACCENT": "orange",
+        "SIZE": 143.145,
+        "WORDS": [
+          {
+            "value": "titles",
+            "cx": 520.0254,
+            "cy": 1072.2304,
+            "rot": -8.26
+          }
+        ]
+      },
+      "rotated": true,
+      "bbox": {
+        "nodeId": "2546:757",
+        "png": "2546-757.png",
+        "x": 326.9948,
+        "y": 960.418,
+        "w": 386.0612,
+        "h": 223.6248
+      },
+      "note": "single word; the composite z-order is covered by the frame-level check"
+    },
+    {
+      "id": "ShortFunkyTitle@blue-lots",
+      "scene": "ShortFunkyTitle",
+      "rotated": true,
+      "values": {
+        "ACCENT": "blue",
+        "SIZE": 112.763,
+        "WORDS": [
+          {
+            "value": "lots",
+            "cx": 377.4359,
+            "cy": 1007.9106,
+            "rot": -17.65
+          }
+        ]
+      },
+      "bbox": {
+        "nodeId": "2546:780",
+        "png": "2546-780.png",
+        "x": 251.039,
+        "y": 909.1888,
+        "w": 252.7938,
+        "h": 197.4436
+      },
+      "note": "single word; the composite z-order is covered by the frame-level check"
     }
   ]
 }

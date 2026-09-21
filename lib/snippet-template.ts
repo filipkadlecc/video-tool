@@ -151,17 +151,30 @@ function replaceArray(
   const itemKeys = Object.keys(param.itemSchema);
   const isPrimitiveValue = itemKeys.length === 1 && itemKeys[0] === "value";
 
+  // Emit each field as the TYPE its schema declares. This used to stringify
+  // everything, so an array of objects with number fields came out as
+  // `{ cx: "377.4" }` — which compiles, renders nothing useful, and fails
+  // silently. Strings and enums stay quoted; numbers and booleans do not.
+  const literal = (k: string, raw: unknown): string => {
+    const kind = param.itemSchema[k]?.kind;
+    if (kind === "number") {
+      const n = Number(raw);
+      return Number.isFinite(n) ? String(n) : "0";
+    }
+    if (kind === "boolean") return String(Boolean(raw));
+    return JSON.stringify(String(raw ?? ""));
+  };
+
   return source.replace(rx, (_match, prefix, typeAnn, openEq, closeIndent, closeBracket) => {
     const indent = (openEq.match(/^\s*/) ?? [""])[0]; // not used; rows indent with 2 spaces.
     void indent;
     const inner = rows
       .map((row) => {
         if (isPrimitiveValue) {
-          const raw = row.value;
-          return `  ${JSON.stringify(String(raw ?? ""))},`;
+          return `  ${literal("value", row.value)},`;
         }
         const fields = itemKeys
-          .map((k) => `${k}: ${JSON.stringify(String(row[k] ?? ""))}`)
+          .map((k) => `${k}: ${literal(k, row[k])}`)
           .join(", ");
         return `  { ${fields} },`;
       })

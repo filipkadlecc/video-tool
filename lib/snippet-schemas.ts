@@ -130,6 +130,44 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
     showIf: { ACCENT: (v) => v.STYLE === "boxed" },
   },
 
+  ShortFunkyTitle: {
+    params: {
+      ACCENT: {
+        kind: "enum", label: "Box colour", default: "orange",
+        options: [
+          { value: "orange", label: "Orange" },
+          { value: "blue", label: "Blue" },
+        ],
+      },
+      SIZE: { kind: "number", label: "Type size", default: 143.145, min: 40, max: 300, step: 0.001 },
+      WORDS: {
+        kind: "array", label: "Words", addLabel: "Add word",
+        itemSchema: {
+          value: { kind: "string", label: "Word", default: "word" },
+          cx: { kind: "number", label: "Centre X", default: 540, min: 0, max: 1080, step: 0.0001 },
+          cy: { kind: "number", label: "Centre Y", default: 960, min: 0, max: 1920, step: 0.0001 },
+          rot: { kind: "number", label: "Rotation", default: 0, min: -45, max: 45, step: 0.01 },
+        },
+        default: [
+          { value: "More", cx: 432.1998, cy: 755.107, rot: -11.62 },
+          { value: "funky", cx: 651.9169, cy: 849.2112, rot: 7.88 },
+          { value: "titles", cx: 520.0254, cy: 1072.2304, rot: -8.26 },
+        ],
+      },
+    },
+  },
+
+  ShortStatement: {
+    params: {
+      TEXT: {
+        kind: "string", label: "Question or statement", multiline: true,
+        default: "Question or statement can be placed here in the box that\u2019s adjustable",
+      },
+      X: { kind: "number", label: "Left (0 = as designed)", default: 0, min: 0, max: 1080, step: 1 },
+      Y: { kind: "number", label: "Top (0 = as designed)", default: 0, min: 0, max: 1920, step: 1 },
+    },
+  },
+
   ShortLowerThird: {
     params: {
       STYLE: {

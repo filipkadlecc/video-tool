@@ -21,21 +21,25 @@ const WEIGHT_SHIFT_LIMIT = 0.45;
 // moves it by the full amount; rasteriser noise moves it by a fraction.
 const CENTROID_LIMIT = 0.75;
 
-/** Decode to raw RGBA flattened over mid-grey.
+/**
+ * Decode to raw RGB, compositing any alpha over `bg`.
  *
- * Mid-grey, not white or black: flattening over either extreme hides one
- * polarity of alpha error — a stray transparent pixel over white looks like
- * white, which is exactly what a white background already is.
+ * Mid-grey by default, because flattening over an extreme hides one polarity of
+ * alpha error. But a Figma NODE export is transparent outside the node, while
+ * our render has the scene's background there — so when a reference comes back
+ * larger than its node (Figma pads around a centred stroke), the ring around it
+ * must be composited over the scene's real background or the two are compared
+ * black-against-grey. Cases pass their background in.
  */
-async function loadRGBA(file) {
+async function loadRGBA(file, bg = [128, 128, 128]) {
   const img = sharp(file).ensureAlpha();
   const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
   const out = Buffer.alloc(info.width * info.height * 3);
   for (let i = 0, o = 0; i < data.length; i += 4, o += 3) {
     const a = data[i + 3] / 255;
-    out[o] = Math.round(data[i] * a + 128 * (1 - a));
-    out[o + 1] = Math.round(data[i + 1] * a + 128 * (1 - a));
-    out[o + 2] = Math.round(data[i + 2] * a + 128 * (1 - a));
+    out[o] = Math.round(data[i] * a + bg[0] * (1 - a));
+    out[o + 1] = Math.round(data[i + 1] * a + bg[1] * (1 - a));
+    out[o + 2] = Math.round(data[i + 2] * a + bg[2] * (1 - a));
   }
   return { data: out, width: info.width, height: info.height };
 }
@@ -253,8 +257,9 @@ function perimeter(mask, width, height) {
 async function compare(refFile, ourFile, opts = {}) {
   const hardThr = opts.hardThr ?? 32;
   const bboxTol = opts.rotated ? 2 : 1;
-  const ref = await loadRGBA(refFile);
-  const our = await loadRGBA(ourFile);
+  const bg = opts.bg ?? [128, 128, 128];
+  const ref = await loadRGBA(refFile, bg);
+  const our = await loadRGBA(ourFile, bg);
 
   const probes = {};
 
@@ -449,6 +454,8 @@ async function compare(refFile, ourFile, opts = {}) {
 
 /** Write ref | ours | failures-in-red, so a red run is legible rather than numeric. */
 async function writeDiff(refFile, ourFile, result, out) {
+  // compare() returns early on a dimension mismatch, before any pixel work.
+  if (!result._hard) return false;
   const { hard, width, height } = result._hard;
   const overlay = Buffer.alloc(width * height * 4);
   for (let p = 0; p < width * height; p++) {
@@ -466,6 +473,7 @@ async function writeDiff(refFile, ourFile, result, out) {
       { input: hot, left: width * 2 + 24, top: 0 },
     ])
     .png().toFile(out);
+  return true;
 }
 
 module.exports = { compare, writeDiff, loadRGBA, inkMask, inkBBox };
