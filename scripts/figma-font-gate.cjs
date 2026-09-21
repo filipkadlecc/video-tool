@@ -90,8 +90,9 @@ loadInter("normal", { weights: ["400", "500", "700"] });
 registerRoot(() => (<Composition id="Scene" component={Scene}
   durationInFrames={1} fps={30} width={${W}} height={${H}} />));
 `);
+  let serveUrl = null;
   try {
-    const serveUrl = await bundle({ entryPoint: ep, publicDir: path.join(ROOT, "public") });
+    serveUrl = await bundle({ entryPoint: ep, publicDir: path.join(ROOT, "public") });
     const composition = await selectComposition({ serveUrl, id: "Scene" });
     await renderStill({
       composition, serveUrl, output: OURS, frame: 0,
@@ -100,6 +101,8 @@ registerRoot(() => (<Composition id="Scene" component={Scene}
   } finally {
     try { fs.unlinkSync(sp); } catch {}
     try { fs.unlinkSync(ep); } catch {}
+    // Each bundle copies public/; leaving them behind once cost 98GB.
+    if (serveUrl) { try { fs.rmSync(serveUrl, { recursive: true, force: true }); } catch {} }
   }
 
   const result = await compare(REF, OURS);

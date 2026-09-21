@@ -53,6 +53,13 @@ interface Case {
   rotated?: boolean;
   /** Scene background, for compositing a node export's transparent surround. */
   bg?: string;
+  /**
+   * Where the export sits relative to the node. Figma grows an export
+   * symmetrically for most bleed, but a DROP SHADOW extends only right and
+   * down, so the export starts at the node's own top-left. Set "node" then, and
+   * the whole export — shadow included — is compared.
+   */
+  refOrigin?: "centred" | "node";
   /** Whole-frame reference: verifies content AND placement in one. */
   frame?: { nodeId: string; png: string };
   /** Content-node reference, for frames that carry the safe-zone Union overlay. */
@@ -143,8 +150,9 @@ registerRoot(() => (
   written.push(ep);
 
   let failures = 0;
+  let serveUrl: string | null = null;
   try {
-    const serveUrl = await bundle({ entryPoint: ep, publicDir: path.join(ROOT, "public") });
+    serveUrl = await bundle({ entryPoint: ep, publicDir: path.join(ROOT, "public") });
 
     for (const [i, { c, hold }] of prepared.entries()) {
       const composition = await selectComposition({ serveUrl, id: `c${i}` });
@@ -167,19 +175,37 @@ registerRoot(() => (
         const sharp = require_("sharp");
         const refPath = path.join(REF_DIR, c.bbox.png);
         const m = await sharp(refPath).metadata();
-        // Figma pads an export symmetrically around the node bounds when the
-        // content bleeds (a centred stroke, a rotated box's corners), so a
-        // 620x202 node can come back 624x207. Crop BOTH images down to the node
-        // itself: leaving the pad on compares a ~2.4px ring in the reference
-        // against a ~2.5px ring in ours, and morphological opening erases one
-        // but not the other.
-        const w = Math.round(c.bbox.w);
-        const h = Math.round(c.bbox.h);
-        const padX = Math.round((m.width! - c.bbox.w) / 2);
-        const padY = Math.round((m.height! - c.bbox.h) / 2);
-        if (m.width !== w || m.height !== h) {
+        // A Figma export rarely matches the node box exactly. It is LARGER
+        // when content bleeds (a centred stroke, a rotated box's corners) and
+        // SMALLER for a text node, where Figma exports the ink rather than the
+        // line boxes. Either way the two are concentric, so compare the region
+        // they share — and measure the overhang against the node's FRACTIONAL
+        // size, since rounding it first moves the crop by a pixel.
+        if (c.refOrigin === "node") {
+          // Compare the whole export, shadow included, anchored at the node.
+          ref = refPath;
+          ours = path.join(OUT_DIR, `${c.id}.crop.png`);
+          await sharp(full)
+            .extract({
+              left: nearestPx(c.bbox.x), top: nearestPx(c.bbox.y),
+              width: m.width!, height: m.height!,
+            })
+            .png().toFile(ours);
+        } else {
+
+        const overhangX = (m.width! - c.bbox.w) / 2;
+        const overhangY = (m.height! - c.bbox.h) / 2;
+        const cw = Math.min(m.width!, Math.round(c.bbox.w));
+        const ch = Math.min(m.height!, Math.round(c.bbox.h));
+
+        if (m.width !== cw || m.height !== ch) {
           const trimmed = path.join(OUT_DIR, `${c.id}.ref.png`);
-          await sharp(refPath).extract({ left: padX, top: padY, width: w, height: h }).png().toFile(trimmed);
+          await sharp(refPath)
+            .extract({
+              left: Math.round(Math.max(0, overhangX)), top: Math.round(Math.max(0, overhangY)),
+              width: cw, height: ch,
+            })
+            .png().toFile(trimmed);
           ref = trimmed;
         } else {
           ref = refPath;
@@ -187,10 +213,12 @@ registerRoot(() => (
         ours = path.join(OUT_DIR, `${c.id}.crop.png`);
         await sharp(full)
           .extract({
-            left: nearestPx(c.bbox.x), top: nearestPx(c.bbox.y),
-            width: w, height: h,
+            left: nearestPx(c.bbox.x + Math.max(0, -overhangX)),
+            top: nearestPx(c.bbox.y + Math.max(0, -overhangY)),
+            width: cw, height: ch,
           })
           .png().toFile(ours);
+        }
       } else {
         ref = path.join(REF_DIR, c.frame!.png);
       }
@@ -214,6 +242,9 @@ registerRoot(() => (
     }
   } finally {
     for (const f of written) { try { fs.unlinkSync(f); } catch { /* best effort */ } }
+    // bundle() copies the whole publicDir into a temp directory, and this
+    // script runs many times a day. Ninety-eight of them filled a disk once.
+    if (serveUrl) { try { fs.rmSync(serveUrl, { recursive: true, force: true }); } catch { /* best effort */ } }
   }
 
   console.log(`\n${cases.length - failures}/${cases.length} cases match Figma.\n`);
