@@ -66,6 +66,37 @@ export const VERTICAL_DESIGN = { width: 1080, height: 1920 } as const;
  */
 export const VERTICAL_CENTRE_X = 539.5;
 
+/**
+ * GT Walsheim's baseline as a fraction of font size inside a `line-height: 1`
+ * box: ascent (0.9em) plus half-leading, which is negative because the font's
+ * content box is 1.145em (hhea ascent 900, descent -245, upem 1000).
+ */
+const GT_BASELINE = 0.9 + (1 - 1.145) / 2; // 0.8275
+
+/**
+ * Whole-pixel correction to put a plain (unboxed) run of GT Walsheim where
+ * Figma puts it.
+ *
+ * Chrome snaps a text baseline to a whole device pixel; Figma does not. The
+ * residual is therefore never more than 1px, and which way it falls depends
+ * only on where `size * GT_BASELINE` sits relative to a pixel boundary.
+ * Measured against the kit's own Figma exports:
+ *
+ *   72     -> ideal 59.58, rounds to 60 (+0.42)  needs 1px
+ *   106.982-> ideal 88.53, rounds to 89 (+0.47)  needs 1px
+ *   143.145-> ideal 118.45, rounds to 118 (-0.45) needs 0
+ *   155.723-> ideal 128.86, rounds to 129 (+0.14) needs 0
+ *
+ * Only for text positioned by the top of its line box. Text centred inside a
+ * padded box is placed by flex and needs no correction — and gets none.
+ * scripts/figma-diff.ts is what keeps this honest: if it is ever wrong for a
+ * new size, the diff says so.
+ */
+export function figmaBaselineNudge(fontSizePx: number): number {
+  const ideal = fontSizePx * GT_BASELINE;
+  return Math.round(ideal) - ideal > 0.35 ? 1 : 0;
+}
+
 export type PlaneAnchor = "top" | "bottom" | "center";
 
 /**

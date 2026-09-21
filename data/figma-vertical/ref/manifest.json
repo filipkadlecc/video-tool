@@ -56,6 +56,81 @@
         "w": 632,
         "h": 451
       }
+    },
+    {
+      "id": "ShortLowerThird@boxed-person",
+      "scene": "ShortLowerThird",
+      "values": {},
+      "bbox": {
+        "nodeId": "2545:571",
+        "png": "2545-571.png",
+        "x": 169,
+        "y": 929,
+        "w": 469,
+        "h": 324
+      }
+    },
+    {
+      "id": "ShortLowerThird@boxed-person-shortslow",
+      "scene": "ShortLowerThird",
+      "values": {
+        "PLACEMENT": "shorts-low"
+      },
+      "bbox": {
+        "nodeId": "2546:747",
+        "png": "2546-747.png",
+        "x": 125,
+        "y": 1168,
+        "w": 469,
+        "h": 324
+      }
+    },
+    {
+      "id": "ShortLowerThird@boxed-place",
+      "scene": "ShortLowerThird",
+      "values": {
+        "MODE": "place",
+        "ACCENT": "blue"
+      },
+      "bbox": {
+        "nodeId": "2545:620",
+        "png": "2545-620.png",
+        "x": 173,
+        "y": 1169,
+        "w": 418,
+        "h": 74
+      }
+    },
+    {
+      "id": "ShortLowerThird@plain-person",
+      "scene": "ShortLowerThird",
+      "values": {
+        "STYLE": "plain"
+      },
+      "bbox": {
+        "nodeId": "2545:547",
+        "png": "2545-547.png",
+        "x": 187,
+        "y": 929,
+        "w": 428,
+        "h": 296
+      }
+    },
+    {
+      "id": "ShortLowerThird@plain-place",
+      "scene": "ShortLowerThird",
+      "values": {
+        "STYLE": "plain",
+        "MODE": "place"
+      },
+      "bbox": {
+        "nodeId": "2545:670",
+        "png": "2545-670.png",
+        "x": 187,
+        "y": 1153,
+        "w": 378,
+        "h": 72
+      }
     }
   ]
 }

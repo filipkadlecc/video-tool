@@ -1,5 +1,6 @@
 export const SNIPPET_ICONS: Record<string, string> = {
   ShortTitle: "type",
+  ShortLowerThird: "monitor",
   ShortLogoOutro: "sparkles",
   IntroCard: "film",
   LowerThird: "monitor",

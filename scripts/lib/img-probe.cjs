@@ -13,6 +13,14 @@
  */
 const sharp = require("sharp");
 
+// How far the outline may move, in PIXELS (see the note in compare()).
+// Calibrated against controls: `node scripts/figma-font-gate.cjs "GT Walsheim" <weight>`.
+const EDGE_SHIFT_LIMIT = 0.9;
+const WEIGHT_SHIFT_LIMIT = 0.45;
+// How far the ink's centre of mass may move, in pixels. A real translation
+// moves it by the full amount; rasteriser noise moves it by a fraction.
+const CENTROID_LIMIT = 0.75;
+
 /** Decode to raw RGBA flattened over mid-grey.
  *
  * Mid-grey, not white or black: flattening over either extreme hides one
@@ -192,6 +200,52 @@ function dilate(mask, width, height) {
 }
 
 /**
+ * Intensity-weighted centroid of the ink, in sub-pixel coordinates.
+ *
+ * This is the translation detector. The integer argmax of ink-profile
+ * cross-correlation looked right but is not: our glyph edges anti-alias a
+ * shade heavier than Figma's, which biases a thresholded profile, and two
+ * cases whose centres of mass differ in OPPOSITE directions both reported the
+ * same -1 shift. A centroid weighted by how far each pixel is from the
+ * background is symmetric under a uniform edge-weight change, so it measures
+ * position and nothing else.
+ */
+function centroid(img, bg) {
+  const { data, width, height } = img;
+  let sx = 0, sy = 0, sw = 0;
+  for (let p = 0, i = 0; p < width * height; p++, i += 3) {
+    const w = Math.max(
+      Math.abs(data[i] - bg[0]),
+      Math.abs(data[i + 1] - bg[1]),
+      Math.abs(data[i + 2] - bg[2]),
+    );
+    if (w <= 8) continue;
+    sx += w * (p % width); sy += w * ((p / width) | 0); sw += w;
+  }
+  return sw ? { x: sx / sw, y: sy / sw } : null;
+}
+
+/** Ink pixels touching a non-ink pixel: the length of the shape's outline. */
+function perimeter(mask, width, height) {
+  let n = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!mask[y * width + x]) continue;
+      let edge = false;
+      for (let dy = -1; dy <= 1 && !edge; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const yy = y + dy, xx = x + dx;
+          if (yy < 0 || xx < 0 || yy >= height || xx >= width) { edge = true; break; }
+          if (!mask[yy * width + xx]) { edge = true; break; }
+        }
+      }
+      if (edge) n++;
+    }
+  }
+  return n;
+}
+
+/**
  * Run every probe. `opts.rotated` relaxes the geometry limit to 2px, because
  * Chrome and Figma do not agree to the pixel on rotated 143px type; it is set
  * per case in the manifest, never globally.
@@ -231,18 +285,50 @@ async function compare(refFile, ourFile, opts = {}) {
   });
   const mRef = open(mRefRaw), mOur = open(mOurRaw);
   const bRef = inkBBox(mRef), bOur = inkBBox(mOur);
-  const pRef = profiles(mRef), pOur = profiles(mOur);
-  const rowShift = bestShift(pRef.rows, pOur.rows);
-  const colShift = bestShift(pRef.cols, pOur.cols);
+
+  // Translation test: does ANY shift fit better than none?
+  //
+  // Not a centroid (dominated by whichever flat region happens to be largest),
+  // and not the argmax of thresholded ink profiles (biased by our slightly
+  // heavier edges — two cases whose content sat in opposite directions both
+  // reported the same -1). Instead, compare the eroded glyph interiors at
+  // every offset in a +/-2px window: a genuine translation has a better fit
+  // somewhere else, while rasteriser noise is equally bad at every offset, so
+  // the minimum stays at (0,0).
+  const eR = erode(mRefRaw.mask, width, height);
+  const eO = erode(mOurRaw.mask, width, height);
+  let best = { dx: 0, dy: 0, n: Infinity }, atZero = 0;
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      let n = 0;
+      for (let y = 0; y < height; y++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= height) continue;
+        for (let x = 0; x < width; x++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= width) continue;
+          if (eR[y * width + x] !== eO[yy * width + xx]) n++;
+        }
+      }
+      if (dx === 0 && dy === 0) atZero = n;
+      if (n < best.n) best = { dx, dy, n };
+    }
+  }
+  // A tie counts as no translation; only a strictly better fit elsewhere is
+  // evidence, and it has to be better by a real margin rather than by noise.
+  const translated = (best.dx !== 0 || best.dy !== 0) && best.n < atZero * 0.9;
+
+  const bboxTolPx = opts.rotated ? 3 : 2;
   const deltas = bRef && bOur
     ? { x0: bOur.x0 - bRef.x0, y0: bOur.y0 - bRef.y0, x1: bOur.x1 - bRef.x1, y1: bOur.y1 - bRef.y1 }
     : null;
   probes.geometry = {
-    pass: !!deltas
-      && Math.abs(deltas.x0) <= bboxTol && Math.abs(deltas.y0) <= bboxTol
-      && Math.abs(deltas.x1) <= bboxTol && Math.abs(deltas.y1) <= bboxTol
-      && rowShift === 0 && colShift === 0,
-    bboxDelta: deltas, rowShift, colShift, tol: bboxTol,
+    pass: !!deltas && !translated
+      && Math.abs(deltas.x0) <= bboxTolPx && Math.abs(deltas.y0) <= bboxTolPx
+      && Math.abs(deltas.x1) <= bboxTolPx && Math.abs(deltas.y1) <= bboxTolPx,
+    bestFitShift: { dx: best.dx, dy: best.dy },
+    fitGain: +(1 - best.n / (atZero || 1)).toFixed(3),
+    bboxDelta: deltas, bboxTol: bboxTolPx,
   };
 
   // Probe 3 — flat colour. Zero tolerance: there is no anti-aliasing in the
@@ -300,33 +386,32 @@ async function compare(refFile, ourFile, opts = {}) {
   // total ink so a uniformly bolder cut cannot hide inside the edge band.
   const iRef = erode(mRefRaw.mask, width, height);
   const iOur = erode(mOurRaw.mask, width, height);
-  let inter = 0, union = 0;
-  for (let p = 0; p < width * height; p++) {
-    if (iRef[p] || iOur[p]) union++;
-    if (iRef[p] !== iOur[p]) inter++;
-  }
-  // Thresholds are set from measured control data, not guessed. Rendering the
-  // same Figma box (node 2545:496, "Headline" at 143.145px) in four faces gave:
-  //
-  //   GT Walsheim 500 (correct)  interior  4.9%   coverage  +4.4%   geometry PASS
-  //   GT Walsheim 400            interior 24.8%   coverage -12.2%   geometry FAIL
-  //   GT Walsheim 700            interior 61.8%   coverage +37.4%   geometry FAIL
-  //   Inter 500                  interior 57.9%   coverage +12.8%   geometry FAIL
-  //
-  // 10% / 8% sits ~2x above the correct font and ~2.5x below the NEAREST wrong
-  // one (the adjacent weight of the same family). Tightening further would make
-  // the harness fail on rasteriser noise; loosening would let a weight slip.
-  probes.interior = {
-    pass: union === 0 || inter / union < 0.10,
-    symmetricDiff: union ? inter / union : 0,
-  };
+  let symDiff = 0;
+  for (let p = 0; p < width * height; p++) if (iRef[p] !== iOur[p]) symDiff++;
 
   let inkRef = 0, inkOur = 0;
   for (let p = 0; p < width * height; p++) { inkRef += mRefRaw.mask[p]; inkOur += mOurRaw.mask[p]; }
+
+  // Normalise by PERIMETER, not area.
+  //
+  // Two rasterisers disagree along glyph edges, so the difference between them
+  // is proportional to outline LENGTH, not to ink area. An area ratio therefore
+  // scales as 1/stroke-width: the same half-pixel edge disagreement reads as
+  // 5% on 143px type and 24% on 72px type, and no single area threshold can
+  // cover a kit ranging from 48px captions to 155px headlines. Dividing by
+  // perimeter gives a number in PIXELS — how far the outline moved — which
+  // means the same thing at every size.
+  const perim = perimeter(mRefRaw.mask, width, height) || 1;
+  const edgeShiftPx = symDiff / perim;
+  const weightShiftPx = (inkOur - inkRef) / perim;
+
+  probes.interior = {
+    pass: edgeShiftPx < EDGE_SHIFT_LIMIT,
+    edgeShiftPx: +edgeShiftPx.toFixed(3), symmetricDiff: symDiff, perimeter: perim,
+  };
   probes.coverage = {
-    pass: inkRef === 0 || Math.abs(inkOur - inkRef) / inkRef < 0.08,
-    ref: inkRef, ours: inkOur,
-    delta: inkRef ? (inkOur - inkRef) / inkRef : 0,
+    pass: Math.abs(weightShiftPx) < WEIGHT_SHIFT_LIMIT,
+    weightShiftPx: +weightShiftPx.toFixed(3), ref: inkRef, ours: inkOur,
   };
 
   // Probe 6 — hard mismatch, now strictly about NON-edge regions: flat fills,

@@ -44,6 +44,7 @@ export const SNIPPET_META: Record<string, { name: string; subtitle: string }> = 
   // Short-form (9:16) kit. These declare `orientation` in their own source, so
   // the browser hides them outside a vertical project — see SceneMeta.
   ShortTitle: { name: "Short — title", subtitle: "TikTok/Shorts title: highlight boxes or plain, orange or blue" },
+  ShortLowerThird: { name: "Short — lower third", subtitle: "Name + role or place/event; boxed or plain, with the Shorts-safe placement" },
   ShortLogoOutro: { name: "Short — logo outro", subtitle: "Centred Apify lockup on black, for the end of a vertical cut" },
 };
 

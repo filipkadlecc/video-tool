@@ -1,6 +1,6 @@
 import React from "react";
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from "remotion";
-import { BRAND_FONT_FACE_CSS, VERTICAL_CENTRE_X, figmaPlane } from "../../theme";
+import { BRAND_FONT_FACE_CSS, VERTICAL_CENTRE_X, figmaPlane, figmaBaselineNudge } from "../../theme";
 
 // ===== Editable parameters (the snippet form fills these in) =====
 const STYLE: "plain" | "boxed" = "boxed";
@@ -98,6 +98,7 @@ export default function ShortTitle() {
           fontFamily: "'GT Walsheim'", fontWeight: 400, fontSize: SUB_SIZE,
           lineHeight: 1, color: WHITE, textAlign: "center", width: "100%",
           clipPath: reveal(frame, i++),
+          transform: `translateY(${figmaBaselineNudge(SUB_SIZE)}px)`,
         }}>{SUBHEAD}</div>
       ) : (
         <div key="sub" style={{
@@ -123,6 +124,7 @@ export default function ShortTitle() {
           fontFamily: "'GT Walsheim'", fontWeight: 500, fontSize: headSize,
           lineHeight: 1, color: WHITE, textAlign: "center", width: "100%",
           clipPath: reveal(frame, i++),
+          transform: `translateY(${figmaBaselineNudge(headSize)}px)`,
         }}>{line}</div>
       ) : (
         <div key={key} style={{

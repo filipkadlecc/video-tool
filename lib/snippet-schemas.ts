@@ -130,6 +130,53 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
     showIf: { ACCENT: (v) => v.STYLE === "boxed" },
   },
 
+  ShortLowerThird: {
+    params: {
+      STYLE: {
+        kind: "enum", label: "Treatment", default: "boxed",
+        options: [
+          { value: "boxed", label: "Highlight boxes" },
+          { value: "plain", label: "Plain text" },
+        ],
+      },
+      MODE: {
+        kind: "enum", label: "Shows", default: "person",
+        options: [
+          { value: "person", label: "Name + role" },
+          { value: "place", label: "Place / event" },
+        ],
+      },
+      ACCENT: {
+        kind: "enum", label: "Box colour", default: "green",
+        options: [
+          { value: "green", label: "Green" },
+          { value: "blue", label: "Blue" },
+          { value: "orange", label: "Orange" },
+        ],
+      },
+      NAME: { kind: "string", label: "First name", default: "Name" },
+      SURNAME: { kind: "string", label: "Surname", default: "Surname" },
+      POSITION: { kind: "string", label: "Role", default: "Position" },
+      PLACE: { kind: "string", label: "Place / event", default: "Place/event" },
+      PLACEMENT: {
+        kind: "enum", label: "Placement", default: "shared",
+        options: [
+          { value: "shared", label: "Standard (TikTok + Shorts)" },
+          { value: "shorts-low", label: "Lower — adapted to Shorts safe zone" },
+        ],
+      },
+      X: { kind: "number", label: "Left (0 = as designed)", default: 0, min: 0, max: 1080, step: 1 },
+      Y: { kind: "number", label: "Top (0 = as designed)", default: 0, min: 0, max: 1920, step: 1 },
+    },
+    showIf: {
+      ACCENT: (v) => v.STYLE === "boxed",
+      NAME: (v) => v.MODE === "person",
+      SURNAME: (v) => v.MODE === "person",
+      POSITION: (v) => v.MODE === "person",
+      PLACE: (v) => v.MODE === "place",
+    },
+  },
+
   ShortLogoOutro: {
     params: {
       MARK: {
