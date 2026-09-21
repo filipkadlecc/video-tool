@@ -27,10 +27,11 @@
  */
 
 import * as React from "react";
+import type { Orientation } from "./types";
 import { transform } from "sucrase";
-import { BRAND, BRAND_FONT_FACE_CSS } from "../remotion/theme";
+import { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, figmaPlane } from "../remotion/theme";
 
-const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS };
+const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, figmaPlane };
 
 /**
  * Stands in for a module a scene imports but never touches at module scope.
@@ -160,15 +161,60 @@ export function evalSceneModule(
 export interface SceneMeta {
   durationInFrames: number;
   fps: number;
+  /**
+   * Canvas shapes this scene is authored for. Absent in the source means all
+   * three, so every scene that predates the short-form kit is unaffected.
+   *
+   * This lives on the scene rather than in a lookup table deliberately. The
+   * table would be a fourth place the library is described — see the note at
+   * the top of lib/snippet-catalog.ts about the three that already disagreed —
+   * and it would disagree DANGEROUSLY: a scene pixel-authored against a
+   * 1080x1920 plane whose table row says "any" gets offered for a 1920x1080
+   * project and renders broken. The export also survives renderSnippet(), so a
+   * scene stored in project.json still declares what it is.
+   */
+  orientations: Orientation[];
+  /** Frame at which everything has settled; what the Figma harness diffs. */
+  holdFrame?: number;
+}
+
+const ALL_ORIENTATIONS: Orientation[] = ["horizontal", "vertical", "square"];
+
+function normaliseOrientations(v: unknown): Orientation[] | undefined {
+  const one = (x: unknown): Orientation | null =>
+    x === "horizontal" || x === "vertical" || x === "square" ? x : null;
+  if (typeof v === "string") {
+    if (v === "any") return ALL_ORIENTATIONS;
+    const o = one(v);
+    return o ? [o] : undefined;
+  }
+  if (Array.isArray(v)) {
+    const out = v.map(one).filter((o): o is Orientation => o !== null);
+    return out.length ? out : undefined;
+  }
+  return undefined;
 }
 
 /** Regex fallback for code that won't evaluate — matches a literal only. */
 function metaByRegex(code: string): Partial<SceneMeta> {
   const dur = code.match(/export\s+const\s+durationInFrames\s*=\s*(\d+)/);
   const f = code.match(/export\s+const\s+fps\s*=\s*(\d+)/);
+  const hold = code.match(/export\s+const\s+holdFrame\s*=\s*(\d+)/);
+  const orient = code.match(/export\s+const\s+orientation\s*(?::[^=]+)?=\s*(\[[^\]]*\]|"[a-z]+"|'[a-z]+')/);
+  let orientations: Orientation[] | undefined;
+  if (orient) {
+    const raw = orient[1].replace(/'/g, '"');
+    try {
+      orientations = normaliseOrientations(raw.startsWith("[") ? JSON.parse(raw) : JSON.parse(raw));
+    } catch {
+      orientations = undefined;
+    }
+  }
   return {
     durationInFrames: dur ? parseInt(dur[1], 10) : undefined,
     fps: f ? parseInt(f[1], 10) : undefined,
+    holdFrame: hold ? parseInt(hold[1], 10) : undefined,
+    orientations,
   };
 }
 
@@ -197,6 +243,11 @@ export function sceneMeta(code: string, fallbackFps = 30): SceneMeta {
     durationInFrames:
       num(evaluated?.durationInFrames) ?? num(regex.durationInFrames) ?? 250,
     fps: num(evaluated?.fps) ?? num(regex.fps) ?? fallbackFps,
+    // Absent => every orientation, so the 29 scenes that predate this are
+    // untouched and there is no table to backfill.
+    orientations:
+      normaliseOrientations(evaluated?.orientation) ?? regex.orientations ?? ALL_ORIENTATIONS,
+    holdFrame: num(evaluated?.holdFrame) ?? regex.holdFrame,
   };
 }
 
@@ -208,7 +259,10 @@ export function sceneMeta(code: string, fallbackFps = 30): SceneMeta {
  * so a 25fps scene dropped into a 30fps document needs 20% more frames to play
  * to its end — without this it is cut short.
  */
-export function sceneFramesAtFps(meta: SceneMeta, docFps: number): number {
+export function sceneFramesAtFps(
+  meta: Pick<SceneMeta, "durationInFrames" | "fps">,
+  docFps: number,
+): number {
   if (!meta.fps || !Number.isFinite(meta.fps)) return meta.durationInFrames;
   return Math.max(1, Math.round((meta.durationInFrames / meta.fps) * docFps));
 }

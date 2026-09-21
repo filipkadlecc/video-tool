@@ -1,6 +1,6 @@
 {
   "name": "video-tool",
-  "version": "0.1.127",
+  "version": "0.1.128",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,7 @@
     "test:doc": "tsx scripts/test-editor-doc.ts",
     "test:agent": "tsx scripts/test-editor-agent.ts",
     "test:render": "tsx scripts/test-editor-render.ts",
-    "test:figma": "node scripts/figma-diff.cjs"
+    "test:figma": "tsx scripts/figma-diff.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

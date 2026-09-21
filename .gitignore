@@ -67,5 +67,3 @@ next-env.d.ts
 /data/*/check/
 /data/*/check-*/
 
-# Figma fidelity harness: references are committed, renders are not
-/data/figma-vertical/check/

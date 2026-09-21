@@ -228,28 +228,46 @@ async function compare(refFile, ourFile, opts = {}) {
     bboxDelta: deltas, rowShift, colShift, tol: bboxTol,
   };
 
-  // Probe 3 — flat colour. No anti-aliasing in the middle of a filled box, so
-  // no tolerance is warranted: a wrong token must fail.
-  const counts = new Map();
-  for (let i = 0; i < width * height * 3; i += 3) {
+  // Probe 3 — flat colour. Zero tolerance: there is no anti-aliasing in the
+  // middle of a filled region, so a token that is merely close must fail.
+  //
+  // Sample points are chosen by ERODING each colour's mask, not by taking its
+  // centroid. The centroid of a large scattered region (a background with a
+  // logo punched out of it) frequently lands on a pixel of some other colour,
+  // and then the probe silently checks nothing — which is exactly what it did
+  // on first run here.
+  const colourMasks = new Map();
+  for (let p = 0, i = 0; p < width * height; p++, i += 3) {
     const k = (ref.data[i] << 16) | (ref.data[i + 1] << 8) | ref.data[i + 2];
-    let e = counts.get(k);
-    if (!e) counts.set(k, (e = { n: 0, sx: 0, sy: 0 }));
-    const p = i / 3;
-    e.n++; e.sx += p % width; e.sy += (p / width) | 0;
+    let m = colourMasks.get(k);
+    if (!m) colourMasks.set(k, (m = { n: 0, mask: new Uint8Array(width * height) }));
+    m.n++; m.mask[p] = 1;
   }
-  const top = [...counts.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 5);
-  const samples = top.map(([k, e]) => {
-    const x = Math.round(e.sx / e.n), y = Math.round(e.sy / e.n);
-    const i = (y * width + x) * 3;
+  const topColours = [...colourMasks.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 5);
+  const samples = [];
+  for (const [k, m] of topColours) {
+    // Three erosions => the point is at least 3px from any other colour, so it
+    // is unambiguously interior rather than an anti-aliased boundary pixel.
+    let e = m.mask;
+    for (let r = 0; r < 3; r++) e = erode(e, width, height);
+    let at = -1;
+    for (let p = 0; p < e.length; p++) if (e[p]) { at = p; break; }
+    if (at < 0) continue;              // region too thin to sample safely
+    const i = at * 3;
     const want = [(k >> 16) & 255, (k >> 8) & 255, k & 255];
-    const got = [ref.data[i], ref.data[i + 1], ref.data[i + 2]];
     const mine = [our.data[i], our.data[i + 1], our.data[i + 2]];
-    // Only meaningful where the reference centroid actually lands on that colour.
-    const onColour = want.every((v, j) => v === got[j]);
-    return { x, y, want, mine, onColour, ok: !onColour || want.every((v, j) => v === mine[j]) };
-  });
-  probes.flatColor = { pass: samples.every((s) => s.ok), samples };
+    samples.push({
+      at: [at % width, (at / width) | 0], area: m.n, want, mine,
+      ok: want.every((v, j) => v === mine[j]),
+    });
+  }
+  probes.flatColor = {
+    // A run with nothing samplable is a failure, not a pass — it means the
+    // probe checked nothing, and silently checking nothing is the bug above.
+    pass: samples.length > 0 && samples.every((s) => s.ok),
+    sampled: samples.length,
+    samples,
+  };
 
   // Probes 4 and 5 — glyph shape.
   //

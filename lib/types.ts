@@ -182,6 +182,18 @@ export function getResolution(orientation: Orientation, resolution: Resolution):
 // Canvas size for a project: the explicit width/height when both are set,
 // otherwise the preset. Every consumer should go through this rather than
 // calling getResolution() directly, so bespoke sizes work everywhere.
+/**
+ * The shape of a canvas, from its actual pixels.
+ *
+ * Derived from size rather than read from ProjectSettings.orientation because
+ * the document's own size is the live truth once a project is on the timeline —
+ * settings can lag it, and a bespoke width/height overrides the preset anyway.
+ */
+export function orientationOf({ width, height }: { width: number; height: number }): Orientation {
+  if (width === height) return "square";
+  return height > width ? "vertical" : "horizontal";
+}
+
 export function getProjectSize(settings: ProjectSettings): { width: number; height: number } {
   const w = Number(settings.width);
   const h = Number(settings.height);

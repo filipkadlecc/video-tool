@@ -1,0 +1,14 @@
+{
+  "fileKey": "4yDBgcWJEXEoAOARXNgrpJ",
+  "page": "Vertical format assets 9:16 (2533:2987)",
+  "note": "References are committed because the Figma MCP asset URLs expire after 7 days. Re-capture is a deliberate, scripted step: node scripts/figma-capture.ts <caseId>.",
+  "capturedAt": "2026-09-21",
+  "cases": [
+    {
+      "id": "ShortLogoOutro",
+      "scene": "ShortLogoOutro",
+      "values": {},
+      "frame": { "nodeId": "2704:7902", "png": "2704-7902.png" }
+    }
+  ]
+}

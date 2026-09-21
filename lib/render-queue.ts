@@ -197,6 +197,7 @@ loadInter("normal", { weights: ["400", "500", "600", "700", "900"] });
 // delayRender so the renderer waits for it too.
 import { delayRender, continueRender, staticFile } from "remotion";
 const __gtWeights = [
+  { weight: "300", file: "GT-Walsheim-Light.ttf" },
   { weight: "400", file: "GT-Walsheim-Regular.ttf" },
   { weight: "500", file: "GT-Walsheim-Medium.ttf" },
   { weight: "700", file: "GT-Walsheim-Bold.ttf" },
