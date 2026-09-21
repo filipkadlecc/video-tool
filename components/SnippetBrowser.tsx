@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Modal from "@/components/ui/Modal";
 import Icon from "@/components/ui/Icon";
 import { BRAND } from "@/lib/brand";
+import type { Orientation } from "@/lib/types";
 import { SNIPPET_SCHEMAS } from "@/lib/snippet-schemas";
 import { SNIPPET_ICONS } from "@/lib/snippet-icons";
 import { renderSnippet } from "@/lib/snippet-template";
@@ -15,6 +16,7 @@ interface Snippet {
   name: string;
   subtitle: string;
   code: string;
+  orientations?: Orientation[];
 }
 
 interface SnippetBrowserProps {
@@ -29,6 +31,12 @@ interface SnippetBrowserProps {
   onUseSnippet: (code: string, provenance?: { id: string; values: Record<string, unknown> }) => void;
   /** Render as a panel instead of a modal, for use as a tab. */
   inline?: boolean;
+  /**
+   * The project's canvas shape. Scenes authored for a different one are not
+   * offered: the short-form kit is a 1:1 port of fixed 1080x1920 frames and has
+   * no landscape layout to fall back to. Also sets the preview tile's shape.
+   */
+  orientation?: Orientation;
 }
 
 // Every preview accent is orange — the brand is orange-only. Icons still vary
@@ -58,6 +66,7 @@ export default function SnippetBrowser({
   hasExistingCode,
   onUseSnippet,
   inline,
+  orientation,
 }: SnippetBrowserProps) {
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -73,7 +82,8 @@ export default function SnippetBrowser({
     // As a tab there is no `open` to wait for — it is mounted or it isn't.
     if (!open && !inline) return;
     let cancelled = false;
-    fetch("/api/snippets")
+    setLoading(true);
+    fetch(orientation ? `/api/snippets?orientation=${orientation}` : "/api/snippets")
       .then((r) => r.json())
       .then((data: Snippet[]) => {
         if (!cancelled) setSnippets(data);
@@ -85,7 +95,7 @@ export default function SnippetBrowser({
     return () => {
       cancelled = true;
     };
-  }, [open, inline]);
+  }, [open, inline, orientation]);
 
   // Reset the two-step flow whenever the modal closes. A tab never closes, so
   // it keeps whatever step it was on.
@@ -203,7 +213,8 @@ export default function SnippetBrowser({
                 >
                   <div
                     style={{
-                      aspectRatio: "16 / 9",
+                      aspectRatio: orientation === "vertical" ? "9 / 16"
+                        : orientation === "square" ? "1 / 1" : "16 / 9",
                       borderRadius: "var(--r-panel)",
                       background: BRAND.colors.bg,
                       display: "flex",

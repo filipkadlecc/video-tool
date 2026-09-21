@@ -8,7 +8,7 @@ import { getProject } from "@/lib/projects";
 import { sceneCodeFromDoc } from "@/lib/editor-render";
 import { docDuration, isValidDoc, type AssetKind, type EditorDoc } from "@/lib/editor-doc";
 import { applyDocTool, describeDoc, DOC_TOOLS, DOC_TOOL_NAMES, toolsWithSnippets, type AgentContext, summariseDocChange } from "@/lib/editor-agent";
-import { loadSnippetCatalog } from "@/lib/snippet-catalog";
+import { catalogForSize } from "@/lib/snippet-catalog";
 import { readCachedTranscript, transcribeWithCache, type TranscriptWord } from "@/lib/transcribe";
 import { probeWithCache } from "@/lib/probe";
 import type { ChatMessage } from "@/lib/types";
@@ -209,7 +209,10 @@ export async function POST(request: Request) {
     transcripts: mediaFolder && projectId ? await cachedTranscripts(incomingDoc, projectId, mediaFolder) : {},
     // Read here rather than in editor-agent, which is pure by contract so every
     // failure mode stays testable with no fs and no network.
-    snippets: loadSnippetCatalog(),
+    // Filtered by the document's own canvas, so add_snippet's id enum cannot
+    // offer a scene the Snippets browser hides. A gate the model can walk
+    // around is not a gate.
+    snippets: catalogForSize(incomingDoc.size),
   };
   // Needs ctx.mediaFiles, so it runs after the object above is built.
   if (mediaFolder) ctx.mediaTranscripts = await mediaTranscripts(ctx.mediaFiles ?? [], mediaFolder);

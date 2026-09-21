@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { SNIPPET_SCHEMAS, type Param, type SnippetSchema } from "./snippet-schemas";
 import { sceneMeta } from "./scene-eval";
+import { orientationOf, type Orientation } from "./types";
 
 /**
  * The branded scene library, as one list.
@@ -59,6 +60,19 @@ export interface SnippetEntry {
   /** As authored — converted to the document's rate when placed. */
   durationInFrames: number;
   fps: number;
+  /**
+   * Canvas shapes this scene is authored for, declared by the scene itself.
+   * Everything that predates the short-form kit says all three.
+   */
+  orientations: Orientation[];
+  /** Settled frame, for the Figma fidelity harness. Short-form scenes only. */
+  holdFrame?: number;
+  /**
+   * Whether the browser shows it. A scene with no SNIPPET_META entry is built
+   * but unnamed, and five of those exist; naming them is its own decision, so
+   * they stay out of the gallery while remaining reachable by the AI.
+   */
+  listed: boolean;
 }
 
 const BRANDED_DIR = () => path.join(process.cwd(), "remotion", "scenes", "branded");
@@ -95,10 +109,33 @@ export function loadSnippetCatalog(): SnippetEntry[] {
       schema: SNIPPET_SCHEMAS[id],
       durationInFrames: meta.durationInFrames,
       fps: meta.fps,
+      orientations: meta.orientations,
+      holdFrame: meta.holdFrame,
+      listed: Boolean(SNIPPET_META[id]),
     });
   }
   cache = { entries, at: Date.now() };
   return entries;
+}
+
+/**
+ * The scenes that suit a given canvas shape.
+ *
+ * One implementation, used by the browser, the New Project modal and the AI
+ * agent's tool schema alike — a scene hidden from the gallery but still
+ * reachable by the model would be a gate in name only.
+ *
+ * The short-form kit is a 1:1 port of fixed 1080x1920 Figma frames; there is no
+ * landscape layout to fall back to, so those scenes are absent rather than
+ * merely discouraged.
+ */
+export function catalogFor(orientation: Orientation): SnippetEntry[] {
+  return loadSnippetCatalog().filter((e) => e.orientations.includes(orientation));
+}
+
+/** Convenience for callers holding a document size rather than an orientation. */
+export function catalogForSize(size: { width: number; height: number }): SnippetEntry[] {
+  return catalogFor(orientationOf(size));
 }
 
 /**

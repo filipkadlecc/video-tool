@@ -29,7 +29,7 @@ import type { TranscriptWord } from "../lib/transcribe";
 import fs from "fs";
 import path from "path";
 import { sceneFramesAtFps, sceneMeta } from "../lib/scene-eval";
-import { loadSnippetCatalog } from "../lib/snippet-catalog";
+import { loadSnippetCatalog, catalogFor } from "../lib/snippet-catalog";
 import { toolsWithSnippets } from "../lib/editor-agent";
 
 let pass = 0, fail = 0;
@@ -564,6 +564,35 @@ head("every branded scene reports its real length, computed ones included");
   a(sceneFramesAtFps({ durationInFrames: 150, fps: 30 }, 30) === 150, "a matching rate is left alone");
   a(sceneFramesAtFps({ durationInFrames: 100, fps: 30 }, 25) === 83, "and it shortens the other way");
   a(sceneFramesAtFps({ durationInFrames: 60, fps: 0 }, 30) === 60, "a missing rate falls through rather than dividing by zero");
+}
+
+head("short-form scenes are offered only where they fit");
+{
+  const all = loadSnippetCatalog();
+  const shortForm = all.filter((e) => e.id.startsWith("Short"));
+  a(shortForm.length > 0, "the short-form kit is in the catalog at all");
+  a(
+    shortForm.every((e) => e.orientations.length === 1 && e.orientations[0] === "vertical"),
+    "every short-form scene declares itself vertical-only",
+  );
+  a(
+    all.filter((e) => !e.id.startsWith("Short")).every((e) => e.orientations.length === 3),
+    "and every scene that predates the kit still says all three, so nothing needed a migration",
+  );
+
+  const landscape = catalogFor("horizontal").map((e) => e.id);
+  const vertical = catalogFor("vertical").map((e) => e.id);
+  a(!landscape.some((id) => id.startsWith("Short")), "a landscape project is offered none of them");
+  a(shortForm.every((e) => vertical.includes(e.id)), "a vertical project is offered all of them");
+  a(landscape.includes("EndCard") && vertical.includes("EndCard"), "and the rest of the library is unaffected either way");
+
+  // The gate has to hold for the MODEL too. A scene hidden from the browser but
+  // still in add_snippet's id enum is a gate in name only.
+  const landscapeCtx = ctx({ playheadFrame: 0, snippets: catalogFor("horizontal") });
+  const offered = applyDocTool(base(), "list_snippets", {}, landscapeCtx);
+  a(!offered.isError && !offered.result.includes("ShortTitle"), "list_snippets hides them from the model in landscape");
+  const refused = applyDocTool(base(), "add_snippet", { id: "ShortTitle", fromFrame: 0 }, landscapeCtx);
+  a(refused.isError, "and add_snippet refuses one it was never offered");
 }
 
 head("the AI can place a branded scene, and it stays re-editable");

@@ -19,7 +19,7 @@ import { evalSceneCode } from "@/remotion/DynamicScene";
 import { sceneFramesAtFps } from "@/lib/scene-eval";
 import type { Project, ChatMessage, TerminalAnnotations, StyleMode, TopicCardStyle, TransitionStyle } from "@/lib/types";
 import { normalizeAnimationType } from "@/lib/animation-types";
-import { getProjectSize } from "@/lib/types";
+import { getProjectSize, orientationOf } from "@/lib/types";
 import { buildTerminalExportPlan } from "@/lib/terminal-export";
 import { stripBackgroundsForTransparency } from "@/lib/transparent-bg";
 import Button from "@/components/ui/Button";
@@ -1259,6 +1259,10 @@ export default function ProjectEditor() {
 
   const { width, height } = getProjectSize(project.settings);
   const resLabel = `${width}\u00d7${height}`;
+  // The document's own size is the live truth once a project is on the
+  // timeline; settings can lag it, and a bespoke width/height overrides the
+  // preset anyway. Drives which snippets the library offers.
+  const canvasOrientation = orientationOf(docView?.size ?? { width, height });
   const isVideoProject = project.animationType === "video";
   // The timeline panel mounts for every Remotion-scene project type too —
   // animation / broll / svg compositions are made of <Sequence> blocks and
@@ -1698,6 +1702,7 @@ export default function ProjectEditor() {
                             onClose={() => {}}
                             hasExistingCode={false}
                             onUseSnippet={handleUseSnippet}
+                            orientation={canvasOrientation}
                           />
                         )}
                         {bottomTab === "effects" && (
@@ -1952,6 +1957,7 @@ export default function ProjectEditor() {
         onClose={() => setSnippetsOpen(false)}
         hasExistingCode={!doc && code.trim().length > 0}
         onUseSnippet={handleUseSnippet}
+        orientation={canvasOrientation}
       />
 
       <SmartTrimDialog

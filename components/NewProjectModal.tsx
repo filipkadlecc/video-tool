@@ -6,7 +6,7 @@ import { TRANSITION_MODES } from "@/lib/prompts/transitions";
 import type { AnimationType, Engine, Resolution, Orientation, FPS, SvgFile, StyleMode, TopicCardStyle, TransitionStyle, Collection } from "@/lib/types";
 import { normalizeAnimationType } from "@/lib/animation-types";
 import { emptyDoc } from "@/lib/editor-doc";
-import { getProjectSize, getResolution } from "@/lib/types";
+import { getProjectSize, getResolution, orientationOf } from "@/lib/types";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
 import Input from "@/components/ui/Input";
@@ -347,20 +347,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     }
   }, [open, initialType]);
 
-  // Fetch snippets once when the modal first opens.
-  useEffect(() => {
-    if (!open || snippets.length > 0) return;
-    let cancelled = false;
-    fetch("/api/snippets")
-      .then((r) => r.json())
-      .then((data: SnippetSummary[]) => {
-        if (!cancelled) setSnippets(data);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [open, snippets.length]);
 
 
   /* ── the new screen's own state ──────────────────────────────────────── */
@@ -368,6 +354,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   /** Where the brief comes from. Switching preserves every other mode. */
   const [source, setSource] = useState<Source>("describe");
   const [snippetQuery, setSnippetQuery] = useState("");
+  /** Which orientation `snippets` was fetched for, so a frame change refetches. */
+  const [snippetsFor, setSnippetsFor] = useState<Orientation | null>(null);
   const [shapeOpen, setShapeOpen] = useState(true);
   const [lookOpen, setLookOpen] = useState(true);
   /**
@@ -393,6 +381,33 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     ? null
     : FRAME_PRESETS.find((p) => p.orientation === orientation && p.resolution === resolution) ?? null;
   const size = customSize ?? getResolution(orientation, resolution);
+  // The canvas the project will actually have, which decides which scenes the
+  // library offers — a custom width/height overrides the preset.
+  const snippetOrientation = orientationOf(size);
+
+  // Refetch when the chosen frame changes, not just on first open.
+  //
+  // The frame preset and the snippet pick live on the SAME screen here, so a
+  // list fetched once is wrong the moment someone switches to 9:16 — they would
+  // be offered the landscape library for a vertical project, and none of the
+  // short-form kit.
+  useEffect(() => {
+    if (!open) return;
+    if (snippetsFor === snippetOrientation) return;
+    let cancelled = false;
+    fetch(`/api/snippets?orientation=${snippetOrientation}`)
+      .then((r) => r.json())
+      .then((data: SnippetSummary[]) => {
+        if (cancelled) return;
+        setSnippets(data);
+        setSnippetsFor(snippetOrientation);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, snippetOrientation, snippetsFor]);
+
 
   const isFootage = animationType === "video";
   const isTerminal = animationType === "terminal";
