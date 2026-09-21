@@ -130,6 +130,44 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
     showIf: { ACCENT: (v) => v.STYLE === "boxed" },
   },
 
+  ShortEndCard: {
+    params: {
+      LEAD: {
+        kind: "string", label: "Light opening clause (claim layout)", default: "",
+        placeholder: "leave empty for the plain call to action", multiline: true,
+      },
+      HEADLINE: { kind: "string", label: "Headline", default: "Try Apify\nfor free", multiline: true },
+      CTA_LABEL: { kind: "string", label: "Button label", default: "apify.com" },
+      SIZE: { kind: "number", label: "Headline size", default: 155.723, min: 40, max: 220, step: 0.001 },
+      SHAPES: { kind: "boolean", label: "Geometric shapes", default: false, description: "The swappable orange line illustrations, bleeding off two corners." },
+      Y: { kind: "number", label: "Headline top (0 = as designed)", default: 0, min: 0, max: 1920, step: 1 },
+    },
+  },
+
+  ShortWatchFull: {
+    params: {
+      LEAD: { kind: "string", label: "Opening clause (Medium)", default: "Watch the full video " },
+      BODY: { kind: "string", label: "Rest (Light)", default: "on our channel \nfor more context", multiline: true },
+      CTA_LABEL: { kind: "string", label: "Button label", default: "youtube.com/apify" },
+      SHAPES: { kind: "boolean", label: "Geometric shapes", default: true },
+      Y: { kind: "number", label: "Text top (0 = as designed)", default: 0, min: 0, max: 1920, step: 1 },
+    },
+  },
+
+  ShortCollabCard: {
+    params: {
+      TITLE_LEAD: { kind: "string", label: "First line (Light)", default: "This is the title." },
+      TITLE_REST: { kind: "string", label: "Remaining lines (Medium)", default: "Only three lines\nmaximum", multiline: true },
+      PILL_LABEL: { kind: "string", label: "Pill label", default: "Case study" },
+      PARTNER_LOGO: {
+        kind: "images", label: "Partner logo", default: [], max: 1,
+        description: "Monochrome white or black only \u2014 never the partner's brand colour on this lockup.",
+      },
+      SHAPES: { kind: "boolean", label: "Geometric shapes", default: false },
+      Y: { kind: "number", label: "Title top (0 = as designed)", default: 0, min: 0, max: 1920, step: 1 },
+    },
+  },
+
   ShortFunkyTitle: {
     params: {
       ACCENT: {

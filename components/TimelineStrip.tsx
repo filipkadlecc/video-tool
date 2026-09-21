@@ -68,6 +68,7 @@ export default function TimelineStrip({
   }, [frameFromClientX, onSeek, onScrubStart]);
 
   const label = (item: EditorItem): string => {
+    if (item.name) return item.name;
     if (item.type === "text") return (item as { text: string }).text;
     if (item.type === "scene" && "snippet" in item && item.snippet) return String(item.snippet.id);
     const assetId = (item as { assetId?: string }).assetId;

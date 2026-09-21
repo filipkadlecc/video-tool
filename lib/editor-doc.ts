@@ -106,6 +106,13 @@ export interface Asset {
 
 interface ItemBase {
   id: string;
+  /**
+   * What the timeline calls this block. Optional: without one the timeline
+   * falls back to the snippet id, then the asset's filename, then the type —
+   * which is how a document full of scenes came to show seventeen blocks all
+   * labelled "scene".
+   */
+  name?: string;
   /** Composition frame this item starts at. */
   from: number;
   durationInFrames: number;

@@ -146,85 +146,102 @@
       }
     },
     {
-      "id": "ShortFunkyTitle@orange-1",
-      "scene": "ShortFunkyTitle",
-      "values": {
-        "ACCENT": "orange",
-        "SIZE": 143.145,
-        "WORDS": [
-          {
-            "value": "More",
-            "cx": 432.1998,
-            "cy": 755.107,
-            "rot": -11.62
-          }
-        ]
-      },
-      "rotated": true,
+      "id": "ShortEndCard@headline",
+      "scene": "ShortEndCard",
+      "values": {},
       "bbox": {
-        "nodeId": "2546:736",
-        "png": "2546-736.png",
-        "x": 232.5902,
-        "y": 632.9196,
-        "w": 399.2193,
-        "h": 244.3748
-      },
-      "note": "single word; the composite z-order is covered by the frame-level check"
+        "nodeId": "2704:3047",
+        "png": "2704-3047.png",
+        "x": 231,
+        "y": 671.5,
+        "w": 619,
+        "h": 312
+      }
     },
     {
-      "id": "ShortFunkyTitle@orange-2",
-      "scene": "ShortFunkyTitle",
-      "values": {
-        "ACCENT": "orange",
-        "SIZE": 143.145,
-        "WORDS": [
-          {
-            "value": "funky",
-            "cx": 651.9169,
-            "cy": 849.2112,
-            "rot": 7.88
-          }
-        ]
-      },
-      "rotated": true,
+      "id": "ShortEndCard@button",
+      "scene": "ShortEndCard",
+      "values": {},
       "bbox": {
-        "nodeId": "2546:755",
-        "png": "2546-755.png",
-        "x": 435.0078,
-        "y": 735.1328,
-        "w": 433.8182,
-        "h": 228.1569
+        "nodeId": "2704:3085",
+        "png": "2704-3085.png",
+        "x": 348,
+        "y": 1094.5,
+        "w": 384,
+        "h": 110.4
       },
-      "note": "single word; the composite z-order is covered by the frame-level check"
+      "refOrigin": "node",
+      "note": "the export includes the orange drop shadow, which extends only right and down"
     },
     {
-      "id": "ShortFunkyTitle@orange-3",
-      "scene": "ShortFunkyTitle",
+      "id": "ShortEndCard@claim",
+      "scene": "ShortEndCard",
       "values": {
-        "ACCENT": "orange",
-        "SIZE": 143.145,
-        "WORDS": [
-          {
-            "value": "titles",
-            "cx": 520.0254,
-            "cy": 1072.2304,
-            "rot": -8.26
-          }
-        ]
+        "LEAD": "Your AI needs tools. ",
+        "HEADLINE": "We\u2019ve got thousands.",
+        "SIZE": 87.251
       },
-      "rotated": true,
       "bbox": {
-        "nodeId": "2546:757",
-        "png": "2546-757.png",
-        "x": 326.9948,
-        "y": 960.418,
-        "w": 386.0612,
-        "h": 223.6248
-      },
-      "note": "single word; the composite z-order is covered by the frame-level check"
+        "nodeId": "2704:7690",
+        "png": "2704-7690.png",
+        "x": 231,
+        "y": 747.5,
+        "w": 619,
+        "h": 261
+      }
     },
     {
-      "id": "ShortFunkyTitle@blue-lots",
+      "id": "ShortWatchFull@text",
+      "scene": "ShortWatchFull",
+      "values": {},
+      "bbox": {
+        "nodeId": "2765:3149",
+        "png": "2765-3149.png",
+        "x": 231,
+        "y": 821,
+        "w": 619,
+        "h": 204
+      }
+    },
+    {
+      "id": "ShortCollabCard@title",
+      "scene": "ShortCollabCard",
+      "values": {},
+      "bbox": {
+        "nodeId": "2704:7824",
+        "png": "2704-7824.png",
+        "x": 218,
+        "y": 772,
+        "w": 645,
+        "h": 261
+      }
+    },
+    {
+      "id": "ShortCollabCard@pill",
+      "scene": "ShortCollabCard",
+      "values": {},
+      "bbox": {
+        "nodeId": "2704:7819",
+        "png": "2704-7819.png",
+        "x": 399,
+        "y": 1104,
+        "w": 283,
+        "h": 88.379
+      }
+    },
+    {
+      "id": "ShortFunkyTitle@orange",
+      "scene": "ShortFunkyTitle",
+      "values": {},
+      "rotated": true,
+      "frame": {
+        "nodeId": "2546:726",
+        "png": "2546-726-frame.png",
+        "mask": "tiktok"
+      }
+    },
+    {
+      "id": "ShortFunkyTitle@blue",
       "scene": "ShortFunkyTitle",
       "rotated": true,
       "values": {
@@ -232,22 +249,42 @@
         "SIZE": 112.763,
         "WORDS": [
           {
+            "value": "When",
+            "cx": 367.49,
+            "cy": 682.5015,
+            "rot": -11.62
+          },
+          {
+            "value": "there\u2019s",
+            "cx": 655.1,
+            "cy": 777.3295,
+            "rot": 7.04
+          },
+          {
             "value": "lots",
-            "cx": 377.4359,
-            "cy": 1007.9106,
+            "cx": 377.44,
+            "cy": 940.672,
             "rot": -17.65
+          },
+          {
+            "value": "of",
+            "cx": 546.79,
+            "cy": 993.5425,
+            "rot": 7.04
+          },
+          {
+            "value": "text",
+            "cx": 655.01,
+            "cy": 1157.9745,
+            "rot": 7.04
           }
         ]
       },
-      "bbox": {
-        "nodeId": "2546:780",
-        "png": "2546-780.png",
-        "x": 251.039,
-        "y": 909.1888,
-        "w": 252.7938,
-        "h": 197.4436
-      },
-      "note": "single word; the composite z-order is covered by the frame-level check"
+      "frame": {
+        "nodeId": "2546:774",
+        "png": "2546-774-frame.png",
+        "mask": "tiktok"
+      }
     }
   ]
 }

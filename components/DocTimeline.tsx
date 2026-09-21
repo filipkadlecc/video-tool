@@ -143,6 +143,21 @@ const ITEM_ICONS: Record<string, string> = {
   text: "layers", solid: "layers", captions: "layers", scene: "layers",
 };
 
+/**
+ * What a block is called on the timeline, most specific first.
+ *
+ * Scene blocks used to fall through to their TYPE, so a document built from the
+ * snippet library showed a row of identical "scene" labels with no way to tell
+ * one from another.
+ */
+function itemLabel(item: EditorItem, assetName?: string): string {
+  if (item.name) return item.name;
+  if (item.type === "text") return (item as { text: string }).text;
+  if (item.type === "scene" && item.snippet) return item.snippet.id;
+  if (item.type === "captions") return "Subtitles";
+  return assetName ?? item.type;
+}
+
 export default function DocTimeline({
   doc, onChange, onSeek, onScrubStart, onTogglePlay,
   mediaFiles, mediaDurations, projectId, selectedIds, onSelectionChange,
@@ -797,7 +812,7 @@ export default function DocTimeline({
           const g = previewGeom(item);
           const selected = selectedIds.has(item.id);
           const asset = "assetId" in item ? getAsset(doc, (item as { assetId: string }).assetId) : undefined;
-          const label = item.type === "text" ? (item as { text: string }).text : asset?.name ?? item.type;
+          const label = itemLabel(item, asset?.name);
           const clipW = Math.max(2, g.dur * pxPerFrame);
 
           // Filmstrip: map the clip's source window onto the strip image.

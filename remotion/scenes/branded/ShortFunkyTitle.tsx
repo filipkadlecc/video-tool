@@ -9,10 +9,18 @@ const SIZE = 143.145;
 // Each word is hand-placed in Figma — there is no rule behind the angles and
 // offsets, so they travel with the words rather than being generated. cx/cy are
 // the centre of the word's bounding box in 1080x1920 design units.
+//
+// Listed TOP-MOST FIRST, the way Figma's layer list reads. The boxes overlap,
+// so this is not cosmetic: painted the other way round, "there's" covers the
+// "n" of "When".
+//
+// The centres come from get_design_context's own left/top, NOT from
+// get_metadata's x/y, which for these rotated instances are up to 75px out.
+// Both were checked against the rendered frame export; the design context wins.
 const WORDS: { value: string; cx: number; cy: number; rot: number }[] = [
-  { value: "More", cx: 432.1998, cy: 755.107, rot: -11.62 },
-  { value: "funky", cx: 651.9169, cy: 849.2112, rot: 7.88 },
-  { value: "titles", cx: 520.0254, cy: 1072.2304, rot: -8.26 },
+  { value: "More", cx: 432.2, cy: 680.1875, rot: -11.62 },
+  { value: "funky", cx: 628.18, cy: 849.2085, rot: 7.88 },
+  { value: "titles", cx: 520.03, cy: 1019.8125, rot: -8.26 },
 ];
 // =================================================================
 
@@ -60,6 +68,9 @@ export default function ShortFunkyTitle() {
                 key={`${w.value}-${i}`}
                 style={{
                   position: "absolute", left: w.cx, top: w.cy,
+                  // Earlier in the list paints on top, matching Figma, while
+                  // the DOM order keeps the entrance stagger reading naturally.
+                  zIndex: WORDS.length - i,
                   transform: `translate(-50%, -50%) rotate(${w.rot}deg) scale(${scale})`,
                   transformOrigin: "center",
                   backgroundColor: accent,

@@ -46,6 +46,42 @@ const DESIGN = { width: 1080, height: 1920 };
  */
 const nearestPx = (v: number) => -Math.round(-v);
 
+/**
+ * The area each platform leaves clear, in 1080x1920 frame pixels, taken from
+ * the Figma Union vectors in the kit's "Safe zones + formats" section and
+ * shifted to where each sits in the frame.
+ */
+const CLEAR_REGION: Record<"tiktok" | "shorts", { x: number; y: number; w: number; h: number }[]> = {
+  tiktok: [{ x: 132, y: 259, w: 838, h: 107 }, { x: 132, y: 366, w: 718, h: 914 }],
+  shorts: [{ x: 61, y: 249, w: 890, h: 472 }, { x: 61, y: 721, w: 816, h: 823 }],
+};
+
+/** Keep only what falls inside the clear region; black out the rest. */
+async function maskToClear(
+  src: string,
+  rects: { x: number; y: number; w: number; h: number }[],
+  out: string,
+): Promise<string> {
+  const sharp = require_("sharp");
+  const { width, height } = await sharp(src).metadata();
+  const flat = await sharp(src).ensureAlpha().flatten({ background: "#000000" }).png().toBuffer();
+  const parts = await Promise.all(
+    rects.map(async (r) => {
+      const w = Math.min(r.w, width! - r.x);
+      const h = Math.min(r.h, height! - r.y);
+      return {
+        input: await sharp(flat).extract({ left: r.x, top: r.y, width: w, height: h }).png().toBuffer(),
+        left: r.x,
+        top: r.y,
+      };
+    }),
+  );
+  await sharp({ create: { width: width!, height: height!, channels: 3, background: "#000000" } })
+    .composite(parts)
+    .png().toFile(out);
+  return out;
+}
+
 interface Case {
   id: string;
   scene: string;
@@ -60,8 +96,20 @@ interface Case {
    * the whole export — shadow included — is compared.
    */
   refOrigin?: "centred" | "node";
-  /** Whole-frame reference: verifies content AND placement in one. */
-  frame?: { nodeId: string; png: string };
+  /**
+   * Whole-frame reference: the only check that can see ABSOLUTE position.
+   *
+   * A per-node diff crops our render at the same coordinate the scene uses, so
+   * a wrong coordinate is self-consistent and passes — which is exactly how the
+   * funky titles sat 68px low while every one of their node diffs was green.
+   *
+   * `mask` blacks out the platform's unsafe area in BOTH images, because the
+   * frame export carries Figma's translucent safe-zone overlay there and our
+   * render does not. Content bleeding outside the clear region is therefore
+   * clipped in both, which is fine: a real displacement still moves everything
+   * inside it.
+   */
+  frame?: { nodeId: string; png: string; mask?: "tiktok" | "shorts" };
   /** Content-node reference, for frames that carry the safe-zone Union overlay. */
   bbox?: { nodeId: string; png: string; x: number; y: number; w: number; h: number };
 }
@@ -168,6 +216,7 @@ registerRoot(() => (
 
       let ours = full;
       let ref = full;
+      const refPath2 = (cc: Case) => path.join(REF_DIR, cc.frame!.png);
       if (c.bbox) {
         // Frames carrying the safe-zone Union overlay are diffed by content
         // node instead. Cropping OUR render to Figma's own absolute coordinates
@@ -221,6 +270,11 @@ registerRoot(() => (
         }
       } else {
         ref = path.join(REF_DIR, c.frame!.png);
+        if (c.frame!.mask) {
+          const rects = CLEAR_REGION[c.frame!.mask];
+          ref = await maskToClear(refPath2(c), rects, path.join(OUT_DIR, `${c.id}.ref.png`));
+          ours = await maskToClear(full, rects, path.join(OUT_DIR, `${c.id}.crop.png`));
+        }
       }
 
       const hex = c.bg ?? "#000000";
