@@ -29,8 +29,15 @@ const TEXT = { x: 231, y: 821, w: 619, size: 68.106 };
 const BUTTON = { x: 277, y: 1136, w: 526, h: 126.886 };
 // This instance of the CTA button scales padding, border and shadow by 1.1535
 // but its type by 1.3306, so the numbers are lifted rather than derived.
+// The label size is MEASURED, not read off Figma.
+// get_design_context reports 68.98 for this label, but that is a number from
+// inside the component, not the size it renders at — at 68.98 the text
+// overflows the button. Swept against the frame export, the edge error
+// bottoms out at 50. The two buttons' measured sizes (43 and 50) sit in the
+// same ratio as their heights, which is what a shared component at two scales
+// should look like.
 const BTN = {
-  fontSize: 68.98, padX: 66.442, padY: 44.295, border: 2.768, shadow: 8.305, radius: 4,
+  fontSize: 50, padX: 66.442, padY: 44.295, border: 2.768, shadow: 8.305, radius: 4,
   bg: "#020202", stroke: "#bfc1c5", ink: "#f4f4f5",
 };
 const ORANGE = "#f86606";

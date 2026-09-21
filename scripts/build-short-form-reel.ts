@@ -33,12 +33,15 @@ const BLOCKS: { scene: string; label: string; values: Record<string, unknown> }[
     scene: "ShortFunkyTitle", label: "Title 5 — funky blue",
     values: {
       ACCENT: "blue", SIZE: 112.763,
+      // Top-most first, and taken from get_design_context rather than
+      // get_metadata — see the note in the scene. Kept in step with
+      // data/figma-vertical/ref/manifest.json, which is what verifies them.
       WORDS: [
-        { value: "When", cx: 367.4878, cy: 749.9365, rot: -11.62 },
-        { value: "there’s", cx: 671.8456, cy: 777.3281, rot: 7.04 },
-        { value: "lots", cx: 377.4359, cy: 1007.9106, rot: -17.65 },
-        { value: "of", cx: 563.5451, cy: 993.5411, rot: 7.04 },
-        { value: "text", cx: 671.7576, cy: 1157.9729, rot: 7.04 },
+        { value: "When", cx: 367.49, cy: 682.5015, rot: -11.62 },
+        { value: "there’s", cx: 655.10, cy: 777.3295, rot: 7.04 },
+        { value: "lots", cx: 377.44, cy: 940.672, rot: -17.65 },
+        { value: "of", cx: 546.79, cy: 993.5425, rot: 7.04 },
+        { value: "text", cx: 655.01, cy: 1157.9745, rot: 7.04 },
       ],
     },
   },

@@ -146,34 +146,6 @@
       }
     },
     {
-      "id": "ShortEndCard@headline",
-      "scene": "ShortEndCard",
-      "values": {},
-      "bbox": {
-        "nodeId": "2704:3047",
-        "png": "2704-3047.png",
-        "x": 231,
-        "y": 671.5,
-        "w": 619,
-        "h": 312
-      }
-    },
-    {
-      "id": "ShortEndCard@button",
-      "scene": "ShortEndCard",
-      "values": {},
-      "bbox": {
-        "nodeId": "2704:3085",
-        "png": "2704-3085.png",
-        "x": 348,
-        "y": 1094.5,
-        "w": 384,
-        "h": 110.4
-      },
-      "refOrigin": "node",
-      "note": "the export includes the orange drop shadow, which extends only right and down"
-    },
-    {
       "id": "ShortEndCard@claim",
       "scene": "ShortEndCard",
       "values": {
@@ -188,19 +160,6 @@
         "y": 747.5,
         "w": 619,
         "h": 261
-      }
-    },
-    {
-      "id": "ShortWatchFull@text",
-      "scene": "ShortWatchFull",
-      "values": {},
-      "bbox": {
-        "nodeId": "2765:3149",
-        "png": "2765-3149.png",
-        "x": 231,
-        "y": 821,
-        "w": 619,
-        "h": 204
       }
     },
     {
@@ -283,6 +242,26 @@
       "frame": {
         "nodeId": "2546:774",
         "png": "2546-774-frame.png",
+        "mask": "tiktok"
+      }
+    },
+    {
+      "id": "ShortEndCard@frame",
+      "scene": "ShortEndCard",
+      "values": {},
+      "frame": {
+        "nodeId": "2704:3045",
+        "png": "2704-3045-frame.png",
+        "mask": "tiktok"
+      }
+    },
+    {
+      "id": "ShortWatchFull@frame",
+      "scene": "ShortWatchFull",
+      "values": {},
+      "frame": {
+        "nodeId": "2765:3122",
+        "png": "2765-3122-frame.png",
         "mask": "tiktok"
       }
     }

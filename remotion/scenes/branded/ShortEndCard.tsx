@@ -38,8 +38,15 @@ const BUTTON = { x: 348, y: 1094.5, w: 384, h: 110.4 };
 // The button's own numbers. Not derived from a scale factor: the "Watch the
 // full video" instance scales padding, border and shadow by 1.1535 but its type
 // by 1.3306, so there is no single factor to derive them from.
+// The label size is MEASURED, not read off Figma.
+// get_design_context reports 51.84 for this label, but that is a number from
+// inside the component, not the size it renders at — at 51.84 the text
+// overflows the button. Swept against the frame export, the edge error
+// bottoms out at 43. The two buttons' measured sizes (43 and 50) sit in the
+// same ratio as their heights, which is what a shared component at two scales
+// should look like.
 const BTN = {
-  fontSize: 51.84, padX: 57.6, padY: 38.4, border: 2.4, shadow: 7.2, radius: 4,
+  fontSize: 43, padX: 57.6, padY: 38.4, border: 2.4, shadow: 7.2, radius: 4,
   bg: "#020202", stroke: "#bfc1c5", ink: "#f4f4f5",
 };
 const ORANGE = "#f86606";
