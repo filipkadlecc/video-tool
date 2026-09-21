@@ -590,9 +590,9 @@ head("short-form scenes are offered only where they fit");
   // still in add_snippet's id enum is a gate in name only.
   const landscapeCtx = ctx({ playheadFrame: 0, snippets: catalogFor("horizontal") });
   const offered = applyDocTool(base(), "list_snippets", {}, landscapeCtx);
-  a(!offered.isError && !offered.result.includes("ShortTitle"), "list_snippets hides them from the model in landscape");
+  a(!offered.isError && !(offered.result ?? "").includes("ShortTitle"), "list_snippets hides them from the model in landscape");
   const refused = applyDocTool(base(), "add_snippet", { id: "ShortTitle", fromFrame: 0 }, landscapeCtx);
-  a(refused.isError, "and add_snippet refuses one it was never offered");
+  a(Boolean(refused.isError), "and add_snippet refuses one it was never offered");
 }
 
 head("the AI can place a branded scene, and it stays re-editable");

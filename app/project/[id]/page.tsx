@@ -1286,6 +1286,7 @@ export default function ProjectEditor() {
     <EditorPreview
       range={range}
       doc={doc}
+      projectId={projectId}
       playerRef={playerRef}
       selectedIds={selectedItemIds}
       onSelectionChange={setSelectedItemIds}

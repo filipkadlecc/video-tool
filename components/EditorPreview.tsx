@@ -6,6 +6,7 @@ import { AbsoluteFill } from "remotion";
 import { EditorComposition } from "@/remotion/EditorComposition";
 import EditorCanvas from "@/components/EditorCanvas";
 import EditorPlayerControls from "@/components/EditorPlayerControls";
+import SafeZoneOverlay, { type SafeZone } from "@/components/SafeZoneOverlay";
 import { docDuration, type EditorDoc } from "@/lib/editor-doc";
 import { usePlayheadFrame, usePlayheadPlaying } from "@/hooks/usePlayhead";
 
@@ -27,8 +28,11 @@ export default function EditorPreview({
   onSeek,
   onTogglePlay,
   range,
+  projectId,
 }: {
   doc: EditorDoc;
+  /** Only used to remember the safe-zone choice per project. */
+  projectId?: string;
   playerRef?: React.RefObject<PlayerRef | null>;
   selectedIds?: Set<string>;
   onSelectionChange?: (next: Set<string>) => void;
@@ -72,6 +76,23 @@ export default function EditorPreview({
   const canEdit = Boolean(onChange && onSelectionChange && selectedIds);
   const [loop, setLoop] = useState(true);
 
+  // Safe zones only mean anything on a vertical canvas, so the control does not
+  // appear on any other. Remembered per project: which platform a cut is for is
+  // a property of the work, not of this sitting.
+  const isVertical = height > width;
+  const [safeZone, setSafeZone] = useState<SafeZone>("off");
+  useEffect(() => {
+    if (!isVertical) return;
+    try {
+      const saved = window.localStorage.getItem(`vt:safezone:${projectId ?? "default"}`);
+      if (saved === "tiktok" || saved === "shorts" || saved === "off") setSafeZone(saved);
+    } catch { /* private window, cleared storage — the default is fine */ }
+  }, [isVertical, projectId]);
+  const chooseZone = (z: SafeZone) => {
+    setSafeZone(z);
+    try { window.localStorage.setItem(`vt:safezone:${projectId ?? "default"}`, z); } catch { /* as above */ }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
       <div
@@ -84,6 +105,30 @@ export default function EditorPreview({
       >
         {durationInFrames}F / {fps}FPS / {(durationInFrames / fps).toFixed(1)}S
       </div>
+
+      {isVertical && (
+        <div style={{
+          position: "absolute", top: 12, right: 12, zIndex: 3, display: "flex",
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", borderRadius: 3,
+          border: "1px solid rgba(255,255,255,0.1)", overflow: "hidden",
+        }}>
+          {([["off", "No guides"], ["tiktok", "TikTok"], ["shorts", "Shorts"]] as const).map(([z, label]) => (
+            <button
+              key={z}
+              type="button"
+              onClick={() => chooseZone(z)}
+              title={z === "off" ? "Hide the safe-zone guides" : `Show the ${label} safe zone`}
+              style={{
+                padding: "4px 8px", fontSize: 10, lineHeight: 1.4, border: "none", cursor: "pointer",
+                background: safeZone === z ? "rgba(248,102,6,0.22)" : "transparent",
+                color: safeZone === z ? "#F86606" : "rgba(255,255,255,0.7)",
+              }}
+            >
+              {z === "off" ? "Off" : label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div ref={boxRef} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 2, minHeight: 0, position: "relative" }}>
         <div style={{ position: "relative", width: box.w || "100%", height: box.h || undefined }}>
@@ -118,6 +163,8 @@ export default function EditorPreview({
             ))}
           </div>
         )}
+
+        {box.w > 0 && <SafeZoneOverlay zone={safeZone} />}
 
         {canEdit && box.w > 0 && (
           <EditorCanvas
