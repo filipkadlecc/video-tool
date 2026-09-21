@@ -16,8 +16,24 @@ menu or from a shell.
 ## Running it
 
 After Effects → File → Scripts → Run Script File… → `build-mogrt.jsx`.
-Templates land in `data/mogrt/`. In Premiere: Window → Essential Graphics →
-Browse → the folder, or double-click a `.mogrt` to install it.
+Templates land in `data/mogrt/`.
+
+## Using them in Premiere
+
+Checked against the strings in Premiere Pro **26.5** rather than from memory,
+because the panels were renamed and older instructions are wrong:
+
+- **Graphics Templates** panel — where templates are installed and browsed.
+  Double-clicking a `.mogrt` puts it here; Premiere's own dialog says so:
+  *"Motion Graphics Templates cannot be imported into the Project panel. We have
+  installed your Motion Graphics Templates in the Graphics Templates panel
+  instead."* Drag one onto the timeline from there.
+- **Properties** panel — where you edit the fields (First name, Headline, Box
+  colour…) once a template is selected on the timeline. Its header carries a
+  "Browse graphics templates" button back to the panel above.
+
+"Essential Graphics" is what this panel used to be called, and the name is still
+present in 26.5, but it is not where the current flow sends you.
 
 ## Requirements on any machine that opens them
 

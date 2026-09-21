@@ -1,6 +1,10 @@
 /**
  * Build the Apify short-form kit as After Effects comps and export each as a
- * .mogrt for Premiere Pro's Essential Graphics panel.
+ * .mogrt for Premiere Pro.
+ *
+ * In Premiere 26.5 these land in the GRAPHICS TEMPLATES panel, and their fields
+ * are edited in the PROPERTIES panel. The old "Essential Graphics" name still
+ * exists in the binary but is not where the current flow sends you.
  *
  * Run: After Effects → File → Scripts → Run Script File… → this file.
  * Requires Preferences → Scripting & Expressions → "Allow Scripts to Write
