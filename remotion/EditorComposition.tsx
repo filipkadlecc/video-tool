@@ -83,6 +83,17 @@ function textStyle(style: TextStyle): React.CSSProperties {
     background: style.backgroundColor,
     padding: style.padding,
     borderRadius: style.backgroundRadius,
+    textShadow: style.textShadow,
+    ...(style.stroke
+      ? {
+          WebkitTextStrokeWidth: `${style.stroke.width}px`,
+          WebkitTextStrokeColor: style.stroke.color,
+          // Without this the stroke is painted OVER the fill, so half of its
+          // width eats into the letterform and the text reads thinner and
+          // muddier the heavier the outline.
+          paintOrder: "stroke fill",
+        }
+      : {}),
   };
 }
 

@@ -24,6 +24,7 @@ import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
 import { sceneMeta } from "../lib/scene-eval";
 import { getProjectSize, type ProjectSettings } from "../lib/types";
+import { captionItem } from "../lib/captions-preset";
 import {
   addAsset, addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, isValidDoc,
   relinkAsset, resizeDoc, retimeDoc,
@@ -1319,6 +1320,43 @@ head("re-linking a source that moved");
   a(relinkAsset(doc, "nope", "/x.mp4") === doc, "an unknown asset id is a no-op, not a new asset");
   a(relinkAsset(doc, "a1", "/api/media/p/old.mp4", "old.mp4") === doc,
     "re-linking to where it already points changes nothing");
+}
+
+head("captions land inside the platform safe area on a vertical canvas");
+{
+  const tokens = [
+    { text: "titles", startSec: 0, endSec: 0.4 },
+    { text: "will", startSec: 0.4, endSec: 0.7 },
+    { text: "here", startSec: 0.7, endSec: 1.1 },
+  ];
+
+  // TikTok's clear region in the kit's 1080x1920 frame, from the Figma Union
+  // vector: x 132..850 below y=366, bottom edge at y=1280. Anything past that
+  // is behind the app's own caption bar or its action rail.
+  const SAFE = { left: 132, right: 850, top: 366, bottom: 1280 };
+
+  const v = captionItem({ width: 1080, height: 1920 }, 0, 25, tokens, 1.1);
+  a(v.layout.y >= SAFE.top, "the caption box starts below the top chrome");
+  a(v.layout.y + v.layout.height <= SAFE.bottom,
+    `and ends above TikTok's caption bar (bottom ${v.layout.y + v.layout.height}, safe ${SAFE.bottom})`);
+  a(v.layout.x >= SAFE.left, "it clears the left edge");
+  a(v.style.fontFamily.includes("GT Walsheim"), "vertical captions use the brand face, not Inter");
+  a(Boolean(v.style.textShadow), "and carry the drop shadow that keeps them legible over footage");
+  a(v.maxWordsPerPage === 5, "paged to two lines");
+
+  // The old default — 8% up from the bottom — would have failed the above.
+  const oldBottom = 1920 - Math.round(1920 * 0.08);
+  a(oldBottom > SAFE.bottom, "which is a change: the previous placement sat behind the caption bar");
+
+  // 4K vertical is the same LAYOUT, not the same pixels.
+  const k4 = captionItem({ width: 2160, height: 3840 }, 0, 25, tokens, 1.1);
+  a(k4.layout.y === v.layout.y * 2 && k4.style.fontSize === v.style.fontSize * 2,
+    "and it scales with the canvas rather than being pinned to 1080");
+
+  // Landscape is untouched.
+  const h = captionItem({ width: 1920, height: 1080 }, 0, 25, tokens, 1.1);
+  a(h.style.fontFamily.includes("Inter"), "a landscape document keeps the caption style it always had");
+  a(h.maxWordsPerPage === 6, "including its paging");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);

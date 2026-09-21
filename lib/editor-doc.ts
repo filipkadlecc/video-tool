@@ -199,6 +199,13 @@ export interface TextStyle {
   backgroundColor?: string;
   padding?: number;
   backgroundRadius?: number;
+  /** CSS text-shadow, e.g. "0px 4px 3px rgba(0,0,0,0.25)". */
+  textShadow?: string;
+  /**
+   * Outline drawn around the glyphs, for text over busy footage. Painted
+   * behind the fill, so it thickens the letterform rather than eating it.
+   */
+  stroke?: { width: number; color: string };
 }
 
 export interface TextItem extends ItemBase {

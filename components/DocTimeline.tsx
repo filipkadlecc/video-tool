@@ -17,6 +17,7 @@ import {
   snapTargets, splitItem, trackWithRoomAt, trimItem, updateItem,
   type Asset, type EditorDoc, type EditorItem, type Track,
 } from "@/lib/editor-doc";
+import { captionItem } from "@/lib/captions-preset";
 
 /**
  * Timeline for a document-based project.
@@ -463,30 +464,7 @@ export default function DocTimeline({
       const rebased = tokens.map((t) => ({ ...t, startSec: t.startSec - base, endSec: t.endSec - base }));
       const spanSec = rebased[rebased.length - 1].endSec;
       const trackId = doc.tracks[doc.tracks.length - 1].id;
-      const height = Math.round(doc.size.height * 0.22);
-      const item = {
-        type: "captions" as const,
-        id: makeId("captions"),
-        from: currentFrame,
-        durationInFrames: Math.max(1, Math.round(spanSec * fps)),
-        layout: {
-          x: Math.round(doc.size.width * 0.08),
-          y: Math.round(doc.size.height - height - doc.size.height * 0.08),
-          width: Math.round(doc.size.width * 0.84),
-          height,
-        },
-        tokens: rebased,
-        style: {
-          fontFamily: "Inter, sans-serif",
-          fontSize: Math.round(doc.size.height * 0.058),
-          fontWeight: 700,
-          color: "#F4F4F5",
-          align: "center" as const,
-        },
-        highlightColor: "#F86606",
-        pageDurationMs: 1200,
-        maxWordsPerPage: 6,
-      };
+      const item = captionItem(doc.size, currentFrame, fps, rebased, spanSec);
       commit(addItem(doc, trackId, item as EditorItem));
       onSelectionChange(new Set([item.id]));
       setPickerOpen(false);
