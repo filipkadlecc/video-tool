@@ -1,0 +1,347 @@
+import React, { useLayoutEffect, useRef } from "react";
+import {
+  AbsoluteFill, Audio, staticFile, useCurrentFrame, useVideoConfig,
+  spring, delayRender, continueRender,
+} from "remotion";
+import { SPRINGS } from "../motion";
+
+export const fps = 25;
+export const durationInFrames = 386;
+
+// ─── WORD SYNC ───────────────────────────────────────────────────────────────
+// `words[i]` is the exact frame word i appears on. Derived by wav2vec2 CTC forced
+// alignment of the voice-over against the known transcript, then pulled back to the
+// true acoustic onset (CTC fires at the evidence peak, which is 0-77ms late depending
+// on the first phoneme), then floored to the frame grid — so a word can land up to
+// 39ms early and never late. Validated against 5 directly-measured sentence onsets
+// to within 5ms. Nudge any number here to retime a single word.
+// `rows` holds the line breaks; the words in it are in the same order as `words`.
+const BLOCKS: { rows: string[][]; words: number[]; exitStart: number }[] = [
+  // All my lead generation run there
+  { rows: [["\"All","my","lead","generation","run","there\""]], words: [2, 6, 12, 17, 37, 44], exitStart: 60 },
+  // My price monitor runs there
+  { rows: [["\"My","price","monitor","runs","there\""]], words: [77, 82, 91, 101, 110], exitStart: 128 },
+  // My AI agents run there
+  { rows: [["\"My","AI","agents","run","there\""]], words: [162, 168, 178, 189, 196], exitStart: 213 },
+  // My competitor research runs there
+  { rows: [["\"My","competitor","research","runs","there\""]], words: [231, 234, 247, 260, 269], exitStart: 285 },
+  // My company's brain runs there
+  { rows: [["\"My","company's","brain","runs","there\""]], words: [305, 307, 318, 325, 330], exitStart: 346 },
+];
+
+// ─── TYPE ────────────────────────────────────────────────────────────────────
+// GT Walsheim Thin, subset to the glyphs this piece uses and embedded as base64 so
+// the same face applies in the app preview and in a CLI render (a staticFile
+// @font-face silently falls back to a system face inside an eval'd scene). Declared
+// at normal weight because the file *is* the thin cut — asking for weight 100 would
+// invite the browser to synthesise one.
+const WALSHEIM = "data:font/woff2;base64,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";
+const FONT_FACE_CSS = `
+@font-face { font-family:'RunSfWalsheim'; src:url('${WALSHEIM}') format('woff2'); font-weight:normal; font-style:normal; font-display:block; }
+`;
+
+if (typeof document !== "undefined") {
+  const w = window as unknown as { __runsf_walsheim?: boolean };
+  if (!w.__runsf_walsheim) {
+    w.__runsf_walsheim = true;
+    try {
+      const handle = delayRender("Loading GT Walsheim Thin");
+      new FontFace("RunSfWalsheim", `url("${WALSHEIM}")`, {
+        style: "normal", weight: "normal", display: "block" as FontDisplay,
+      })
+        .load()
+        .then((ff) => (document.fonts as FontFaceSet).add(ff))
+        .catch(() => undefined)
+        .finally(() => continueRender(handle));
+    } catch {
+      // outside a render context — the CSS @font-face above still applies
+    }
+  }
+}
+
+// One type size for the whole piece, so every subtitle reads at the same size.
+// ADV holds each character's advance width in px, taken from the font's own metrics —
+// GT Walsheim is proportional, so there is no grid to fall back on.
+const FONT_PX = 151.94;
+const CAP = 106.36;        // cap height, 700/1000 em
+const ADV: Record<string, number> = {" ":39.2,"\"":55.16,"'":34.34,"A":85.7,"I":34.04,"M":123.38,"a":89.65,"b":89.65,"c":77.79,"d":89.65,"e":77.34,"g":89.65,"h":85.85,"i":32.21,"l":32.21,"m":126.26,"n":85.24,"o":82.35,"p":89.65,"r":53.03,"s":65.94,"t":51.05,"u":85.54,"y":86.3};
+const advance = (ch: string) => ADV[ch] ?? FONT_PX * 0.5;
+const measure = (text: string) => [...text].reduce((w, ch) => w + advance(ch), 0);
+const LINE_STEP = 159.54;  // Figma row step, 1.5000 x cap height
+const BOTTOM = 260;         // px from the bottom of the frame to the baseline
+const RISE = 6.5;       // entrance rise
+const FILL = "#FAF7F2";
+const QUOTE = '"';
+const QUOTE_FILL = "#F86606";
+const CSS_FONT = `${FONT_PX}px 'RunSfWalsheim', sans-serif`;
+const INTRA_WORD_STAGGER = 2;   // total frames of ripple across a word, max
+const MAX_GLYPH_DELAY = 0.6;    // frames — keeps short words from rippling too slowly
+
+// ─── DUST ────────────────────────────────────────────────────────────────────
+// The snap. Each sentence is sampled into a grid of ash flakes off its own glyph
+// pixels; a wave crosses the block left-to-right and slightly upward, and every
+// flake it reaches lifts off, drifts up and away, shrinks and fades. What the wave
+// has not reached yet is still the crisp, untouched text — the letters erode rather
+// than fade, so nothing ever dips to a ghost of itself.
+const DUST_FRAMES = 30;
+const CELL = 4;                 // px per flake, scaled to the type size
+const SWEEP = 0.48;             // fraction of DUST_FRAMES the wave takes to cross
+const JITTER = 0.12;            // per-flake randomness in when it lifts off
+const LIFE = 0.26;              // fraction of DUST_FRAMES a flake takes to vanish
+const DRIFT = 184;           // px a flake travels in its lifetime
+const ERASE_PAD = 1;            // px the erase overshoots its cell, covering the seam
+                                // between two cells; the grid is whole-pixel aligned and
+                                // sampled from a full-size render, so one pixel is enough
+
+/** Every character of a block, on the monospace grid, with the word it belongs to. */
+type Glyph = { ch: string; x: number; baseline: number; word: number; fill: string };
+type Layout = { width: number; height: number; glyphs: Glyph[] };
+
+function layout(rows: string[][]): Layout {
+  const lineWidths = rows.map((r) => measure(r.join(" ")));
+  const width = Math.max(...lineWidths);
+  const height = (rows.length - 1) * LINE_STEP + CAP;
+  const glyphs: Glyph[] = [];
+  let word = 0;
+  rows.forEach((row, ri) => {
+    const baseline = ri * LINE_STEP + CAP;
+    let x = (width - lineWidths[ri]) / 2; // rows centred on each other
+    row.forEach((w) => {
+      for (const ch of w) {
+        glyphs.push({ ch, x, baseline, word, fill: ch === QUOTE ? QUOTE_FILL : FILL });
+        x += advance(ch);
+      }
+      x += advance(" ");
+      word++;
+    });
+  });
+  return { width, height, glyphs };
+}
+
+/**
+ * One character. It is fully opaque the instant its word lands — the pop is carried
+ * by scale + rise, never by a fade, so the arrival reads exactly on the beat. Once
+ * settled the word is completely still: no ambient drift, no idle motion.
+ */
+const Char: React.FC<{ g: Glyph; index: number; count: number; start: number; frame: number; vfps: number }> = ({
+  g, index, count, start, frame, vfps,
+}) => {
+  const step = count > 1 ? Math.min(MAX_GLYPH_DELAY, INTRA_WORD_STAGGER / (count - 1)) : 0;
+  const t = frame - start - index * step;
+  if (t < 0) return null;
+  const p = spring({ frame: t, fps: vfps, config: SPRINGS.SNAPPY });
+  const cx = g.x + advance(g.ch) / 2;
+  const cy = g.baseline - CAP / 2;
+  const s = 0.86 + 0.14 * p;
+  const dy = (1 - p) * RISE;
+  return (
+    <g transform={`translate(${cx} ${cy + dy}) scale(${s}) translate(${-cx} ${-cy})`}>
+      <text x={g.x} y={g.baseline} fill={g.fill} style={{ fontFamily: "'RunSfWalsheim', sans-serif", fontSize: FONT_PX }}>
+        {g.ch}
+      </text>
+    </g>
+  );
+};
+
+/** The sentence assembling itself, word by word, on the voice-over. */
+const Assembling: React.FC<{ rows: string[][]; words: number[]; frame: number; vfps: number; vwidth: number; vheight: number }> = ({
+  rows, words, frame, vfps, vwidth, vheight,
+}) => {
+  const { width, height, glyphs } = layout(rows);
+  const perWord = rows.flat().map((w) => w.length);
+  let seen = -1, lastWord = -1;
+  return (
+    <div style={{ position: "absolute", left: (vwidth - width) / 2, top: vheight - BOTTOM - height, width, height }}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: "visible" }}>
+        {glyphs.map((g, i) => {
+          if (g.word !== lastWord) { lastWord = g.word; seen = 0; } else { seen++; }
+          return <Char key={i} g={g} index={seen} count={perWord[g.word]} start={words[g.word]} frame={frame} vfps={vfps} />;
+        })}
+      </svg>
+    </div>
+  );
+};
+
+// ─── The ash field ───────────────────────────────────────────────────────────
+// Sampled once per sentence from the glyphs themselves: the text is drawn to an
+// offscreen canvas at 1/CELL scale, and every pixel with ink becomes one flake.
+// All randomness is hashed from the flake's grid position, never Math.random, so
+// every worker in a distributed render draws the identical storm.
+type Field = { x: Float32Array; y: Float32Array; a: Float32Array; r1: Float32Array; r2: Float32Array; r3: Float32Array; r4: Float32Array; quote: Uint8Array; n: number };
+
+const hash = (x: number, y: number, k: number) => {
+  let h = Math.imul(x + 1, 374761393) ^ Math.imul(y + 1, 668265263) ^ Math.imul(k + 1, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+
+const FIELDS = new Map<string, Field>();
+
+function ashField(key: string, lay: Layout): Field {
+  const cached = FIELDS.get(key);
+  if (cached) return cached;
+
+  // Whole cells of padding, so the flake grid lands on whole pixels: a fractional
+  // grid makes every erase rect anti-alias at its edges and leaves a faint lattice
+  // of un-erased text behind — most visibly a hairline along each baseline.
+  const padTop = Math.ceil((FONT_PX * 0.12) / CELL) * CELL;    // room for ascenders above the cap line
+  const padBottom = Math.ceil((FONT_PX * 0.35) / CELL) * CELL; // and descenders below the last baseline
+  const gw = Math.ceil(lay.width / CELL);
+  const gh = Math.ceil((lay.height + padTop + padBottom) / CELL);
+  const bw = gw * CELL, bh = gh * CELL;
+
+  // Sample from a full-size render of the text, not a shrunken one: the flake grid
+  // has to agree with the crisp text pixel for pixel, and Chrome rasterises small
+  // text on its own rounded baseline. Drawing big and reducing by hand (a cell counts
+  // if it holds any ink at all) keeps the two in lockstep. Sampled once per colour,
+  // so the quotes blow away as orange ash and the words as off-white.
+  const big = document.createElement("canvas");
+  big.width = bw;
+  big.height = bh;
+  const bc = big.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+
+  const xs: number[] = [], ys: number[] = [], as: number[] = [], qs: number[] = [];
+  for (const pass of [0, 1]) {
+    const glyphs = lay.glyphs.filter((g) => (g.ch === QUOTE ? 1 : 0) === pass);
+    if (glyphs.length === 0) continue;
+    bc.clearRect(0, 0, bw, bh);
+    bc.fillStyle = "#ffffff";
+    bc.font = CSS_FONT;
+    bc.textBaseline = "alphabetic";
+    for (const g of glyphs) bc.fillText(g.ch, g.x, g.baseline + padTop);
+
+    const src = bc.getImageData(0, 0, bw, bh).data;
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        let max = 0, sum = 0;
+        for (let y = 0; y < CELL; y++) {
+          const row = (gy * CELL + y) * bw + gx * CELL;
+          for (let x = 0; x < CELL; x++) {
+            const a = src[(row + x) * 4 + 3];
+            if (a > max) max = a;
+            sum += a;
+          }
+        }
+        if (max === 0) continue; // any ink at all becomes a flake, however faint
+        xs.push(gx * CELL);
+        ys.push(gy * CELL - padTop);
+        as.push(Math.min(1, (sum / (CELL * CELL * 255)) * 1.25));
+        qs.push(pass);
+      }
+    }
+  }
+
+  const n = xs.length;
+  const field: Field = {
+    x: Float32Array.from(xs), y: Float32Array.from(ys), a: Float32Array.from(as),
+    r1: new Float32Array(n), r2: new Float32Array(n), r3: new Float32Array(n), r4: new Float32Array(n),
+    quote: Uint8Array.from(qs), n,
+  };
+  for (let i = 0; i < n; i++) {
+    const gx = Math.round(xs[i] / CELL), gy = Math.round((ys[i] + padTop) / CELL);
+    field.r1[i] = hash(gx, gy, 1);
+    field.r2[i] = hash(gx, gy, 2);
+    field.r3[i] = hash(gx, gy, 3);
+    field.r4[i] = hash(gx, gy, 4);
+  }
+  FIELDS.set(key, field);
+  return field;
+}
+
+/** One frame of the snap: the intact remainder, eroded, plus everything in flight. */
+function drawDust(ctx: CanvasRenderingContext2D, lay: Layout, field: Field, ox: number, oy: number, t: number, W: number, H: number) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.font = CSS_FONT;
+  ctx.textBaseline = "alphabetic";
+  for (const g of lay.glyphs) {
+    ctx.fillStyle = g.fill;
+    ctx.fillText(g.ch, ox + g.x, oy + g.baseline);
+  }
+
+  const sweepSpan = DUST_FRAMES * SWEEP;
+  const lift = new Float32Array(field.n); // 0 = still solid, >0 = progress in flight
+
+  // Which flakes the wave has taken, and how long ago.
+  for (let i = 0; i < field.n; i++) {
+    const nx = field.x[i] / lay.width;
+    const ny = 1 - field.y[i] / lay.height;
+    const delay = sweepSpan * (nx * 0.78 + ny * 0.22) + DUST_FRAMES * JITTER * field.r1[i];
+    const life = DUST_FRAMES * LIFE * (0.7 + 0.6 * field.r2[i]);
+    const p = (t - delay) / life;
+    lift[i] = p > 0 ? Math.min(1, p) : 0;
+  }
+
+  // Erase what has lifted off, so the letters visibly erode from the wavefront.
+  ctx.globalCompositeOperation = "destination-out";
+  for (let i = 0; i < field.n; i++) {
+    if (lift[i] <= 0) continue;
+    ctx.fillRect(ox + field.x[i] - ERASE_PAD, oy + field.y[i] - ERASE_PAD, CELL + ERASE_PAD * 2, CELL + ERASE_PAD * 2);
+  }
+
+  // Then the ash itself, drifting up and away — words first, then quotes, so the
+  // canvas only changes colour once.
+  ctx.globalCompositeOperation = "source-over";
+  for (const pass of [0, 1]) {
+  ctx.fillStyle = pass === 0 ? FILL : QUOTE_FILL;
+  for (let i = 0; i < field.n; i++) {
+    const p = lift[i];
+    if (p <= 0 || p >= 1 || field.quote[i] !== pass) continue;
+    const ease = Math.pow(p, 1.3);
+    const spread = (field.r3[i] - 0.5) * 1.25;
+    const dist = DRIFT * ease * (0.45 + 0.95 * field.r2[i]);
+    const dx = Math.sin(spread) * dist * 0.55 + DRIFT * 0.5 * ease + Math.sin(p * 7 + field.r1[i] * 6.28) * 14 * p;
+    const dy = -Math.cos(spread) * dist * 0.85 - DRIFT * 0.18 * ease;
+    // Flakes, not pixels: each one keeps its own proportions and shrinks as it goes.
+    const shrink = 1 - 0.5 * p;
+    const w = CELL * (0.5 + 1.5 * field.r4[i]) * shrink;
+    const h = CELL * (0.5 + 1.5 * field.r3[i]) * shrink;
+    ctx.globalAlpha = field.a[i] * Math.pow(1 - p, 1.4);
+    ctx.fillRect(ox + field.x[i] + dx, oy + field.y[i] + dy, w, h);
+  }
+  }
+  ctx.restore();
+}
+
+const Dust: React.FC<{ rows: string[][]; t: number }> = ({ rows, t }) => {
+  const { width: W, height: H } = useVideoConfig();
+  const ref = useRef<HTMLCanvasElement | null>(null);
+  const key = rows.map((r) => r.join(" ")).join("|");
+
+  useLayoutEffect(() => {
+    const cv = ref.current;
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const lay = layout(rows);
+    const field = ashField(key, lay);
+    drawDust(ctx, lay, field, Math.round((W - lay.width) / 2), Math.round(H - BOTTOM - lay.height), t, W, H);
+  });
+
+  return <canvas ref={ref} width={W} height={H} style={{ position: "absolute", left: 0, top: 0, width: W, height: H }} />;
+};
+
+const TextBlock: React.FC<{ cue: { rows: string[][]; words: number[]; exitStart: number } }> = ({ cue }) => {
+  const frame = useCurrentFrame();
+  const { fps: vfps, width: vwidth, height: vheight } = useVideoConfig();
+
+  const first = Math.min(...cue.words);
+  if (frame < first || frame > cue.exitStart + DUST_FRAMES) return null;
+
+  return frame < cue.exitStart
+    ? <Assembling rows={cue.rows} words={cue.words} frame={frame} vfps={vfps} vwidth={vwidth} vheight={vheight} />
+    : <Dust rows={cue.rows} t={frame - cue.exitStart} />;
+};
+
+// No Background component: the piece is transparent by design, for compositing.
+export default function RunSfWordSyncMono() {
+  return (
+    <AbsoluteFill>
+      <style>{FONT_FACE_CSS}</style>
+      <Audio src={staticFile("assets/run-sf/voice.wav")} />
+      {BLOCKS.map((cue, i) => (
+        <TextBlock key={i} cue={cue} />
+      ))}
+    </AbsoluteFill>
+  );
+}

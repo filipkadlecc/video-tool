@@ -1,0 +1,674 @@
+[
+  {
+    "section": 2,
+    "slug": "bestsellers",
+    "cards": [
+      {
+        "id": "2-0",
+        "x": 15,
+        "y": 109,
+        "width": 240,
+        "height": 377,
+        "title": "-27% 36 37.5 39 + 8 QUICK ADD YZY YS-01 BLACK €123.33 €61.46",
+        "file": "elements/card-2-0.webp"
+      },
+      {
+        "id": "2-1",
+        "x": 285,
+        "y": 109,
+        "width": 240,
+        "height": 378,
+        "title": "OS ADD TO CART BE@RBRICK SERIES 47 BLIND BOX (100%) €20.21",
+        "file": "elements/card-2-1.webp"
+      },
+      {
+        "id": "2-2",
+        "x": 555,
+        "y": 109,
+        "width": 240,
+        "height": 378,
+        "title": "XXS XS S + 3 QUICK ADD FEAR OF GOD ESSENTIALS SWEATSHORT (SS22) LIGHT ",
+        "file": "elements/card-2-2.webp"
+      },
+      {
+        "id": "2-3",
+        "x": 825,
+        "y": 109,
+        "width": 240,
+        "height": 377,
+        "title": "38 38.5 39 + 11 QUICK ADD NIKE AIR FORCE 1 LOW '07 WHITE €164.57 €102.",
+        "file": "elements/card-2-3.webp"
+      },
+      {
+        "id": "2-4",
+        "x": 1095,
+        "y": 109,
+        "width": 240,
+        "height": 378,
+        "title": "37.5 38 38.5 + 6 QUICK ADD NIKE AIR FORCE 1 LOW SUPREME WHITE €267.69 ",
+        "file": "elements/card-2-4.webp"
+      },
+      {
+        "id": "2-5",
+        "x": 1365,
+        "y": 109,
+        "width": 240,
+        "height": 377,
+        "title": "39 40.5 42 + 8 QUICK ADD YZY YS-01 CREAM €123.33 €61.46",
+        "file": "elements/card-2-5.webp"
+      },
+      {
+        "id": "2-6",
+        "x": 1635,
+        "y": 109,
+        "width": 240,
+        "height": 377,
+        "title": "41 42 42.5 + 4 QUICK ADD JORDAN 4 RETRO BLACK CAT (2025) €329.56 €288.",
+        "file": "elements/card-2-6.webp"
+      },
+      {
+        "id": "2-7",
+        "x": 1905,
+        "y": 109,
+        "width": 240,
+        "height": 378,
+        "title": "XXS XS S + 3 QUICK ADD FEAR OF GOD ESSENTIALS HOODIE LIGHT OATMEAL €20",
+        "file": "elements/card-2-7.webp"
+      },
+      {
+        "id": "2-8",
+        "x": 2175,
+        "y": 109,
+        "width": 240,
+        "height": 378,
+        "title": "Spike XXS XS S + 3 QUICK ADD FEAR OF GOD ESSENTIALS SWEATSHORT (SS22) ",
+        "file": "elements/card-2-8.webp"
+      },
+      {
+        "id": "2-9",
+        "x": 2445,
+        "y": 109,
+        "width": 240,
+        "height": 377,
+        "title": "Spike 40 41 42.5 + 7 QUICK ADD NIKE MIND 001 SLIDE TRIPLE BLACK €288.3",
+        "file": "elements/card-2-9.webp"
+      }
+    ]
+  },
+  {
+    "section": 4,
+    "slug": "new-arrivals",
+    "cards": [
+      {
+        "id": "4-0",
+        "x": 15,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW 46 ADD TO CART ADIDAS YEEZY FOAM RNNR MX SAND GREY €131.58",
+        "file": "elements/card-4-0.webp"
+      },
+      {
+        "id": "4-1",
+        "x": 285,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW 40 ADD TO CART NIKE MIND 001 FLYKNIT SLIDE HYPER ROYAL BLACK €267.",
+        "file": "elements/card-4-1.webp"
+      },
+      {
+        "id": "4-2",
+        "x": 555,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "38 40 46 QUICK ADD NIKE ZOOM FIELD JAXX TRAVIS SCOTT LIGHT CHOCOLATE €",
+        "file": "elements/card-4-2.webp"
+      },
+      {
+        "id": "4-3",
+        "x": 825,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-19% 36 QUICK ADD JORDAN 4 RETRO SE PARIS OLYMPICS WET CEMENT €329.56 ",
+        "file": "elements/card-4-3.webp"
+      },
+      {
+        "id": "4-4",
+        "x": 1095,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "36 36.5 37.5 + 6 QUICK ADD JORDAN 4 RETRO WHITE CEMENT (2025) €370.80 ",
+        "file": "elements/card-4-4.webp"
+      },
+      {
+        "id": "4-5",
+        "x": 1365,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "38.5 40 42.5 + 3 QUICK ADD JORDAN 4 RETRO MILITARY BLUE (2024) €267.69",
+        "file": "elements/card-4-5.webp"
+      },
+      {
+        "id": "4-6",
+        "x": 1635,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "36 36.5 37.5 + 4 QUICK ADD JORDAN 4 RETRO MIDNIGHT NAVY €350.18 €247.0",
+        "file": "elements/card-4-6.webp"
+      },
+      {
+        "id": "4-7",
+        "x": 1905,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "37.5 38 38.5 + 6 QUICK ADD NIKE AIR FORCE 1 LOW SUPREME WHITE €267.69 ",
+        "file": "elements/card-4-7.webp"
+      },
+      {
+        "id": "4-8",
+        "x": 2175,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "38.5 39 40.5 + 5 QUICK ADD NIKE DUNK LOW GREY FOG €152.20 €82.08",
+        "file": "elements/card-4-8.webp"
+      },
+      {
+        "id": "4-9",
+        "x": 2445,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-11% 36 36.5 44 QUICK ADD JORDAN 4 RETRO METALLIC GOLD (WOMEN'S) €370.",
+        "file": "elements/card-4-9.webp"
+      }
+    ]
+  },
+  {
+    "section": 5,
+    "slug": "jordan",
+    "cards": [
+      {
+        "id": "5-0",
+        "x": 15,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "NEW 40.5 41 42 + 6 QUICK ADD JORDAN 1 MID CHICAGO TOE €185.20",
+        "file": "elements/card-5-0.webp"
+      },
+      {
+        "id": "5-1",
+        "x": 285,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "36 36.5 37.5 + 11 QUICK ADD JORDAN 1 RETRO LOW OG SP TRAVIS SCOTT SAIL",
+        "file": "elements/card-5-1.webp"
+      },
+      {
+        "id": "5-2",
+        "x": 555,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "-42% 36 36.5 40 + 6 QUICK ADD JORDAN 4 RETRO OXIDIZED GREEN €247.06 €1",
+        "file": "elements/card-5-2.webp"
+      },
+      {
+        "id": "5-3",
+        "x": 825,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "-43% 36 36.5 42 QUICK ADD JORDAN 1 MID DIAMOND SHORTS €143.95 €82.08",
+        "file": "elements/card-5-3.webp"
+      },
+      {
+        "id": "5-4",
+        "x": 1095,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "36.5 37.5 38 + 7 QUICK ADD JORDAN 1 RETRO HIGH OG ATMOSPHERE (WOMEN'S)",
+        "file": "elements/card-5-4.webp"
+      },
+      {
+        "id": "5-5",
+        "x": 1365,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "-33% 36.5 QUICK ADD JORDAN 1 MID LUCKY GREEN €123.33 €82.08",
+        "file": "elements/card-5-5.webp"
+      },
+      {
+        "id": "5-6",
+        "x": 1635,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-11% 36 36.5 44 QUICK ADD JORDAN 4 RETRO METALLIC GOLD (WOMEN'S) €370.",
+        "file": "elements/card-5-6.webp"
+      },
+      {
+        "id": "5-7",
+        "x": 1905,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "-20% 37.5 38 38.5 + 10 QUICK ADD JORDAN 4 RETRO CAVE STONE €329.56 €26",
+        "file": "elements/card-5-7.webp"
+      },
+      {
+        "id": "5-8",
+        "x": 2175,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "36 36.5 37.5 + 4 QUICK ADD JORDAN 4 RETRO MIDNIGHT NAVY €350.18 €247.0",
+        "file": "elements/card-5-8.webp"
+      },
+      {
+        "id": "5-9",
+        "x": 2445,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "Spike 38 38.5 40 QUICK ADD JORDAN 1 LOW MEDIUM SOFT PINK WHITE (GS) €1",
+        "file": "elements/card-5-9.webp"
+      }
+    ]
+  },
+  {
+    "section": 6,
+    "slug": "nike",
+    "cards": [
+      {
+        "id": "6-0",
+        "x": 15,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW 40 ADD TO CART NIKE MIND 001 FLYKNIT SLIDE HYPER ROYAL BLACK €267.",
+        "file": "elements/card-6-0.webp"
+      },
+      {
+        "id": "6-1",
+        "x": 285,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "37.5 38.5 40 + 9 QUICK ADD NIKE SB DUNK LOW PRO ISO ORANGE LABEL WOLF ",
+        "file": "elements/card-6-1.webp"
+      },
+      {
+        "id": "6-2",
+        "x": 555,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "39 42.5 43 + 4 QUICK ADD NIKE SB DUNK LOW PRO ISO LIGHT COGNAC €123.33",
+        "file": "elements/card-6-2.webp"
+      },
+      {
+        "id": "6-3",
+        "x": 825,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "38 38.5 39 + 11 QUICK ADD NIKE AIR FORCE 1 LOW '07 WHITE €164.57 €102.",
+        "file": "elements/card-6-3.webp"
+      },
+      {
+        "id": "6-4",
+        "x": 1095,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "40 40.5 41 + 8 QUICK ADD NIKE SB DUNK LOW PRO BLUETILE SKATEBOARDS €24",
+        "file": "elements/card-6-4.webp"
+      },
+      {
+        "id": "6-5",
+        "x": 1365,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "38 39 40 + 3 QUICK ADD NIKE SHOX TL BLACK MAX ORANGE (WOMEN'S) €205.82",
+        "file": "elements/card-6-5.webp"
+      },
+      {
+        "id": "6-6",
+        "x": 1635,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "Spike 35.5 36 36.5 + 12 QUICK ADD NIKE AIR FORCE 1 ROPE LACES PINK €17",
+        "file": "elements/card-6-6.webp"
+      },
+      {
+        "id": "6-7",
+        "x": 1905,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "38.5 40.5 41 + 3 QUICK ADD NIKE SB DUNK LOW COURT PURPLE (2021/2024) €",
+        "file": "elements/card-6-7.webp"
+      },
+      {
+        "id": "6-8",
+        "x": 2175,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "36 36.5 37.5 + 10 QUICK ADD NIKE SB DUNK LOW PRO WHITE GUM €185.20",
+        "file": "elements/card-6-8.webp"
+      },
+      {
+        "id": "6-9",
+        "x": 2445,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "Spike 36.5 38.5 40.5 QUICK ADD NIKE SHOX TL SEAWEED GUNMETAL €131.58",
+        "file": "elements/card-6-9.webp"
+      }
+    ]
+  },
+  {
+    "section": 7,
+    "slug": "adidas",
+    "cards": [
+      {
+        "id": "7-0",
+        "x": 15,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW 46 ADD TO CART ADIDAS YEEZY FOAM RNNR MX SAND GREY €131.58",
+        "file": "elements/card-7-0.webp"
+      },
+      {
+        "id": "7-1",
+        "x": 285,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "37 1/3 38 2/3 QUICK ADD ADIDAS YEEZY BOOST 350 V2 ZEBRA (2017/2022/202",
+        "file": "elements/card-7-1.webp"
+      },
+      {
+        "id": "7-2",
+        "x": 555,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "52 40.5 42 + 2 QUICK ADD ADIDAS YEEZY SLIDE DARK ONYX €176.95",
+        "file": "elements/card-7-2.webp"
+      },
+      {
+        "id": "7-3",
+        "x": 825,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-27% 40.5 42 43 + 4 QUICK ADD ADIDAS YEEZY SLIDE BONE (2022/2023 RESTO",
+        "file": "elements/card-7-3.webp"
+      },
+      {
+        "id": "7-4",
+        "x": 1095,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "36 2/3 37 1/3 38 + 1 QUICK ADD ADIDAS CAMPUS 00S CORE BLACK €143.95 €8",
+        "file": "elements/card-7-4.webp"
+      },
+      {
+        "id": "7-5",
+        "x": 1365,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-50% 40.5 QUICK ADD ADIDAS ADILETTE SLIDES KORN 30TH ANNIVERSARY €123.",
+        "file": "elements/card-7-5.webp"
+      },
+      {
+        "id": "7-6",
+        "x": 1635,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-50% 39 1/3 QUICK ADD ADIDAS FEAR OF GOD ATHLETICS '86 LO CLAY €123.33",
+        "file": "elements/card-7-6.webp"
+      },
+      {
+        "id": "7-7",
+        "x": 1905,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "47 QUICK ADD ADIDAS ADILETTE 22 SLIDES MAGIC LIME €40.83",
+        "file": "elements/card-7-7.webp"
+      },
+      {
+        "id": "7-8",
+        "x": 2175,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW 42 42 2/3 46 QUICK ADD ADIDAS ADISTAR JELLYFISH PHARRELL WILLIAMS ",
+        "file": "elements/card-7-8.webp"
+      },
+      {
+        "id": "7-9",
+        "x": 2445,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW 41 1/3 ADD TO CART ADIDAS ADISTAR JELLYFISH PHARRELL WILLIAMS TRIP",
+        "file": "elements/card-7-9.webp"
+      }
+    ]
+  },
+  {
+    "section": 8,
+    "slug": "clothing",
+    "cards": [
+      {
+        "id": "8-0",
+        "x": 15,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW M ADD TO CART SUPREME LARRY CLARK NEIGHBOR TEE POWDER BLUE €164.57",
+        "file": "elements/card-8-0.webp"
+      },
+      {
+        "id": "8-1",
+        "x": 285,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW L ADD TO CART SUPREME LARRY CLARK NEIGHBOR TEE WHITE €164.57",
+        "file": "elements/card-8-1.webp"
+      },
+      {
+        "id": "8-2",
+        "x": 555,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW XXS XS S + 3 QUICK ADD FEAR OF GOD ESSENTIALS S25 ZIP-UP HOODIE TI",
+        "file": "elements/card-8-2.webp"
+      },
+      {
+        "id": "8-3",
+        "x": 825,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW M L QUICK ADD SUPREME RACING LINED ZIP UP HOODED SWEATSHIRT BLACK ",
+        "file": "elements/card-8-3.webp"
+      },
+      {
+        "id": "8-4",
+        "x": 1095,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW L ADD TO CART SUPREME REFLECTIVE FOOTBALL JERSEY WHITE €288.31",
+        "file": "elements/card-8-4.webp"
+      },
+      {
+        "id": "8-5",
+        "x": 1365,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "NEW S M QUICK ADD SUPREME HANES PLAID BOXERS (4 PACK) MULTICOLOR €115.",
+        "file": "elements/card-8-5.webp"
+      },
+      {
+        "id": "8-6",
+        "x": 1635,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "XXS XS S + 3 QUICK ADD FEAR OF GOD ESSENTIALS SWEATSHORT (SS22) LIGHT ",
+        "file": "elements/card-8-6.webp"
+      },
+      {
+        "id": "8-7",
+        "x": 1905,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-20% XS S M + 2 QUICK ADD FEAR OF GOD ESSENTIALS TEE STRETCH LIMO €143",
+        "file": "elements/card-8-7.webp"
+      },
+      {
+        "id": "8-8",
+        "x": 2175,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-13% Spike L QUICK ADD SUPREME PERFORMANCE ZIP UP HOODED SWEATSHIRT BL",
+        "file": "elements/card-8-8.webp"
+      },
+      {
+        "id": "8-9",
+        "x": 2445,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-20% Spike XXS XS S + 3 QUICK ADD FEAR OF GOD ESSENTIALS SWEATSHORT (S",
+        "file": "elements/card-8-9.webp"
+      }
+    ]
+  },
+  {
+    "section": 9,
+    "slug": "supreme",
+    "cards": [
+      {
+        "id": "9-0",
+        "x": 15,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "37.5 38.5 39 + 10 QUICK ADD NIKE AIR FORCE 1 LOW SUPREME BLACK €267.69",
+        "file": "elements/card-9-0.webp"
+      },
+      {
+        "id": "9-1",
+        "x": 285,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "40 42.5 46 QUICK ADD NIKE AIR FORCE 1 LOW SUPREME GOODENOUGH €329.56 €",
+        "file": "elements/card-9-1.webp"
+      },
+      {
+        "id": "9-2",
+        "x": 555,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "37.5 38 38.5 + 6 QUICK ADD NIKE AIR FORCE 1 LOW SUPREME WHITE €267.69 ",
+        "file": "elements/card-9-2.webp"
+      },
+      {
+        "id": "9-3",
+        "x": 825,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "41 42 44.5 + 1 QUICK ADD NIKE SB DUNK LOW SUPREME RAMMELLZEE €535.79",
+        "file": "elements/card-9-3.webp"
+      },
+      {
+        "id": "9-4",
+        "x": 1095,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "-35% 42.5 ADD TO CART NIKE SB DUNK LOW SUPREME STARS BLACK (2021) €824",
+        "file": "elements/card-9-4.webp"
+      },
+      {
+        "id": "9-5",
+        "x": 1365,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "ON REQUEST Spike NOTIFY ME SUPREME ANARCHY HOODED SWEATSHIRT NAVY €255",
+        "file": "elements/card-9-5.webp"
+      },
+      {
+        "id": "9-6",
+        "x": 1635,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "NEW Spike M QUICK ADD SUPREME ANGEL TEE BLACK €123.33",
+        "file": "elements/card-9-6.webp"
+      },
+      {
+        "id": "9-7",
+        "x": 1905,
+        "y": 64,
+        "width": 240,
+        "height": 377,
+        "title": "Spike L QUICK ADD SUPREME ANGEL TEE WHITE €123.33",
+        "file": "elements/card-9-7.webp"
+      },
+      {
+        "id": "9-8",
+        "x": 2175,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "Spike M QUICK ADD SUPREME ANTIHERO HOODED SWEATSHIRT (FW25) ASH GREY €",
+        "file": "elements/card-9-8.webp"
+      },
+      {
+        "id": "9-9",
+        "x": 2445,
+        "y": 64,
+        "width": 240,
+        "height": 378,
+        "title": "Spike M ADD TO CART SUPREME ANTIHERO HOODED SWEATSHIRT (FW25) BLACK €4",
+        "file": "elements/card-9-9.webp"
+      }
+    ]
+  }
+]

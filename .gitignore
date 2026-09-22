@@ -67,3 +67,7 @@ next-env.d.ts
 /data/*/check/
 /data/*/check-*/
 
+
+# Python bytecode (the talk/ helper scripts)
+__pycache__/
+*.pyc

@@ -1,0 +1,35 @@
+{
+  "file": "/Volumes/T7 Shield/Run_SF_Promo/Graphics/Texts/Animated/RUN-SF_SUBTITLES_TC00-00-00-00.mov",
+  "durationInFrames": 386,
+  "fps": 25,
+  "width": 3840,
+  "height": 2160,
+  "timecode": "00:00:00:00",
+  "lines": [
+    {
+      "text": "\"All my lead generation run there\"",
+      "in": "00:00:00:02",
+      "out": "00:00:03:15"
+    },
+    {
+      "text": "\"My price monitor runs there\"",
+      "in": "00:00:03:02",
+      "out": "00:00:06:08"
+    },
+    {
+      "text": "\"My AI agents run there\"",
+      "in": "00:00:06:12",
+      "out": "00:00:09:18"
+    },
+    {
+      "text": "\"My competitor research runs there\"",
+      "in": "00:00:09:06",
+      "out": "00:00:12:15"
+    },
+    {
+      "text": "\"My company's brain runs there\"",
+      "in": "00:00:12:05",
+      "out": "00:00:15:01"
+    }
+  ]
+}

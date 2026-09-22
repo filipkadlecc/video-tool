@@ -1,0 +1,39 @@
+{
+  "file": "/Volumes/T7 Shield/Run_SF_Promo/Graphics/Texts/Animated/RUN-SF_EVERYTHING-RUNS-ON-APIFY.mov",
+  "durationInFrames": 43,
+  "holdsTo": null,
+  "words": [
+    {
+      "text": "EVERYTHING",
+      "in": "00:00:00:00",
+      "inFrame": 0,
+      "outFrame": 33,
+      "goneFrame": 38
+    },
+    {
+      "text": "RUNS",
+      "in": "00:00:00:09",
+      "inFrame": 9,
+      "outFrame": 34,
+      "goneFrame": 39
+    },
+    {
+      "text": "ON",
+      "in": "00:00:00:15",
+      "inFrame": 15,
+      "outFrame": 35,
+      "goneFrame": 40
+    },
+    {
+      "text": "APIFY",
+      "in": "00:00:00:17",
+      "inFrame": 17,
+      "outFrame": 36,
+      "goneFrame": 41
+    }
+  ],
+  "clears": {
+    "start": "00:00:01:08",
+    "end": "00:00:01:16"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "badges": [
+    {
+      "i": 0,
+      "w": 186,
+      "h": 186,
+      "alt": "SPIKE",
+      "file": "elements/badge-0.png"
+    },
+    {
+      "i": 1,
+      "w": 186,
+      "h": 186,
+      "alt": "SPIKE",
+      "file": "elements/badge-1.png"
+    },
+    {
+      "i": 2,
+      "w": 186,
+      "h": 186,
+      "alt": "SPIKE",
+      "file": "elements/badge-2.png"
+    },
+    {
+      "i": 3,
+      "w": 186,
+      "h": 186,
+      "alt": "SPIKE",
+      "file": "elements/badge-3.png"
+    },
+    {
+      "i": 4,
+      "w": 186,
+      "h": 186,
+      "alt": "SPIKE",
+      "file": "elements/badge-4.png"
+    }
+  ],
+  "reviews": null,
+  "mascot": "elements/mascot.webp"
+}
