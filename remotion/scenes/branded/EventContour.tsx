@@ -77,7 +77,7 @@ export default function EventContour() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headSize,
               color: BRAND.colors.text,
               lineHeight: 1.04,

@@ -105,7 +105,7 @@ export const FailureStage: React.FC = () => {
             }}
           >
             <div>
-              <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: base * 0.026, color: C.text }}>
+              <div style={{ fontFamily: DISPLAY, fontWeight: 500, fontSize: base * 0.026, color: C.text }}>
                 Create your account
               </div>
               <div style={{ fontFamily: SANS, fontSize: base * 0.014, color: C.textSubtle, marginTop: base * 0.008 }}>
@@ -126,7 +126,7 @@ export const FailureStage: React.FC = () => {
                 alignItems: "center",
                 justifyContent: "center",
                 fontFamily: SANS,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: base * 0.016,
                 color: "#fff",
               }}
@@ -196,7 +196,7 @@ export const FailureStage: React.FC = () => {
             />
             {/* top row: kind + brand mark */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: base * 0.015, color: C.textMuted, letterSpacing: "0.12em" }}>
+              <div style={{ fontFamily: SANS, fontWeight: 500, fontSize: base * 0.015, color: C.textMuted, letterSpacing: "0.12em" }}>
                 {CARD.kind}
               </div>
               <div style={{ display: "flex" }}>
@@ -214,11 +214,11 @@ export const FailureStage: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
               <div>
                 <div style={{ fontFamily: SANS, fontSize: base * 0.0095, color: C.textSubtle, letterSpacing: "0.14em" }}>CARD HOLDER</div>
-                <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: base * 0.015, color: C.textMuted, letterSpacing: "0.06em" }}>{CARD.name}</div>
+                <div style={{ fontFamily: SANS, fontWeight: 500, fontSize: base * 0.015, color: C.textMuted, letterSpacing: "0.06em" }}>{CARD.name}</div>
               </div>
               <div>
                 <div style={{ fontFamily: SANS, fontSize: base * 0.0095, color: C.textSubtle, letterSpacing: "0.14em" }}>EXPIRES</div>
-                <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: base * 0.015, color: C.textMuted }}>{CARD.expiry}</div>
+                <div style={{ fontFamily: SANS, fontWeight: 500, fontSize: base * 0.015, color: C.textMuted }}>{CARD.expiry}</div>
               </div>
             </div>
             {/* specular sheen sweep */}

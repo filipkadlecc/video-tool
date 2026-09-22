@@ -73,7 +73,7 @@ export default function FourQuadrant() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headlineSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.02em",
@@ -131,7 +131,7 @@ export default function FourQuadrant() {
                       alignItems: "center",
                       justifyContent: "center",
                       fontFamily: BRAND.fonts.marketing,
-                      fontWeight: 600,
+                      fontWeight: 500,
                       fontSize: rankSize,
                       color: ACCENT,
                     }}
@@ -141,7 +141,7 @@ export default function FourQuadrant() {
                   <div
                     style={{
                       fontFamily: BRAND.fonts.primary,
-                      fontWeight: 600,
+                      fontWeight: 500,
                       fontSize: cardTitleSize,
                       color: BRAND.colors.text,
                       letterSpacing: "-0.005em",

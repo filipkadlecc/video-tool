@@ -72,9 +72,13 @@ export function captionItem(
     style: {
       fontFamily: "Inter, sans-serif",
       fontSize: Math.round(size.height * 0.058),
-      fontWeight: 700,
+      // Was 700. Nothing this app renders goes above 500 now, and captions sit
+      // over footage, so the legibility that came from Bold comes from the
+      // shadow instead — the same way the vertical treatment gets it.
+      fontWeight: 500,
       color: "#F4F4F5",
       align: "center" as const,
+      textShadow: `0px ${Math.round(size.height * 0.004)}px ${Math.round(size.height * 0.003)}px rgba(0,0,0,0.35)`,
     },
     highlightColor: "#F86606",
     pageDurationMs: 1200,

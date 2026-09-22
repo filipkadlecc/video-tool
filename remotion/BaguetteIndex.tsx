@@ -123,7 +123,7 @@ const Chip: React.FC<{ label: string; active?: boolean; style?: React.CSSPropert
       borderRadius: base * 0.018,
       padding: `${base * 0.016}px ${base * 0.026}px`,
       fontFamily: F.marketing,
-      fontWeight: 600,
+      fontWeight: 500,
       fontSize: base * 0.03,
       color: active ? ACCENT : C.text,
       whiteSpace: "nowrap",
@@ -156,7 +156,7 @@ const SceneHook: React.FC = () => {
         borderRadius: base * 0.02,
         padding: `${base * 0.018}px ${base * 0.032}px`,
         fontFamily: F.marketing,
-        fontWeight: 700,
+        fontWeight: 500,
         fontSize: base * 0.072,
         color: C.text,
         fontVariantNumeric: "tabular-nums",
@@ -200,7 +200,7 @@ const SceneHook: React.FC = () => {
         <div
           style={{
             fontFamily: F.marketing,
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: base * 0.066,
             color: C.text,
             letterSpacing: "-0.02em",
@@ -252,7 +252,7 @@ const SceneLens: React.FC = () => {
       <div
         style={{
           fontFamily: F.marketing,
-          fontWeight: 600,
+          fontWeight: 500,
           fontSize: base * 0.06,
           color: accent ? ACCENT : C.text,
           letterSpacing: "-0.02em",
@@ -370,7 +370,7 @@ const SceneBrigitte: React.FC = () => {
         <div
           style={{
             fontFamily: F.marketing,
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: base * 0.05,
             color: C.text,
             opacity: labelIn,
@@ -444,7 +444,7 @@ const SceneData: React.FC = () => {
           <span
             style={{
               fontFamily: F.marketing,
-              fontWeight: 700,
+              fontWeight: 500,
               fontSize: base * 0.1,
               color: C.text,
               fontVariantNumeric: "tabular-nums",
@@ -453,14 +453,14 @@ const SceneData: React.FC = () => {
           >
             {count.toLocaleString("en-US")}+
           </span>
-          <span style={{ fontFamily: F.marketing, fontWeight: 600, fontSize: base * 0.04, color: C.textMuted }}>
+          <span style={{ fontFamily: F.marketing, fontWeight: 500, fontSize: base * 0.04, color: C.textMuted }}>
             bakeries
           </span>
         </div>
         <div
           style={{
             fontFamily: F.primary,
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: base * 0.026,
             color: ACCENT,
             letterSpacing: "0.02em",
@@ -555,7 +555,7 @@ const SceneCalls: React.FC = () => {
               <span
                 style={{
                   fontFamily: F.marketing,
-                  fontWeight: 700,
+                  fontWeight: 500,
                   fontSize: base * 0.16,
                   color: i === 2 ? ACCENT : C.text,
                   fontVariantNumeric: "tabular-nums",
@@ -623,7 +623,7 @@ const ScenePayoff: React.FC = () => {
         <div
           style={{
             fontFamily: F.marketing,
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: base * 0.05,
             color: C.text,
             opacity: titleIn,
@@ -669,7 +669,7 @@ const ScenePayoff: React.FC = () => {
               left: "62%",
               top: "20%",
               fontFamily: F.primary,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: base * 0.026,
               color: ACCENT,
               opacity: parisIn,
@@ -680,7 +680,7 @@ const ScenePayoff: React.FC = () => {
         </div>
 
         <div style={{ display: "flex", alignItems: "baseline", gap: base * 0.014, opacity: titleIn }}>
-          <span style={{ fontFamily: F.marketing, fontWeight: 700, fontSize: base * 0.12, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}>
+          <span style={{ fontFamily: F.marketing, fontWeight: 500, fontSize: base * 0.12, color: C.text, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}>
             €{avg}
           </span>
           <span style={{ fontFamily: F.primary, fontWeight: 500, fontSize: base * 0.032, color: C.textMuted }}>
@@ -750,7 +750,7 @@ const SceneCTA: React.FC = () => {
         <div
           style={{
             fontFamily: F.marketing,
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: base * 0.08,
             color: C.text,
             letterSpacing: "-0.025em",
@@ -768,7 +768,7 @@ const SceneCTA: React.FC = () => {
             borderRadius: 999,
             padding: `${base * 0.02}px ${base * 0.05}px`,
             fontFamily: F.primary,
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: base * 0.044,
             color: ACCENT,
             opacity: pillIn,

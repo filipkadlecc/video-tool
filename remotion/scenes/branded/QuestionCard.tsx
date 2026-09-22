@@ -89,7 +89,7 @@ export default function QuestionCard({
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: questionSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.02em",

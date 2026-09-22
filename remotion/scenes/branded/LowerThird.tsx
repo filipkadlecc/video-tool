@@ -125,7 +125,7 @@ const PersonCard: React.FC<PersonCardProps> = ({ name, title, align, entranceDel
               opacity: nameOpacity,
               transform: `translateX(${nameX}px)`,
               fontSize: base * 0.030,
-              fontWeight: 600,
+              fontWeight: 500,
               color: BRAND.colors.text,
               letterSpacing: "0.01em",
               lineHeight: 1,

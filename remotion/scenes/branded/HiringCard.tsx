@@ -77,7 +77,7 @@ export default function HiringCard() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headSize,
               color: BRAND.colors.text,
               lineHeight: 1.02,
@@ -159,7 +159,7 @@ export default function HiringCard() {
                 borderRadius: 999,
                 padding: `${base * 0.016}px ${base * 0.032}px`,
                 fontFamily: BRAND.fonts.primary,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: roleSize,
                 color: ACCENT,
               }}

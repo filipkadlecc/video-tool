@@ -61,7 +61,7 @@ export default function Years() {
                 transform: `translate(calc(-50% + ${offset}px), -50%)`,
                 whiteSpace: "nowrap",
                 fontFamily: "'GT Walsheim', sans-serif",
-                fontWeight: 700,
+                fontWeight: 500,
                 fontSize: height * 0.28,
                 lineHeight: 1,
                 color: "#FFFFFF",

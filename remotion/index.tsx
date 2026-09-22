@@ -16,10 +16,11 @@ import { RemotionRoot } from "./Root";
 loadInter("normal", { weights: ["400", "500", "600", "700", "900"] });
 
 const gtWeights: { weight: string; file: string }[] = [
+  { weight: "300", file: "GT-Walsheim-Light.ttf" },
   { weight: "400", file: "GT-Walsheim-Regular.ttf" },
   { weight: "500", file: "GT-Walsheim-Medium.ttf" },
-  { weight: "700", file: "GT-Walsheim-Bold.ttf" },
-  { weight: "900", file: "GT-Walsheim-Black.ttf" },
+  // 600-900 → Medium; see the note in remotion/theme.ts.
+  { weight: "600 900", file: "GT-Walsheim-Medium.ttf" },
 ];
 const gtHandle = delayRender("Loading GT Walsheim");
 Promise.all(

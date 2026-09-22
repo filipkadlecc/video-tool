@@ -945,7 +945,7 @@ export function applyDocTool(
             // Inter and GT Walsheim are the only licensed faces here.
             fontFamily: "Inter, sans-serif",
             fontSize: Math.round(num(input, "fontSize") ?? doc.size.height * 0.09),
-            fontWeight: 700,
+            fontWeight: 500,
             color: str(input, "color") ?? "#F4F4F5",
             align: (str(input, "align") as TextStyle["align"]) ?? "center",
           },
@@ -1067,7 +1067,7 @@ export function applyDocTool(
           style: {
             fontFamily: "Inter, sans-serif",
             fontSize: Math.round(num(input, "fontSize") ?? doc.size.height * 0.06),
-            fontWeight: 700,
+            fontWeight: 500,
             color: str(input, "color") ?? "#F4F4F5",
             align: "center",
           },

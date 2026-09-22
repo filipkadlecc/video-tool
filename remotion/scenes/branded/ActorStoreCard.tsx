@@ -93,7 +93,7 @@ export default function ActorStoreCard() {
                 <div
                   style={{
                     fontFamily: BRAND.fonts.marketing,
-                    fontWeight: 600,
+                    fontWeight: 500,
                     fontSize: titleSize,
                     color: BRAND.colors.text,
                     letterSpacing: "-0.01em",
@@ -150,7 +150,7 @@ export default function ActorStoreCard() {
                 alignItems: "center",
                 justifyContent: "center",
                 fontFamily: BRAND.fonts.marketing,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: base * 0.02,
                 color: ACCENT,
                 flexShrink: 0,

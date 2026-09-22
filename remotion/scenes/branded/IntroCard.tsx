@@ -65,7 +65,7 @@ export default function IntroCard() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headlineSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.025em",

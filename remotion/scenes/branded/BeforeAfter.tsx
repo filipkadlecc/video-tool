@@ -66,7 +66,7 @@ function ComparisonCard({ state, label, rows, progress, base }: ComparisonCardPr
         style={{
           alignSelf: "flex-start",
           fontFamily: BRAND.fonts.primary,
-          fontWeight: 600,
+          fontWeight: 500,
           fontSize: base * 0.022,
           color: labelColor,
           letterSpacing: "0.12em",
@@ -136,7 +136,7 @@ export default function BeforeAfter() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headlineSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.02em",

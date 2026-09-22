@@ -34,6 +34,9 @@ export const holdFrame = 45;
 
 const SETTLE = 30;
 const STAGGER = 5;
+// Scale each word springs up FROM. ELASTIC peaks at p=1.2346, so this range
+// overshoots to 0.6 + 0.4 * 1.2346 = 1.094 — a ~9% pop — before settling to 1.
+const POP_FROM = 0.6;
 
 // Figma: Titles 4 and 5 (2546:726 orange at 143.145px, 2546:774 blue at
 // 112.763px). The box padding is proportional to type size in both —
@@ -59,10 +62,20 @@ export default function ShortFunkyTitle() {
       <div style={plane.outer}>
         <div style={plane.inner}>
           {WORDS.map((w, i) => {
-            // Words land one after another, each arriving sharp at full size
-            // rather than fading or blurring up.
-            const p = frame >= SETTLE ? 1 : springIn(frame, vfps, i * STAGGER, "SNAPPY");
-            const scale = 0.9 + 0.1 * p;
+            // Words POP in one after another, overshooting past full size and
+            // settling back. Still no fade and no blur — they arrive sharp, the
+            // scale is the whole effect. SNAPPY was doing this too, but its
+            // p=1.0598 peak over a 0.9..1 range came to a 0.6% overshoot, which
+            // is not visible; ELASTIC over 0.6..1 reads as an actual pop.
+            //
+            // The last word is delayed 2*STAGGER=10 and ELASTIC takes ~25
+            // frames to land, i.e. frame 35, past SETTLE. Harmless: by its own
+            // frame 20 the spring is within 0.5% of 1, so the clamp is a <0.2%
+            // step on scale. The clamp has to STAY, though — scripts/figma-diff.ts
+            // renders holdFrame and holdFrame+3 and requires the two PNGs to be
+            // byte-identical to prove the entrance has settled.
+            const p = frame >= SETTLE ? 1 : springIn(frame, vfps, i * STAGGER, "ELASTIC");
+            const scale = POP_FROM + (1 - POP_FROM) * p;
             return (
               <div
                 key={`${w.value}-${i}`}

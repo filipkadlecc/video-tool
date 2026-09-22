@@ -111,7 +111,7 @@ export default function EndCard() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headlineSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.025em",
@@ -139,7 +139,7 @@ export default function EndCard() {
                 borderRadius: 999,
                 padding: `${base * 0.018}px ${base * 0.04}px`,
                 fontFamily: BRAND.fonts.primary,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: ctaSize,
                 color: ACCENT,
                 letterSpacing: "-0.005em",
@@ -175,7 +175,7 @@ export default function EndCard() {
             <div
               style={{
                 fontFamily: BRAND.fonts.primary,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: promoSize,
                 color: BRAND.colors.text,
                 letterSpacing: "0.06em",
@@ -189,7 +189,7 @@ export default function EndCard() {
                   padding: `${base * 0.003}px ${base * 0.01}px`,
                   borderRadius: base * 0.006,
                   fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-                  fontWeight: 600,
+                  fontWeight: 500,
                 }}
               >
                 {PROMO_CODE}

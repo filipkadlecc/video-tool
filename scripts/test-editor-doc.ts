@@ -1359,5 +1359,60 @@ head("captions land inside the platform safe area on a vertical canvas");
   a(h.maxWordsPerPage === 6, "including its paging");
 }
 
+head("nothing the app renders asks for a weight above Medium");
+{
+  // GT Walsheim ships in three weights here — Light, Regular, Medium. Bold and
+  // Black are gone, and 600-900 resolve to Medium, so a heavier number in the
+  // source is a lie rather than an effect. This is the check that keeps it true:
+  // 60 weights across 22 library scenes had to be brought down once already.
+  const fs = require("fs") as typeof import("fs");
+  const path = require("path") as typeof import("path");
+  const BANNED = /fontWeight:\s*(600|700|800|900)\b|fontWeight:\s*["']bold["']/;
+
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full, out);
+      else if (/\.(ts|tsx)$/.test(e.name)) out.push(full);
+    }
+    return out;
+  };
+
+  // Everything the app PRODUCES: the snippet library, the prompts that steer
+  // generated scenes, and the defaults the editor writes into a document.
+  // Deliberately NOT the app's own UI chrome (components/, app/) — that is
+  // interface, not output — nor the scenes that draw a simulated chat or
+  // terminal in a non-brand face, where bold is part of what is depicted.
+  const targets = [
+    ...walk("remotion/scenes/branded"),
+    ...walk("lib/prompts"),
+    "lib/captions-preset.ts",
+    "lib/editor-agent.ts",
+  ];
+
+  const offenders: string[] = [];
+  for (const f of targets) {
+    const src = fs.readFileSync(f, "utf-8");
+    src.split("\n").forEach((line, i) => {
+      if (BANNED.test(line)) offenders.push(`${f}:${i + 1}`);
+    });
+  }
+  a(offenders.length === 0, `no weight above 500 in generated output${offenders.length ? " (found " + offenders.slice(0, 5).join(", ") + ")" : ""}`);
+
+  // The stack must ship exactly three real faces.
+  const theme = fs.readFileSync("remotion/theme.ts", "utf-8");
+  a(!/GT-Walsheim-Bold/.test(theme), "Bold is no longer served");
+  a(!/GT-Walsheim-Black/.test(theme), "Black is no longer served");
+  a(/GT-Walsheim-Light/.test(theme) && /GT-Walsheim-Regular/.test(theme) && /GT-Walsheim-Medium/.test(theme),
+    "Light, Regular and Medium all are");
+  // ...and the heavier numbers still resolve, or eleven stored projects would
+  // render a synthesised faux-bold instead of a real weight.
+  a(/font-weight: 600 900/.test(theme), "600-900 still resolve, to Medium, so older projects do not fake it");
+
+  // The rule has to reach the model too, not just the library.
+  const base = fs.readFileSync("lib/prompts/base.ts", "utf-8");
+  a(/exactly THREE weights/.test(base), "and the prompt tells the model the same thing");
+}
+
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
 if (fail) process.exit(1);

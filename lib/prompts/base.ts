@@ -17,6 +17,7 @@ import { BRAND } from "@/lib/brand";
 \`\`\`
 Use \`BRAND.colors.*\` and \`BRAND.fonts.*\` instead of hardcoded hex / font names. The COLOR SYSTEM and APIFY LAYOUT sections below define which tokens to use where.
 
+
 ---
 
 ## Output Structure
@@ -353,6 +354,7 @@ DO NOT do any of the following. If you catch yourself starting any of these, swi
 13. **Do NOT omit \`fontFamily\` on any text element.** The renderer's default is serif/Times. If a single text node forgets \`fontFamily\`, the exported MP4 will show it in serif while the preview looks correct — invisible-until-export bug. Every \`<div>\`, \`<span>\`, or styled element with text content needs \`fontFamily: "'GT Walsheim', Inter, sans-serif"\` (the default for ~90% of text) or \`fontFamily: "Inter, sans-serif"\` (only for subtitles and long body copy).
 14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, use slow camera motion (a continuous slow zoom or pan) on already-visible content — NOT a black hold. If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
 15. **ABSOLUTE RULE — NEVER animate a Gaussian / focus-pull blur on a reveal.** Elements must arrive SHARP. Do NOT ramp \`filter: blur()\` (or \`backdrop-filter: blur()\`) from a positive value down to 0 as anything enters, and NEVER put an animated blur on text or on a hero as it appears — that split-second fuzziness is explicitly banned and keeps regressing. Reveals combine opacity + translate + scale (+ rotate) ONLY. This OVERRIDES every style file (default, kinetic, editorial, cinematic) and every few-shot example: if any guidance or snippet shows \`blur(Npx → 0)\` on an entrance, drop the blur term. The ONLY permitted blur is a STATIC (non-animated) \`filter: blur\` on a purely decorative BACKGROUND layer for depth-of-field — it must never touch foreground text and must never animate in.
+16. **ABSOLUTE RULE — GT Walsheim has exactly THREE weights here: 300 (Light), 400 (Regular), 500 (Medium).** Never set \`fontWeight\` above 500, and never use the keyword \`bold\` as a weight. 600, 700, 800 and 900 are not shipped; asking for one resolves to Medium anyway, so a heavier number achieves nothing except a lie in the source. Weight is NOT how you make something dominant — size, colour and space are. A hero headline is Medium at 8-12% of canvas height, not Bold at 5%. Body copy and long text are Regular; Light is for a secondary clause set against a Medium one (as in "**Watch the full video** on our channel"). This overrides every style file and every example: if a snippet anywhere shows a weight above 500, use 500.
 
 ---
 
@@ -391,7 +393,7 @@ const KineticIntro: React.FC = () => {
       <div style={{
         position: "absolute", left: "6%", top: "16%",
         display: "flex",
-        fontSize: 280, fontWeight: 600, color: "#fff", lineHeight: 0.92, letterSpacing: "-0.04em",
+        fontSize: 280, fontWeight: 500, color: "#fff", lineHeight: 0.92, letterSpacing: "-0.04em",
       }}>
         {HERO.split("").map((ch, i) => {
           const charIn = spring({ frame, fps, delay: 4 + i * 2, config: SNAPPY });
@@ -557,7 +559,7 @@ Opaque dark surface + orange outline + orange text — no translucent fill.
   borderRadius: 16,
   padding: "20px 56px",
   fontSize: 42,
-  fontWeight: 600,
+  fontWeight: 500,
   color: COLORS.orange,
   letterSpacing: "0.15em",
 }
@@ -574,7 +576,7 @@ Both states sit on the backdrop, so both fills are opaque; the active state read
   borderRadius: 40,
   padding: "16px 36px",
   fontSize: 28,
-  fontWeight: 600,
+  fontWeight: 500,
   color: isActive ? COLORS.orange : COLORS.textMuted,
 }
 \`\`\`
@@ -596,13 +598,13 @@ NOTE: the low-alpha track fills below are acceptable ONLY because these bars liv
 // Row container
 { display: "flex", alignItems: "center", gap: 28 }
 // Label
-{ width: 160, fontSize: 36, fontWeight: 600, color: fmt.color, textAlign: "right" }
+{ width: 160, fontSize: 36, fontWeight: 500, color: fmt.color, textAlign: "right" }
 // Track
 { flex: 1, height: 52, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 26, overflow: "hidden" }
 // Fill bar
 { width: \`\${value * progress}%\`, height: "100%", backgroundColor: fmt.color, borderRadius: 26 }
 // Value label
-{ width: 100, fontSize: 36, fontWeight: 600, color: COLORS.textSubtle }
+{ width: 100, fontSize: 36, fontWeight: 500, color: COLORS.textSubtle }
 \`\`\`
 
 ### Skeleton / Placeholder Lines (for mockup content)

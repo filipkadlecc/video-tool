@@ -191,6 +191,42 @@
     }
   }
 
+  /**
+   * Overshooting scale-in for the funky titles. `popIn` above only travels
+   * 94% -> 100% with nothing beyond the target, so it reads as a gentle grow,
+   * not a pop — and it is shared with the end-card/outro buttons, which want
+   * exactly that quiet version, so this is a second helper rather than a change
+   * to that one.
+   *
+   * The word grows from NOTHING, overshoots to 115% and settles back to full
+   * size: 0% -> 115% -> 100%, keyed on frames 0 / 6 / 11 at 25fps, hence the
+   * seconds. Bezier on every key so the rise eases rather than running linear.
+   *
+   * The last key is exactly `base`, so the word is settled and stays settled
+   * for the rest of the comp.
+   *
+   * Starting at 0 is safe for the box: its width comes from an expression on
+   * the text layer's sourceRectAtTime, which is the pre-transform text bounds
+   * and so is unaffected by scaling either layer.
+   */
+  var ELASTIC_POP = [
+    [0.00, 0.000],   // frame 0  — nothing
+    [0.24, 1.150],   // frame 6  — peak, 15% past full size
+    [0.44, 1.000]    // frame 11 — settled
+  ];
+
+  function elasticPop(layer, startSec) {
+    var p = xf(layer, "ADBE Scale");
+    var base = p.value;
+    for (var i = 0; i < ELASTIC_POP.length; i++) {
+      var at = ELASTIC_POP[i][0], m = ELASTIC_POP[i][1];
+      p.setValueAtTime(startSec + at, [base[0] * m, base[1] * m]);
+    }
+    for (var k = 1; k <= p.numKeys; k++) {
+      p.setInterpolationTypeAtKey(k, KeyframeInterpolationType.BEZIER, KeyframeInterpolationType.BEZIER);
+    }
+  }
+
   function controlsLayer(comp) {
     var n = comp.layers.addNull();
     n.name = "Controls";
@@ -401,8 +437,9 @@
       made[i] = funkyWord(comp, w.label, w.value, size, accent, w.cx, w.cy, w.rot);
     }
     for (var j = 0; j < made.length; j++) {
-      popIn(made[j].box, j * 0.12, 0.35);
-      popIn(made[j].text, j * 0.12, 0.35);
+      // Box and text get the same curve so the box stays locked around the word.
+      elasticPop(made[j].box, j * 0.20);
+      elasticPop(made[j].text, j * 0.20);
     }
 
     comp.motionGraphicsTemplateName = comp.name;

@@ -69,7 +69,7 @@ export default function PathReveal() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: titleSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.03em",

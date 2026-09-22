@@ -279,7 +279,7 @@ const BannerOverlay: React.FC<{
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 700,
+              fontWeight: 500,
               fontSize: base * 0.045,
               color: BRAND.colors.text,
               letterSpacing: "-0.02em",
@@ -344,7 +344,7 @@ const EndCardOverlay: React.FC<{ title: string; subtitle?: string; url?: string 
       <div
         style={{
           fontFamily: "Inter, sans-serif",
-          fontWeight: 700,
+          fontWeight: 500,
           fontSize: base * 0.072,
           color: "#FFFFFF",
           letterSpacing: "-0.02em",

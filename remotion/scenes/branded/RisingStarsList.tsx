@@ -84,7 +84,7 @@ export default function RisingStarsList() {
             <div
               style={{
                 fontFamily: BRAND.fonts.primary,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: eyebrowSize,
                 color: ACCENT,
                 letterSpacing: "0.12em",
@@ -98,7 +98,7 @@ export default function RisingStarsList() {
             <div
               style={{
                 fontFamily: BRAND.fonts.marketing,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: headlineSize,
                 color: BRAND.colors.text,
                 letterSpacing: "-0.02em",
@@ -155,7 +155,7 @@ export default function RisingStarsList() {
                       alignItems: "center",
                       justifyContent: "center",
                       fontFamily: BRAND.fonts.marketing,
-                      fontWeight: 600,
+                      fontWeight: 500,
                       fontSize: rankSize,
                       color: ACCENT,
                       flexShrink: 0,
@@ -167,7 +167,7 @@ export default function RisingStarsList() {
                     <div
                       style={{
                         fontFamily: BRAND.fonts.primary,
-                        fontWeight: 600,
+                        fontWeight: 500,
                         fontSize: nameSize,
                         color: BRAND.colors.text,
                         letterSpacing: "-0.005em",

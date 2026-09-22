@@ -97,7 +97,7 @@ export default function AccountCTA() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: base * 0.032,
               color: BRAND.colors.text,
               letterSpacing: "-0.02em",
@@ -140,7 +140,7 @@ export default function AccountCTA() {
               <div
                 style={{
                   fontFamily: BRAND.fonts.primary,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   fontSize: base * 0.02,
                   color: BRAND.colors.textMuted,
                   letterSpacing: "0.02em",
@@ -168,7 +168,7 @@ export default function AccountCTA() {
               <span
                 style={{
                   fontFamily: BRAND.fonts.primary,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   fontSize: base * 0.022,
                   color: BRAND.colors.bg,
                   letterSpacing: "-0.005em",
@@ -179,7 +179,7 @@ export default function AccountCTA() {
               <span
                 style={{
                   fontSize: base * 0.022,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: BRAND.colors.bg,
                   display: "inline-block",
                   transform: `translateX(${arrowX}px)`,

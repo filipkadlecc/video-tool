@@ -73,7 +73,7 @@ export default function ChartReveal() {
           <div
             style={{
               fontFamily: BRAND.fonts.primary,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: eyebrowSize,
               color: ACCENT,
               letterSpacing: "0.12em",
@@ -86,7 +86,7 @@ export default function ChartReveal() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headSize,
               color: BRAND.colors.text,
               lineHeight: 1.05,

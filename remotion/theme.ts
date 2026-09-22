@@ -27,17 +27,21 @@ export const BRAND_FONT_FACE_CSS = `
   font-style: normal;
   font-display: block;
 }
+/*
+ * Light, Regular and Medium are the ONLY weights this project sets. Bold and
+ * Black are no longer shipped.
+ *
+ * 600-900 still resolve, to the Medium file: eleven stored projects contain
+ * scene code asking for 700, and with no face at that weight the browser
+ * synthesises a faux-bold — a smeared Medium, worse than either real weight.
+ * Pointing them at Medium means old work renders an allowed weight instead of
+ * a fake one. New code should ask for 500; scripts/test-editor-doc.ts fails the
+ * build if a library scene or a prompt asks for anything heavier.
+ */
 @font-face {
   font-family: 'GT Walsheim';
-  src: url('/fonts/GT-Walsheim-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: block;
-}
-@font-face {
-  font-family: 'GT Walsheim';
-  src: url('/fonts/GT-Walsheim-Black.ttf') format('truetype');
-  font-weight: 900;
+  src: url('/fonts/GT-Walsheim-Medium.ttf') format('truetype');
+  font-weight: 600 900;
   font-style: normal;
   font-display: block;
 }

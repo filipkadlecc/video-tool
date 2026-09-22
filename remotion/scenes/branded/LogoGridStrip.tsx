@@ -67,7 +67,7 @@ export default function LogoGridStrip() {
             <div
               style={{
                 fontFamily: BRAND.fonts.primary,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: eyebrowSize,
                 color: ACCENT,
                 letterSpacing: "0.14em",
@@ -80,7 +80,7 @@ export default function LogoGridStrip() {
             <div
               style={{
                 fontFamily: BRAND.fonts.marketing,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: headlineSize,
                 color: BRAND.colors.text,
                 letterSpacing: "-0.02em",

@@ -73,7 +73,7 @@ export default function SymbolBug() {
           <div
             style={{
               fontFamily: BRAND.fonts.primary,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: base * 0.022,
               color: BRAND.colors.text,
               letterSpacing: "0.02em",

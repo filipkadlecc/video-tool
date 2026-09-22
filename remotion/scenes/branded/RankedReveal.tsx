@@ -140,7 +140,7 @@ function ThreeXBadge({ progress }: { progress: number }) {
         background: C.blue,
         color: C.white,
         fontSize: 44,
-        fontWeight: 800,
+        fontWeight: 500,
         padding: "10px 20px",
         borderRadius: 16,
         fontFamily: "Inter, sans-serif",
@@ -294,7 +294,7 @@ function ChannelCard({ index }: { index: number }) {
           style={{
             fontSize: 42,
             color: highlighted ? C.white : C.muted,
-            fontWeight: 700,
+            fontWeight: 500,
             fontFamily: "Inter, sans-serif",
             letterSpacing: "-0.01em",
           }}
@@ -306,7 +306,7 @@ function ChannelCard({ index }: { index: number }) {
             style={{
               fontSize: 22,
               color: C.blue,
-              fontWeight: 600,
+              fontWeight: 500,
               fontFamily: "Inter, sans-serif",
               letterSpacing: "0.05em",
               textTransform: "uppercase",
@@ -451,7 +451,7 @@ function Phase2() {
           style={{
             color: C.blue,
             fontSize: 52,
-            fontWeight: 800,
+            fontWeight: 500,
             fontFamily: "Inter, sans-serif",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
@@ -523,7 +523,7 @@ function Phase3() {
           style={{
             fontSize: 58,
             color: C.white,
-            fontWeight: 700,
+            fontWeight: 500,
             fontFamily: "Inter, sans-serif",
             letterSpacing: "-0.01em",
             opacity: cueProg,
@@ -599,7 +599,7 @@ function Phase3() {
           borderRadius: 16,
           color: C.red,
           fontSize: 36,
-          fontWeight: 700,
+          fontWeight: 500,
           fontFamily: "Inter, sans-serif",
           letterSpacing: "0.04em",
           textTransform: "uppercase",
@@ -662,8 +662,8 @@ function Phase4() {
         }}
       >
         <Img src={staticFile("assets/apify/Apify Logo white Wordmark.svg")} style={{ height: 72 }} />
-        <div style={{ fontSize: 200, fontWeight: 900, color: C.blue, lineHeight: 1, fontFamily: "Inter, sans-serif" }}>1</div>
-        <div style={{ fontSize: 38, color: C.white, fontWeight: 600, fontFamily: "Inter, sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+        <div style={{ fontSize: 200, fontWeight: 500, color: C.blue, lineHeight: 1, fontFamily: "Inter, sans-serif" }}>1</div>
+        <div style={{ fontSize: 38, color: C.white, fontWeight: 500, fontFamily: "Inter, sans-serif", letterSpacing: "0.04em", textTransform: "uppercase" }}>
           one actor
         </div>
       </div>
@@ -745,7 +745,7 @@ function Phase4() {
         }}
       >
         <ClockIcon size={180} color={C.amber} />
-        <div style={{ fontSize: 100, fontWeight: 800, color: C.amber, lineHeight: 1, fontFamily: "Inter, sans-serif", letterSpacing: "-0.02em" }}>
+        <div style={{ fontSize: 100, fontWeight: 500, color: C.amber, lineHeight: 1, fontFamily: "Inter, sans-serif", letterSpacing: "-0.02em" }}>
           ≈ 20 min
         </div>
       </div>
@@ -782,7 +782,7 @@ function Phase5() {
           gap: 26,
         }}
       >
-        <div style={{ fontSize: 26, color: C.muted, fontWeight: 600, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14, opacity: spring({ frame, fps, delay: 2, config: SPR_BASE }) }}>
+        <div style={{ fontSize: 26, color: C.muted, fontWeight: 500, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14, opacity: spring({ frame, fps, delay: 2, config: SPR_BASE }) }}>
           channels you care about
         </div>
         {P5_CHIPS.map((label, i) => {
@@ -797,7 +797,7 @@ function Phase5() {
                 padding: "22px 38px",
                 color: C.white,
                 fontSize: 36,
-                fontWeight: 600,
+                fontWeight: 500,
                 fontFamily: "Inter, sans-serif",
                 opacity: p,
                 transform: `translateX(${interpolate(p, [0, 1], [-30, 0])}px) scale(${interpolate(p, [0, 1], [0.9, 1])})`,
@@ -835,7 +835,7 @@ function Phase5() {
         }}
       >
         <Img src={staticFile("assets/apify/Apify Logo white Wordmark.svg")} style={{ height: 44, marginBottom: 8 }} />
-        <div style={{ fontSize: 24, color: C.muted, fontWeight: 600, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <div style={{ fontSize: 24, color: C.muted, fontWeight: 500, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase" }}>
           processing
         </div>
       </div>
@@ -861,7 +861,7 @@ function Phase5() {
           opacity: spring({ frame, fps, delay: 40, config: SPR_BASE }),
         }}
       >
-        <div style={{ fontSize: 26, color: C.muted, fontWeight: 600, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+        <div style={{ fontSize: 26, color: C.muted, fontWeight: 500, fontFamily: "Inter, sans-serif", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
           ranked answers
         </div>
         {[0, 1, 2, 3].map((i) => {
@@ -891,7 +891,7 @@ function Phase5() {
           right: 60 + colW - 100 - 70,
           top: SAFE.h / 2 - 420,
           fontSize: 280,
-          fontWeight: 900,
+          fontWeight: 500,
           color: C.blue,
           fontFamily: "Inter, sans-serif",
           lineHeight: 1,
@@ -950,7 +950,7 @@ function Phase6() {
           style={{
             color: C.white,
             fontSize: 64,
-            fontWeight: 800,
+            fontWeight: 500,
             fontFamily: "Inter, sans-serif",
             letterSpacing: "-0.015em",
           }}
@@ -1010,7 +1010,7 @@ function Phase6() {
                   justifyContent: "center",
                   color: C.white,
                   fontSize: 38,
-                  fontWeight: 800,
+                  fontWeight: 500,
                   fontFamily: "Inter, sans-serif",
                   flexShrink: 0,
                 }}
@@ -1024,7 +1024,7 @@ function Phase6() {
                   flex: 1,
                   fontSize: 40,
                   color: C.white,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   fontFamily: "Inter, sans-serif",
                   letterSpacing: "-0.01em",
                 }}
@@ -1063,7 +1063,7 @@ function Phase6() {
                   width: 120,
                   textAlign: "right",
                   fontSize: 56,
-                  fontWeight: 800,
+                  fontWeight: 500,
                   color: isWinner && winnerSettle > 0.3 ? C.green : C.white,
                   fontFamily: "Inter, sans-serif",
                   letterSpacing: "-0.02em",
@@ -1093,7 +1093,7 @@ function Phase6() {
           style={{
             color: cueProg > 0.5 ? C.blue : C.muted,
             fontSize: 28,
-            fontWeight: 600,
+            fontWeight: 500,
             fontFamily: "Inter, sans-serif",
             letterSpacing: "0.06em",
             textTransform: "uppercase",

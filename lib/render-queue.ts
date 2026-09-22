@@ -196,12 +196,14 @@ loadInter("normal", { weights: ["400", "500", "600", "700", "900"] });
 // GT Walsheim is local-licensed; load via the standard FontFace API behind
 // delayRender so the renderer waits for it too.
 import { delayRender, continueRender, staticFile } from "remotion";
+// Light, Regular and Medium only. 600-900 resolve to Medium so scene code
+// stored in older projects renders a real allowed weight rather than a
+// synthesised faux-bold — see the note in remotion/theme.ts.
 const __gtWeights = [
   { weight: "300", file: "GT-Walsheim-Light.ttf" },
   { weight: "400", file: "GT-Walsheim-Regular.ttf" },
   { weight: "500", file: "GT-Walsheim-Medium.ttf" },
-  { weight: "700", file: "GT-Walsheim-Bold.ttf" },
-  { weight: "900", file: "GT-Walsheim-Black.ttf" },
+  { weight: "600 900", file: "GT-Walsheim-Medium.ttf" },
 ];
 const __gtHandle = delayRender("Loading GT Walsheim");
 Promise.all(

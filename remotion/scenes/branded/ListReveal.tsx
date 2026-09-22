@@ -88,7 +88,7 @@ export default function ListReveal() {
           <div
             style={{
               fontFamily: BRAND.fonts.marketing,
-              fontWeight: 600,
+              fontWeight: 500,
               fontSize: headlineSize,
               color: BRAND.colors.text,
               letterSpacing: "-0.025em",
@@ -156,7 +156,7 @@ export default function ListReveal() {
                     <div
                       style={{
                         fontFamily: BRAND.fonts.primary,
-                        fontWeight: 600,
+                        fontWeight: 500,
                         fontSize: itemSize,
                         color: BRAND.colors.text,
                         letterSpacing: "-0.005em",
