@@ -1,0 +1,22 @@
+---
+voice: af_heart
+speed: 1.0
+---
+
+# Example VO script — npx tsx scripts/vo.ts scripts/vo/example.vo
+
+## Cold open
+
+Every morning in Prague, a scraper visits forty bakeries.
+
+[pause 0.4]
+
+It records one number: what a classic baguette costs today.
+
+## The turn
+
+[voice=am_michael] Six months later, that number tells a story nobody expected.
+
+[pause 0.6]
+
+[speed=0.92] The Baguette Index is live, and it is built entirely on Apify.
