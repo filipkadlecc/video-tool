@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="900" height="990.925" viewBox="0 0 900 990.925" fill="none">
+<!-- Apify "Geometric shapes" (Figma 2704:3344), composed from its three vectors.
+     Each is centred on its own point, rotated -10.77deg and flipped vertically,
+     exactly as the component nests them. Ids are namespaced per piece so the
+     pattern fills cannot collide. -->
+<g transform="translate(422.8935 323.0525) rotate(-10.77) scale(1 -1) translate(-348.7085 -147.6175)">
+<path id="s0_Vector" d="M696.909 294.27L0.461082 104.253L199.39 0.887358L696.909 294.27Z" fill="url(#s0_pattern0_0_10)" stroke="#F86606" stroke-width="2" stroke-miterlimit="10" stroke-linejoin="bevel"/>
+<defs>
+<pattern id="s0_pattern0_0_10" patternUnits="userSpaceOnUse" patternTransform="matrix(11.2629 0 0 11.2629 0.461082 0.887358)" preserveAspectRatio="none" viewBox="0 0 6 6" width="1" height="1">
+<g id="s0_pattern0_0_10_inner">
+<circle id="s0_Ellipse 15020" cx="1" cy="1" r="1" fill="#F86606"/>
+</g>
+</pattern></defs>
+</g>
+<g transform="translate(370.0765 664.7425) rotate(-10.77) scale(1 -1) translate(-233.5765 -283.446)">
+<path id="s1_Vector" d="M200.638 462.577L0.771986 566.004L466.286 0.635639L200.638 462.577Z" stroke="#F86606" stroke-width="2" stroke-miterlimit="10" stroke-linejoin="bevel"/>
+</g>
+<g transform="translate(563.663 531.1825) rotate(-10.77) scale(1 -1) translate(-249.726 -378.4055)">
+<path id="s2_Vector" d="M0.866296 462.441L498.495 755.95L267.235 0.499531L0.866296 462.441Z" stroke="#F86606" stroke-width="2" stroke-miterlimit="10" stroke-linejoin="bevel"/>
+</g>
+</svg>
