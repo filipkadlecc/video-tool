@@ -254,6 +254,15 @@ registerRoot(Root);
 
 export type RenderCodec = "h264" | "prores" | "prores-xq" | "uncompressed" | "qtrle" | "hevc-alpha";
 
+/**
+ * Codecs exported with an alpha channel, and so the ones whose render has to
+ * have its opaque backgrounds taken out first. Named because the render and the
+ * caller that prepares a document both have to agree on the same list.
+ */
+export function codecCarriesAlpha(codec: RenderCodec): boolean {
+  return codec === "prores" || codec === "prores-xq" || codec === "qtrle" || codec === "hevc-alpha";
+}
+
 // Escape an absolute path for use inside an ffmpeg filtergraph value (e.g. lut3d).
 // Single-quote so spaces/colons are literal; escape embedded backslashes and quotes.
 function escapeForFiltergraph(p: string): string {
@@ -290,7 +299,7 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
 
     try {
       let fixedCode = fixImportPaths(code);
-      if (codec === "prores" || codec === "prores-xq" || codec === "qtrle" || codec === "hevc-alpha") {
+      if (codecCarriesAlpha(codec)) {
         fixedCode = stripBackgroundsForTransparency(fixedCode);
       }
       fs.writeFileSync(scenePath, fixedCode, "utf-8");
