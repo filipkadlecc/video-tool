@@ -14,7 +14,7 @@ import type { AnimationPreset } from "@/lib/editor-effects";
 import {
   addItem, addTrack, cloneItem, docDuration, duplicateItem, findItem, getAsset, hasRoomAt,
   makeId, moveItem, moveItemToTrack, removeItem, removeTrack, rippleRemoveItem,
-  snapTargets, splitItem, trackWithRoomAt, trimItem, updateItem,
+  itemLabel, renameItem, sceneNumbers, snapTargets, splitItem, trackWithRoomAt, trimItem, updateItem,
   type Asset, type EditorDoc, type EditorItem, type Track,
 } from "@/lib/editor-doc";
 import { captionItem } from "@/lib/captions-preset";
@@ -143,21 +143,6 @@ const ITEM_ICONS: Record<string, string> = {
   text: "layers", solid: "layers", captions: "layers", scene: "layers",
 };
 
-/**
- * What a block is called on the timeline, most specific first.
- *
- * Scene blocks used to fall through to their TYPE, so a document built from the
- * snippet library showed a row of identical "scene" labels with no way to tell
- * one from another.
- */
-function itemLabel(item: EditorItem, assetName?: string): string {
-  if (item.name) return item.name;
-  if (item.type === "text") return (item as { text: string }).text;
-  if (item.type === "scene" && item.snippet) return item.snippet.id;
-  if (item.type === "captions") return "Subtitles";
-  return assetName ?? item.type;
-}
-
 export default function DocTimeline({
   doc, onChange, onSeek, onScrubStart, onTogglePlay,
   mediaFiles, mediaDurations, projectId, selectedIds, onSelectionChange,
@@ -168,6 +153,26 @@ export default function DocTimeline({
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [snapOn, setSnapOn] = useState(true);
+  /** The block whose name is being typed over, straight on the timeline. */
+  const [renaming, setRenaming] = useState<string | null>(null);
+  /** Set by Escape, so the blur that follows as the field closes does not save. */
+  const renameCancelled = useRef(false);
+  const renameInput = useRef<HTMLInputElement | null>(null);
+  /** The previous press on a clip, so a second one close behind it renames. */
+  const lastPress = useRef<{ id: string; at: number } | null>(null);
+  // Focused after the frame, not via autoFocus: the double-click that opens the
+  // field ends a pointer gesture on the clip, and focus set during that
+  // gesture's render was lost — the field opened but typing went nowhere.
+  useEffect(() => {
+    if (!renaming) return;
+    const raf = requestAnimationFrame(() => {
+      renameInput.current?.focus();
+      renameInput.current?.select();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [renaming]);
+  // Worked out once per document, not once per clip.
+  const numbers = useMemo(() => sceneNumbers(doc), [doc]);
   /** Track-head controls show on hover; at 168px they crowd the name otherwise. */
   const [hoverHead, setHoverHead] = useState<string | null>(null);
   /** Expanded shows the selected clip's property lanes. */
@@ -812,7 +817,7 @@ export default function DocTimeline({
           const g = previewGeom(item);
           const selected = selectedIds.has(item.id);
           const asset = "assetId" in item ? getAsset(doc, (item as { assetId: string }).assetId) : undefined;
-          const label = itemLabel(item, asset?.name);
+          const label = itemLabel(doc, item, numbers);
           const clipW = Math.max(2, g.dur * pxPerFrame);
 
           // Filmstrip: map the clip's source window onto the strip image.
@@ -844,7 +849,24 @@ export default function DocTimeline({
           return (
             <div
               key={item.id}
-              onPointerDown={(e) => beginDrag(e, item, "move")}
+              onPointerDown={(e) => {
+                // A double-click is detected here rather than with onDoubleClick:
+                // the first press starts a drag, and the browser never delivered
+                // the dblclick event to the clip after it.
+                const last = lastPress.current;
+                const now = e.timeStamp;
+                lastPress.current = { id: item.id, at: now };
+                if (last && last.id === item.id && now - last.at < 400 && e.button === 0) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  lastPress.current = null;
+                  renameCancelled.current = false;
+                  setRenaming(item.id);
+                  return;
+                }
+                beginDrag(e, item, "move");
+              }}
+              title={renaming === item.id ? undefined : `${label} — double-click to rename`}
               onDragOver={(e) => {
                 if (e.dataTransfer.types.includes("application/x-vt-effect")) {
                   e.preventDefault();
@@ -925,9 +947,40 @@ export default function DocTimeline({
                   read by name and by range, and one line could only ever carry
                   the first. */}
               <span style={{ position: "relative", minWidth: 0, display: "flex", flexDirection: "column", gap: 1, justifyContent: "center" }}>
-                <span className="t-control" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {label}
-                </span>
+                {renaming === item.id ? (
+                  <input
+                    ref={renameInput}
+                    aria-label="Clip name"
+                    defaultValue={item.name ?? ""}
+                    placeholder={itemLabel(doc, { ...item, name: undefined }, numbers)}
+                    // The clip underneath starts a drag on pointer down; typing
+                    // in its name must not pick the clip up.
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Enter") e.currentTarget.blur();
+                      if (e.key === "Escape") {
+                        renameCancelled.current = true;
+                        setRenaming(null);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      setRenaming(null);
+                      if (renameCancelled.current) return;
+                      if (e.currentTarget.value.trim() !== (item.name ?? "")) commit(renameItem(doc, item.id, e.currentTarget.value));
+                    }}
+                    className="t-control"
+                    style={{
+                      width: Math.max(60, clipW - 24), minWidth: 0, color: "var(--ink-primary)",
+                      background: "var(--surface-sunken, var(--surface-chrome))", border: "1px solid var(--border-edge)",
+                      borderRadius: 3, padding: "0 4px", outline: "none",
+                    }}
+                  />
+                ) : (
+                  <span className="t-control" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {label}
+                  </span>
+                )}
                 {clipW > 90 && (
                   <span className="t-data-s" style={{ color: "var(--ink-tertiary)", whiteSpace: "nowrap" }}>
                     {timecode(g.from, fps, hoursNeeded)} → {timecode(g.from + g.dur, fps, hoursNeeded)}

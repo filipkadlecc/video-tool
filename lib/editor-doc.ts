@@ -385,6 +385,54 @@ export function getAsset(doc: EditorDoc, assetId: string): Asset | undefined {
   return doc.assets.find((a) => a.id === assetId);
 }
 
+/**
+ * Each scene block's place in the running order: 1 for the first scene the
+ * viewer sees, 2 for the next. Earlier start wins; a tie goes to the track
+ * further back, so the order is stable.
+ *
+ * Computed, never stored — dragging a scene past another renumbers both, which
+ * is what "Scene 2" has to mean for the person reading the timeline and for the
+ * AI they are talking to about it.
+ */
+export function sceneNumbers(doc: EditorDoc): Map<string, number> {
+  const scenes: { id: string; from: number; track: number }[] = [];
+  doc.tracks.forEach((track, t) => {
+    for (const item of track.items) if (item.type === "scene") scenes.push({ id: item.id, from: item.from, track: t });
+  });
+  scenes.sort((a, b) => a.from - b.from || a.track - b.track);
+  return new Map(scenes.map((s, i) => [s.id, i + 1]));
+}
+
+/**
+ * What a block is called, most specific first: the name someone gave it, then
+ * what it is. Scene blocks without a name are numbered in running order, with
+ * the library scene they came from alongside ("Scene 3 · EndCard").
+ *
+ * Pass `numbers` when labelling many items, so the order is worked out once.
+ */
+export function itemLabel(
+  doc: EditorDoc,
+  item: EditorItem,
+  numbers: Map<string, number> = sceneNumbers(doc),
+): string {
+  if (item.name?.trim()) return item.name.trim();
+  if (item.type === "scene") {
+    const n = numbers.get(item.id);
+    const base = n ? `Scene ${n}` : "Scene";
+    return item.snippet ? `${base} · ${item.snippet.id}` : base;
+  }
+  if (item.type === "text") return item.text;
+  if (item.type === "captions") return "Subtitles";
+  if ("assetId" in item) return getAsset(doc, item.assetId)?.name ?? item.type;
+  return item.type;
+}
+
+/** Give an item a name, or clear it with an empty one so it goes back to its default. */
+export function renameItem(doc: EditorDoc, itemId: string, name: string): EditorDoc {
+  const clean = name.replace(/\s+/g, " ").trim().slice(0, 80);
+  return updateItem(doc, itemId, { name: clean || undefined });
+}
+
 /** Items that are on screen at `frame`, front-most last. */
 export function itemsAtFrame(doc: EditorDoc, frame: number): EditorItem[] {
   const out: EditorItem[] = [];

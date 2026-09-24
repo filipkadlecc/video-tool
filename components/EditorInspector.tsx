@@ -11,7 +11,7 @@ import Tabs from "@/components/ui/Tabs";
 import Menu from "@/components/ui/Menu";
 import {
   findItem, hasSource, setLayout, updateItem, docDuration,
-  evenSpacing, evenSpacingGap, sameDuration, pasteEffects,
+  evenSpacing, evenSpacingGap, sameDuration, pasteEffects, itemLabel, renameItem,
   type AudioItem, type CaptionsItem, type EditorDoc, type EditorItem,
   type TextItem, type VideoItem,
 } from "@/lib/editor-doc";
@@ -529,6 +529,31 @@ export default function EditorInspector({
   return (
     <div className="vt-scroll" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflowY: "auto" }}>
       <Header subject={`${item.type} · ${frameCount(item.durationInFrames)}`} />
+
+      {/* Keyed on the stored name so an undo, or a rename on the timeline,
+          resets what the field shows instead of leaving a stale draft in it. */}
+      <div style={{ padding: "8px 10px 4px", flexShrink: 0 }}>
+        <Row label="Name">
+          <input
+            key={`${item.id}:${item.name ?? ""}`}
+            aria-label="Clip name"
+            defaultValue={item.name ?? ""}
+            placeholder={itemLabel(doc, { ...item, name: undefined })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Escape") {
+                e.currentTarget.value = item.name ?? "";
+                e.currentTarget.blur();
+              }
+            }}
+            onBlur={(e) => {
+              if (e.currentTarget.value.trim() !== (item.name ?? "")) onChange(renameItem(doc, item.id, e.currentTarget.value));
+            }}
+            className="t-data-m"
+            style={FIELD}
+          />
+        </Row>
+      </div>
 
       <Tabs
         value={category}

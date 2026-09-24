@@ -13,7 +13,7 @@
  */
 import {
   addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
-  moveItem, moveItemToTrack, removeItem, setItemKey, setLayout, trimItem, updateItem,
+  itemLabel, moveItem, moveItemToTrack, removeItem, renameItem, sceneNumbers, setItemKey, setLayout, trimItem, updateItem,
   type Asset, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
 } from "../lib/editor-doc";
 import {
@@ -827,7 +827,10 @@ head("the edit receipt says what actually moved");
     type: "scene", id: "win", from: 300, durationInFrames: 60, layout: { ...box },
     code: src(900, "old"), sourceOffsetFrames: 240,
   };
-  const before = addItem(addItem(base(), t0(base()), card), t0(base()), win);
+  // One document: every base() mints a fresh track id, so t0(base()) of another
+  // one names a track this document does not have.
+  const d0 = base();
+  const before = addItem(addItem(d0, t0(d0), card), t0(d0), win);
 
   // The scene writer is free to change its mind about length; the block is not.
   const c = findItem(reviseSceneItem(before, "card", src(200, "new"), FPS), "card")!.item as SceneItem;
@@ -844,6 +847,40 @@ head("the edit receipt says what actually moved");
   a(reviseSceneItem(before, "nope", src(1, "x"), FPS) === before, "an unknown id changes nothing");
   a(summariseDocChange(before, reviseSceneItem(before, "card", src(120, "new"), FPS)).some((ch) => ch.field === "design"),
     "the receipt names the design change");
+}
+
+{
+  head("scene names: numbered in running order, renameable, shared with the AI");
+  const sc = (id: string, from: number, extra: Partial<SceneItem> = {}): SceneItem => ({
+    type: "scene", id, from, durationInFrames: 30, layout: { ...box },
+    code: "export const durationInFrames = 30;", ...extra,
+  });
+  const d0 = base();
+  const back = t0(d0);
+  let doc = addItem(addItem(addItem(d0, back, sc("late", 200)), back, sc("early", 0)), back,
+    sc("card", 100, { snippet: { id: "EndCard", values: {} } }));
+  doc = addItem(doc, back, text("t1", 300, 30, "Hello there"));
+
+  const label = (id: string, d = doc) => itemLabel(d, findItem(d, id)!.item);
+  a(label("early") === "Scene 1" && label("late") === "Scene 3", "scenes are numbered by when they play, not by insertion order");
+  a(label("card") === "Scene 2 · EndCard", "a library scene keeps its number and says which scene it is");
+  a(sceneNumbers(doc).size === 3, "only scene blocks are counted");
+
+  const moved = moveItem(doc, "late", -150); // now at 50, between the other two
+  a(label("late", moved) === "Scene 2" && label("card", moved) === "Scene 3 · EndCard", "moving a scene renumbers the others");
+
+  const named = renameItem(doc, "late", "  Big   finish ");
+  a(label("late", named) === "Big finish", "a given name wins, tidied of stray spaces");
+  a(label("early", named) === "Scene 1", "naming one scene does not shift the others' numbers");
+  a(findItem(renameItem(named, "late", "   "), "late")!.item.name === undefined, "an empty name clears back to the number");
+
+  const outline = describeDoc(doc, ctx());
+  a(outline.includes('scene "Scene 2 · EndCard"') && outline.includes('scene "Scene 1"'),
+    "the AI's outline uses the same names the timeline shows");
+
+  const viaAi = applyDocTool(doc, "update_item", { itemId: "early", name: "Intro" }, ctx());
+  a(!viaAi.isError && label("early", viaAi.doc) === "Intro", "the AI can rename a block");
+  a(summariseDocChange(doc, viaAi.doc).some((c) => c.field === "name" && c.after === "Intro"), "and the receipt says so");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);

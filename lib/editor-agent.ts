@@ -67,6 +67,8 @@ import {
   type VideoItem,
   retimeSceneCode,
   sceneFit,
+  itemLabel,
+  sceneNumbers,
 } from "./editor-doc";
 import { ANIMATION_PRESETS, presetsFor, type AnimationPreset , itemEffects, setEffectPreset } from "./editor-effects";
 import {
@@ -145,8 +147,11 @@ function animBit(item: EditorItem): string {
   return bits.length ? ` · ${bits.join(" ")}` : "";
 }
 
-function describeItem(doc: EditorDoc, item: EditorItem, fps: number): string {
-  const head = `  [${item.id}] ${item.type} ${span(item.from, item.durationInFrames, fps)}`;
+function describeItem(doc: EditorDoc, item: EditorItem, fps: number, numbers: Map<string, number>): string {
+  // The label is what the person sees on the timeline — "Scene 3", or a name
+  // they gave it — so it is how they will refer to the block.
+  const called = item.type === "text" && !item.name ? "" : ` "${short(itemLabel(doc, item, numbers), 40)}"`;
+  const head = `  [${item.id}] ${item.type}${called} ${span(item.from, item.durationInFrames, fps)}`;
   const bits: string[] = [];
 
   switch (item.type) {
@@ -213,6 +218,7 @@ export function describeDoc(doc: EditorDoc, ctx: AgentContext): string {
   const fps = doc.size.fps || ctx.fps;
   const total = docDuration(doc);
   const lines: string[] = [];
+  const numbers = sceneNumbers(doc);
 
   lines.push(
     `DOCUMENT — ${doc.size.width}x${doc.size.height} @ ${fps}fps · ${span(0, total, fps).split(" ")[1]} long (${total} frames) · ${doc.tracks.length} track(s)`,
@@ -244,7 +250,7 @@ export function describeDoc(doc: EditorDoc, ctx: AgentContext): string {
     );
     if (!track.items.length) lines.push("  (empty)");
     for (const item of [...track.items].sort((a, b) => a.from - b.from)) {
-      lines.push(describeItem(doc, item, fps));
+      lines.push(describeItem(doc, item, fps, numbers));
     }
   });
 
@@ -382,6 +388,7 @@ export const DOC_TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         itemId: { type: "string" },
+        name: { type: "string", description: "What the block is called on the timeline, any item type. An empty string clears it back to the default (scene blocks are then numbered \"Scene 1\", \"Scene 2\"… in running order)." },
         text: { type: "string", description: "text layers only." },
         fontSize: { type: "number" },
         fontWeight: { type: "number" },
@@ -840,6 +847,12 @@ export function applyDocTool(
         const { item } = requireItem(doc, input.itemId);
         const changed: string[] = [];
         const patch: Record<string, unknown> = {};
+
+        if (typeof input.name === "string") {
+          const clean = input.name.replace(/\s+/g, " ").trim().slice(0, 80);
+          patch.name = clean || undefined;
+          changed.push("name");
+        }
 
         if (item.type === "text" || item.type === "captions") {
           const style: Partial<TextStyle> = {};
@@ -1417,10 +1430,9 @@ export interface DocChange {
   after?: string;
 }
 
-function clipLabel(item: EditorItem): string {
-  if (item.type === "text") return `"${(item as { text?: string }).text?.slice(0, 24) ?? "Text"}"`;
-  if (item.type === "scene" && "snippet" in item && item.snippet) return String(item.snippet.id);
-  return item.type;
+function clipLabel(doc: EditorDoc, item: EditorItem, numbers: Map<string, number>): string {
+  if (item.type === "text" && !item.name?.trim()) return `"${item.text?.slice(0, 24) ?? "Text"}"`;
+  return itemLabel(doc, item, numbers);
 }
 
 const tc = (frame: number, fps: number) => {
@@ -1476,18 +1488,20 @@ export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChan
   for (const t of after.tracks) for (const i of t.items) now.set(i.id, i);
 
   const out: DocChange[] = [];
+  const numbersNow = sceneNumbers(after);
+  const numbersWas = sceneNumbers(before);
 
   for (const [id, item] of now) {
     const prev = was.get(id);
     if (!prev) {
-      out.push({ itemId: id, label: clipLabel(item), field: "added", after: tc(item.from, fps) });
+      out.push({ itemId: id, label: clipLabel(after, item, numbersNow), field: "added", after: tc(item.from, fps) });
       continue;
     }
     if (prev === item) continue;
 
     const before0 = out.length;
     const push = (field: string, b?: string, a?: string) =>
-      out.push({ itemId: id, label: clipLabel(item), field, before: b, after: a });
+      out.push({ itemId: id, label: clipLabel(after, item, numbersNow), field, before: b, after: a });
 
     if (prev.from !== item.from) push("in", tc(prev.from, fps), tc(item.from, fps));
 
@@ -1503,6 +1517,7 @@ export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChan
     // A revised scene keeps its place and length, so without this line the
     // receipt would only say "changed" about the edit that mattered most.
     if (prev.type === "scene" && item.type === "scene" && prev.code !== item.code) push("design");
+    if ((prev.name ?? "") !== (item.name ?? "")) push("name", prev.name || "—", item.name || "—");
 
     const pl = prev.layout;
     const nl = item.layout;
@@ -1540,7 +1555,7 @@ export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChan
   }
 
   for (const [id, item] of was) {
-    if (!now.has(id)) out.push({ itemId: id, label: clipLabel(item), field: "removed", before: tc(item.from, fps) });
+    if (!now.has(id)) out.push({ itemId: id, label: clipLabel(before, item, numbersWas), field: "removed", before: tc(item.from, fps) });
   }
 
   return out;

@@ -39,6 +39,7 @@ import { useToast } from "@/components/ui/Toast";
 import { PlayheadContext, useNewPlayheadStore } from "@/hooks/usePlayhead";
 import Tooltip from "@/components/ui/Tooltip";
 import ShortcutsModal from "@/components/ShortcutsModal";
+import HistoryPanel from "@/components/HistoryPanel";
 
 const titleCase = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
 
@@ -154,7 +155,15 @@ export default function ProjectEditor() {
   // Which tab each panel is showing while the visual editor is open. Code-first
   // projects keep the old single-purpose panels.
   const [bottomTab, setBottomTab] = useState<"footage" | "assets" | "snippets" | "effects">("footage");
-  const [rightTab, setRightTab] = useState<"chat" | "properties">("chat");
+  const [rightTab, setRightTab] = useState<"chat" | "properties" | "history">("chat");
+  /**
+   * What the NEXT save should call its version, when it is a moment worth
+   * standing alone in the history — an AI edit, a restore. Consumed by the save
+   * that carries it; ordinary edits send nothing and are folded together.
+   */
+  const pendingVersionRef = useRef<{ label: string; checkpoint: true } | null>(null);
+  /** Bumped after each save so the History tab shows the version that just landed. */
+  const [savedCount, setSavedCount] = useState(0);
 
   /**
    * Cut (timeline-first) vs Direct (chat-first), the Premiere-style workspaces.
@@ -453,16 +462,26 @@ export default function ProjectEditor() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       setSaveState("saving");
+      const note = pendingVersionRef.current;
       try {
         const res = await fetch(`/api/projects/${projectId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, chatHistory, styleMode, ...(terminalAnnotations !== undefined ? { terminalAnnotations } : {}), ...(doc ? { doc } : {}) }),
+          body: JSON.stringify({
+            code, chatHistory, styleMode,
+            ...(terminalAnnotations !== undefined ? { terminalAnnotations } : {}),
+            ...(doc ? { doc } : {}),
+            ...(note ? { versionLabel: note.label, versionCheckpoint: true } : {}),
+          }),
         });
         if (!res.ok) throw new Error(String(res.status));
+        // Only the note this save carried — one set while it was in flight
+        // belongs to the next save.
+        if (pendingVersionRef.current === note) pendingVersionRef.current = null;
         lastSavedRef.current = { code, chatLength: chatHistory.length, annotations: annotationsKey, styleMode };
         lastSavedDocRef.current = docKey;
         setSaveState("saved");
+        setSavedCount((n) => n + 1);
       } catch {
         // Left visible rather than silent: a save that failed used to still
         // read as "SAVED", which is the worst possible thing for this badge.
@@ -522,12 +541,20 @@ export default function ProjectEditor() {
   const forceSave = useCallback(async () => {
     if (!project) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const note = pendingVersionRef.current;
     try {
       await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, chatHistory, styleMode, ...(terminalAnnotations !== undefined ? { terminalAnnotations } : {}), ...(doc ? { doc } : {}) }),
+        body: JSON.stringify({
+          code, chatHistory, styleMode,
+          ...(terminalAnnotations !== undefined ? { terminalAnnotations } : {}),
+          ...(doc ? { doc } : {}),
+          ...(note ? { versionLabel: note.label, versionCheckpoint: true } : {}),
+        }),
       });
+      if (pendingVersionRef.current === note) pendingVersionRef.current = null;
+      setSavedCount((n) => n + 1);
       lastSavedRef.current = {
         code,
         chatLength: chatHistory.length,
@@ -844,6 +871,32 @@ export default function ProjectEditor() {
     commitDoc(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name));
   }, [project, projectId, commitDoc]);
 
+  /**
+   * The chat's edits, marked for the history. The turn's final commit is what
+   * lands as one "AI edit" version — the transient ones streaming in while the
+   * model works are not saved as anything.
+   */
+  const commitAiDoc = useCallback((next: EditorDoc, opts?: { transient?: boolean }) => {
+    if (!opts?.transient) pendingVersionRef.current = { label: "AI edit", checkpoint: true };
+    commitDoc(next, opts);
+  }, [commitDoc]);
+
+  /**
+   * Put a saved version back. It goes through the ordinary commit, so Cmd+Z
+   * undoes the restore, and the save after it records the restored state as a
+   * new version — nothing in the history is ever overwritten.
+   */
+  const restoreVersion = useCallback((v: { doc?: EditorDoc; code?: string; createdAt: string }) => {
+    const when = new Date(v.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    pendingVersionRef.current = { label: `Restored ${when}`, checkpoint: true };
+    if (typeof v.code === "string" && v.code !== code) commitComposition(v.code);
+    if (v.doc) commitDoc(migrateDoc(v.doc));
+    // A version from before this project had a timeline: rebuild the timeline
+    // from its code, the same way opening it did the first time.
+    else if (typeof v.code === "string") void importCodeToDoc(v.code);
+    toast.success(`Restored the version from ${when}`, "Undo with ⌘Z, or restore another one.");
+  }, [code, commitComposition, commitDoc, importCodeToDoc, toast]);
+
   /** Import whatever is in the editor right now. */
   const importToDoc = useCallback(() => importCodeToDoc(code), [importCodeToDoc, code]);
 
@@ -1029,8 +1082,9 @@ export default function ProjectEditor() {
       await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: finalCode, chatHistory: finalChat }),
+        body: JSON.stringify({ code: finalCode, chatHistory: finalChat, versionLabel: "AI edit", versionCheckpoint: true }),
       });
+      setSavedCount((n) => n + 1);
       lastSavedRef.current = {
         code: finalCode,
         chatLength: finalChat.length,
@@ -1116,7 +1170,7 @@ export default function ProjectEditor() {
    * at the timeline it describes. The same three actions arrive as a toast
    * instead, and it stays up until you answer it (`duration: 0`).
    */
-  const chatOnScreen = !(doc && !showCodeEditor && rightTab === "properties");
+  const chatOnScreen = !(doc && !showCodeEditor && rightTab !== "chat");
   useEffect(() => {
     if (!aiEdit?.length || chatOnScreen) return;
     const first = aiEdit[0];
@@ -1760,11 +1814,14 @@ export default function ProjectEditor() {
                     options={[
                       { value: "chat", label: "Chat" },
                       { value: "properties", label: "Properties" },
+                      { value: "history", label: "History" },
                     ]}
                   />
                 </div>
               )}
-              {docView && rightTab === "properties" ? (
+              {docView && rightTab === "history" ? (
+                <HistoryPanel projectId={projectId} refreshKey={savedCount} onRestore={restoreVersion} />
+              ) : docView && rightTab === "properties" ? (
                 <EditorInspector
                   doc={docView}
                   selectedIds={selectedItemIds}
@@ -1800,7 +1857,7 @@ export default function ProjectEditor() {
                 sceneError={sceneError}
                 doc={docView}
                 selectedIds={[...selectedItemIds]}
-                onDocChanged={commitDoc}
+                onDocChanged={commitAiDoc}
                 onUndoEdit={undoAiEdit}
                 onSelectItems={(ids) => setSelectedItemIds(new Set(ids))}
                 receipt={aiEdit}
