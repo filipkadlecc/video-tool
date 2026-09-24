@@ -1,6 +1,6 @@
 {
   "name": "video-tool",
-  "version": "0.1.148",
+  "version": "0.1.149",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "studio": "npx remotion studio remotion/index.tsx",
+    "vo": "tsx scripts/vo.ts",
     "test": "npm run test:doc && npm run test:agent",
     "test:doc": "tsx scripts/test-editor-doc.ts",
     "test:agent": "tsx scripts/test-editor-agent.ts",

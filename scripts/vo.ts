@@ -250,6 +250,12 @@ async function concat(files: string[], out: string) {
 
 type Job = { key: string; line: SpeechLine };
 
+/** What scripts/vo-kokoro.py writes back, one JSON object per line. */
+type WorkerMessage =
+  | { ready: true }
+  | { id: number; ok: true; durationSec: number; sampleRate: number }
+  | { id: number; ok: false; error: string };
+
 /**
  * Feed every miss through one long-lived Python process. Model load plus the
  * first Metal compile is ~5s and each line after that ~0.2s, so the worker is
@@ -266,32 +272,40 @@ async function synthKokoro(jobs: Job[], model: string, onDone: (key: string, dur
   const byId = new Map(jobs.map((j, i) => [i, j]));
   let settled = 0;
 
+  // The whole conversation is written up front. The worker reads its config
+  // line before it can announce itself, so waiting for that announcement before
+  // writing would deadlock — and Node buffers the writes in userspace anyway,
+  // so a long script cannot fill the pipe and stall.
+  child.stdin.write(JSON.stringify({ model }) + "\n");
+  for (const [id, { key, line }] of byId) {
+    child.stdin.write(
+      JSON.stringify({ id, text: line.text, voice: line.voice, speed: line.speed, out: path.join(CACHE_DIR, `${key}.wav`) }) + "\n",
+    );
+  }
+  child.stdin.end();
+
   await new Promise<void>((resolve, reject) => {
     const rl = readline.createInterface({ input: child.stdout });
     let failure: Error | undefined;
 
     child.on("error", reject);
     child.on("close", (code) => {
+      rl.close();
       if (failure) reject(failure);
       else if (settled < jobs.length) reject(new Error(`kokoro worker exited early (code ${code}) after ${settled}/${jobs.length} lines`));
       else resolve();
     });
 
     rl.on("line", (raw) => {
-      let msg: any;
+      let msg: WorkerMessage;
       try {
-        msg = JSON.parse(raw);
+        msg = JSON.parse(raw) as WorkerMessage;
       } catch {
         return; // stray output is not protocol; the worker sends chatter to stderr
       }
 
-      if (msg.ready) {
-        for (const [id, { key, line }] of byId) {
-          child.stdin.write(
-            JSON.stringify({ id, text: line.text, voice: line.voice, speed: line.speed, out: path.join(CACHE_DIR, `${key}.wav`) }) + "\n",
-          );
-        }
-        child.stdin.end();
+      if ("ready" in msg) {
+        process.stderr.write("  model loaded\n");
         return;
       }
 

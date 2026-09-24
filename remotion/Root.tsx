@@ -47,6 +47,10 @@ import AmazonChat, {
   durationInFrames as amazonDuration,
   CalibrationDoc as AmazonCalibrationDoc,
 } from "./scenes/AmazonChat.built";
+import GrokViralDashboard, {
+  fps as grokFps,
+  durationInFrames as grokDuration,
+} from "./scenes/GrokViralDashboard";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -180,6 +184,14 @@ export const RemotionRoot: React.FC = () => {
             ),
           };
         }}
+      />
+      <Composition
+        id="GrokViralDashboard"
+        component={GrokViralDashboard}
+        durationInFrames={grokDuration}
+        fps={grokFps}
+        width={3840}
+        height={2160}
       />
     </>
   );

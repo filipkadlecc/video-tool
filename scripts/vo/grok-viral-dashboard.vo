@@ -1,0 +1,108 @@
+---
+voice: af_heart
+speed: 1.0
+---
+
+# Grok Viral dashboard — Scriptify v3, conformed to 02.mp4
+# npx tsx scripts/vo.ts scripts/vo/grok-viral-dashboard.vo
+
+## Hook
+
+A post in your niche pulled 2,158 likes last week, and 5,834 saves.
+You never saw it, because native analytics only cover your own posts, and trend pages only show you what already peaked.
+So we're building a Grok Bot that scrapes X, TikTok, and Instagram overnight and ranks them by save rate before you're awake.
+Here's how.
+
+[pause 0.5]
+
+## Setup
+
+Grok Bot is xAI's always-on agent app, and the reason we're using it here is that it keeps working after you close your laptop.
+Open its marketplace, install the Apify plugin, and sign in once.
+That plugin brings Apify MCP server and a set of scraping skills with it, which is what lets you run any Actor in Apify Store by asking rather than by writing code.
+
+[pause 0.4]
+
+## The prompt
+
+Then give the bot one prompt.
+Run Tweet Scraper on your search terms sorted by Top, TikTok Scraper with your search queries against the video section, and Instagram Scraper on your tag pages.
+Before it normalizes anything, have it show you which engagement fields each Actor returned.
+
+[pause 0.4]
+
+## Field mapping
+
+That last instruction is the one that decides whether this bot is worth anything.
+You're not checking post counts, you're checking what each platform actually calls the number you care about.
+Tweet Scraper returns saves as bookmark count.
+TikTok Scraper calls likes digg count, and saves collect count.
+Instagram Scraper gives you likes count and comments count, and no save count at all.
+Same human action, three different names, and one platform missing the best signal entirely.
+Skip this and let the agent guess, and you get a board that ranks TikTok above X because one platform counted plays where the other counted impressions.
+
+[pause 0.4]
+
+## Instagram
+
+Instagram needs a decision, not a guess.
+Since there's no public save count, we substitute comments divided by likes, and we label that column separately so nobody reads an Instagram row as a save.
+
+[pause 0.4]
+
+## Build
+
+Now let it build.
+It normalizes all three into one table of platform, likes, saves, and views, drops anything under 24 hours old, ranks by save rate, and renders a page where every row links back to the original post.
+
+[pause 0.4]
+
+## Filters
+
+Watch what the filters actually do.
+This run kept 128 posts.
+It dropped four for being under a day old, and 18 more for having no usable save rate.
+Both of those matter for the same reason: tag pages come back newest first, so some of what you scrape is minutes old with nothing on it yet, and a post with no save count can't be ranked by save rate at all.
+Leave either filter out and your number one row is noise.
+
+[pause 0.5]
+
+## Top three
+
+Here's the payoff.
+Top three by save rate: the leader has 2,158 likes and 5,834 saves, a rate of 2.7.
+Second place, 1,104 likes and 2,841 saves.
+Third, 593 likes and 1,488 saves.
+Likes tell you a post was enjoyed.
+Saves tell you someone intends to come back and do the thing.
+
+[pause 0.4]
+
+## Standing
+
+A page you have to remember to open is still work, so make it standing.
+Set a weekday digest, and the bot re-scrapes and re-ranks every morning on its own.
+
+[pause 0.4]
+
+## Telegram
+
+Then get it off your laptop.
+Create a Telegram bot with BotFather, copy the token, install the Composio plugin in Grok Bot, and connect it.
+One gotcha worth knowing: a Telegram bot can't message you first, so send it any message once, and after that it can push.
+Tell it to send the top three rows with the save rate and the link, and nothing else.
+A bot that sends 20 rows gets muted in a week.
+A bot that sends three gets read.
+
+[pause 0.5]
+
+## Outro
+
+That's the real shift.
+You're not building a dashboard, you're adding a teammate who's awake when a post starts moving and has it ranked by the time you sit down.
+
+[pause 0.3]
+
+The next time a post in your niche pulls nearly three times more saves than likes, you don't miss it.
+It's in your messages before you're awake, with the save rate and the link.
+To build yours, create an Apify account from the link below, install the Apify plugin in Grok Bot, and start with Tweet Scraper.

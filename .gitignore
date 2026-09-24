@@ -51,6 +51,7 @@ next-env.d.ts
 
 # too large for GitHub (>100MB) — kept locally / in backups, use Git LFS if it must be tracked
 /public/assets/brand-deal-spy-src.mp4
+/public/assets/footage/grok-02-720p.mp4
 
 # unrelated data export (X mentions scrape)
 /apify_x_mentions_*.json
@@ -71,3 +72,10 @@ next-env.d.ts
 # Python bytecode (the talk/ helper scripts)
 __pycache__/
 *.pyc
+
+# voice-over tooling (scripts/vo.ts)
+# .venv-vo is a pinned 3.12 env for mlx-audio; .vo-cache is regenerable synthesis
+# output keyed by content hash; rendered VO is a build artifact, not source.
+/.venv-vo/
+/.vo-cache/
+/public/assets/vo/

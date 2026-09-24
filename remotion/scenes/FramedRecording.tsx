@@ -12,7 +12,10 @@ import {
 import { BRAND } from "../theme";
 
 // --- Animated dot-grid background (ported from the "Background dots pop-in"
-// project): dots scale up in a diagonal staggered wave, then hold. ---
+// project): dots scale up in a diagonal staggered wave, then hold. Exported so
+// a multi-section composition can paint ONE persistent copy at its root
+// (driven by the root frame, so it never resets) and pass
+// `showBackground={false}` to FramedRecording instances embedded inside it. ---
 const DOT_COLOR = "#F86606";
 const VB_WIDTH = 3846;
 const VB_HEIGHT = 2459;
@@ -45,7 +48,7 @@ const STAGGER_FRAMES = 45;
 const POP_FRAMES = 22;
 const DECELERATE = Easing.out(Easing.exp);
 
-const BackgroundDots: React.FC = () => {
+export const BackgroundDots: React.FC = () => {
   const frame = useCurrentFrame();
   return (
     <AbsoluteFill style={{ backgroundColor: BRAND.colors.bg }}>
@@ -78,6 +81,86 @@ export type FramedRecordingProps = {
   aspect: number; // recording width / height
   heightFraction?: number; // panel height as a fraction of canvas height
   showLogo?: boolean;
+  /** Paint the dot-grid bg + bg fill. Set false when embedding inside a
+   *  composition that already paints ONE persistent background — otherwise
+   *  the dot pop-in replays (and resets) every time this scene mounts. */
+  showBackground?: boolean;
+  /** Trim the SOURCE recording, in seconds. Omit sourceOutSec to play to the
+   *  natural end of the display window. */
+  sourceInSec?: number;
+  sourceOutSec?: number;
+  /** Frames this instance is on screen for (its enclosing Sequence's
+   *  duration). Required to trim/hold correctly; ignored otherwise. */
+  displayDurationInFrames?: number;
+  /** When the trimmed clip is shorter than displayDurationInFrames, hold on
+   *  its last frame for the remainder instead of letting playback continue
+   *  past the intended source window. Default true. */
+  holdLastFrame?: boolean;
+  /** Mute the recording's own embedded audio. Set true whenever the
+   *  composition plays its own VO/audio track over this footage — otherwise
+   *  the source recording's captured sound plays underneath and clashes with
+   *  it. Default false (preserves standalone playback, e.g. BrandDealSpyFrame,
+   *  where the recording's own audio IS the soundtrack). */
+  muted?: boolean;
+  /** staticFile() path to a still image of the exact frame at sourceOutSec —
+   *  a pre-extracted PNG/JPG (e.g. via `ffmpeg -ss <t> -frames:v 1`). When the
+   *  clip is shorter than the display window and holdLastFrame is on, the
+   *  hold renders THIS instead of continuing to decode video: interactively
+   *  scrubbing/playing a long hold by re-seeking OffthreadVideo every frame
+   *  is what actually caused stutter/buffering in the Player — a static
+   *  image has none of that cost. Falls back to the (heavier) video-based
+   *  hold when omitted. */
+  heldImageSrc?: string;
+};
+
+// Plays [sourceInSec, sourceOutSec] of `videoSrc` for up to `displayFrames`
+// composition frames, then holds the last decoded frame for whatever display
+// time remains — so a short source cut never has to drift past its intended
+// timecode to fill a longer VO line.
+//
+// This recomputes a single-frame `trimBefore` every frame rather than using
+// <Freeze>: OffthreadVideo's seek is (local frame + trimBefore) / fps, and
+// <Freeze> only overrides "local frame" correctly when the frozen element
+// sits directly under the composition root — nested two or more <Sequence>s
+// deep (as any per-beat mount inside a scene is), it silently seeks to frame
+// 0 instead. Recomputing trimBefore to CANCEL the local frame's own advance
+// (trimBefore = target − frame) holds on the same source instant regardless
+// of nesting depth, using only the plain trimBefore behavior that already
+// works correctly at any depth.
+const TrimmedVideo: React.FC<{
+  videoSrc: string;
+  sourceInSec: number;
+  sourceOutSec?: number;
+  displayFrames: number;
+  holdLastFrame: boolean;
+  muted: boolean;
+  heldImageSrc?: string;
+  style: React.CSSProperties;
+}> = ({ videoSrc, sourceInSec, sourceOutSec, displayFrames, holdLastFrame, muted, heldImageSrc, style }) => {
+  const { fps } = useVideoConfig();
+  const frame = useCurrentFrame();
+  const trimBeforeBase = Math.round(sourceInSec * fps);
+  const clipFrames =
+    sourceOutSec != null
+      ? Math.max(1, Math.round((sourceOutSec - sourceInSec) * fps))
+      : displayFrames;
+  const playFrames = Math.min(clipFrames, displayFrames);
+  const isHolding = holdLastFrame && frame >= playFrames;
+
+  if (isHolding && heldImageSrc) {
+    return <Img src={heldImageSrc} style={style} />;
+  }
+
+  const heldFrame = holdLastFrame ? Math.min(frame, playFrames - 1) : frame;
+  return (
+    <OffthreadVideo
+      src={videoSrc}
+      trimBefore={trimBeforeBase + heldFrame - frame}
+      muted={muted}
+      volume={muted ? 0 : 1}
+      style={style}
+    />
+  );
 };
 
 const FramedRecording: React.FC<FramedRecordingProps> = ({
@@ -85,17 +168,25 @@ const FramedRecording: React.FC<FramedRecordingProps> = ({
   aspect,
   heightFraction = 0.9,
   showLogo = false,
+  showBackground = true,
+  sourceInSec,
+  sourceOutSec,
+  displayDurationInFrames,
+  holdLastFrame = true,
+  muted = false,
+  heldImageSrc,
 }) => {
-  const { width, height } = useVideoConfig();
+  const { width, height, durationInFrames: ownDuration } = useVideoConfig();
   const base = Math.min(width, height);
 
   const panelH = height * heightFraction;
   const panelW = panelH * aspect;
   const radius = base * 0.018;
+  const videoStyle: React.CSSProperties = { width: "100%", height: "100%", objectFit: "cover" };
 
   return (
-    <AbsoluteFill style={{ backgroundColor: BRAND.colors.bg }}>
-      <BackgroundDots />
+    <AbsoluteFill style={{ backgroundColor: showBackground ? BRAND.colors.bg : "transparent" }}>
+      {showBackground && <BackgroundDots />}
 
       {/* Soft orange glow for depth */}
       <AbsoluteFill style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -122,10 +213,20 @@ const FramedRecording: React.FC<FramedRecordingProps> = ({
             boxShadow: `0 ${base * 0.038}px ${base * 0.11}px rgba(0,0,0,0.65), 0 ${base * 0.008}px ${base * 0.022}px rgba(0,0,0,0.45)`,
           }}
         >
-          <OffthreadVideo
-            src={videoSrc}
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
+          {sourceInSec != null ? (
+            <TrimmedVideo
+              videoSrc={videoSrc}
+              sourceInSec={sourceInSec}
+              sourceOutSec={sourceOutSec}
+              displayFrames={displayDurationInFrames ?? ownDuration}
+              holdLastFrame={holdLastFrame}
+              muted={muted}
+              heldImageSrc={heldImageSrc}
+              style={videoStyle}
+            />
+          ) : (
+            <OffthreadVideo src={videoSrc} muted={muted} volume={muted ? 0 : 1} style={videoStyle} />
+          )}
         </div>
       </AbsoluteFill>
 
