@@ -66,6 +66,7 @@ import {
   type TextStyle,
   type VideoItem,
   retimeSceneCode,
+  sceneFit,
 } from "./editor-doc";
 import { ANIMATION_PRESETS, presetsFor, type AnimationPreset , itemEffects, setEffectPreset } from "./editor-effects";
 import {
@@ -79,7 +80,7 @@ import {
 import type { TranscriptWord } from "./transcribe";
 import { describeParams, settableKeys, type SnippetEntry } from "./snippet-catalog";
 import { renderSnippet } from "./snippet-template";
-import { sceneFramesAtFps } from "./scene-eval";
+import { sceneFramesAtFps, sceneMeta } from "./scene-eval";
 
 /** Everything a tool may need that does not live in the document. */
 export interface AgentContext {
@@ -1499,6 +1500,10 @@ export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChan
     const textOf = (i: EditorItem) => (i.type === "text" ? (i as { text?: string }).text : undefined);
     if (textOf(prev) !== textOf(item)) push("text", textOf(prev), textOf(item));
 
+    // A revised scene keeps its place and length, so without this line the
+    // receipt would only say "changed" about the edit that mattered most.
+    if (prev.type === "scene" && item.type === "scene" && prev.code !== item.code) push("design");
+
     const pl = prev.layout;
     const nl = item.layout;
     const xy = (l: typeof pl) => `${Math.round(l.x)}, ${Math.round(l.y)}`;
@@ -1539,4 +1544,33 @@ export function summariseDocChange(before: EditorDoc, after: EditorDoc): DocChan
   }
 
   return out;
+}
+
+/**
+ * Put a rewritten design into a scene block without disturbing its timing.
+ *
+ * The block keeps its place, length, layout and effects; only what is drawn
+ * inside it changes. The new code is pinned to the length the block needs — a
+ * retiming block to its own frames, a window to the composition it was cut from
+ * — because the scene writer is free to change its mind about duration and the
+ * timeline is not.
+ *
+ * Snippet provenance is dropped: reopening the parameter form re-renders the
+ * library template from scratch, which would silently throw the revision away.
+ * Its fit is written down explicitly for the same reason — without the snippet
+ * tag, `sceneFit` would otherwise start treating a retiming card as a window.
+ */
+export function reviseSceneItem(doc: EditorDoc, itemId: string, code: string, fps: number): EditorDoc {
+  const found = findItem(doc, itemId);
+  if (!found || found.item.type !== "scene") return doc;
+  const item = found.item;
+  const fit = sceneFit(item);
+  let pinned: string;
+  if (fit === "retime") {
+    pinned = retimeSceneCode(code, item.durationInFrames, fps);
+  } else {
+    const was = sceneMeta(item.code, fps);
+    pinned = retimeSceneCode(code, was.durationInFrames, was.fps);
+  }
+  return updateItem<SceneItem>(doc, itemId, { code: pinned, fit, snippet: undefined });
 }

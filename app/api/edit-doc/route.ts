@@ -6,16 +6,18 @@ import { framesToContentBlocks } from "@/lib/prompts/reference-images";
 import { renderSampleFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { getProject } from "@/lib/projects";
 import { sceneCodeFromDoc } from "@/lib/editor-render";
-import { docDuration, isValidDoc, type AssetKind, type EditorDoc } from "@/lib/editor-doc";
-import { applyDocTool, describeDoc, DOC_TOOLS, DOC_TOOL_NAMES, toolsWithSnippets, type AgentContext, summariseDocChange } from "@/lib/editor-agent";
+import { docDuration, isValidDoc, sceneFit, type AssetKind, type EditorDoc } from "@/lib/editor-doc";
+import { applyDocTool, describeDoc, DOC_TOOLS, DOC_TOOL_NAMES, reviseSceneItem, toolsWithSnippets, type AgentContext, summariseDocChange } from "@/lib/editor-agent";
 import { catalogForSize } from "@/lib/snippet-catalog";
 import { readCachedTranscript, transcribeWithCache, type TranscriptWord } from "@/lib/transcribe";
 import { probeWithCache } from "@/lib/probe";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, Project } from "@/lib/types";
 
 const anthropic = new Anthropic();
 
-export const maxDuration = 300;
+// A scene revision is a full scene-writing run (minutes on Opus 5.5), so this
+// route needs the same ceiling as /api/generate.
+export const maxDuration = 900;
 
 /**
  * The AI editing the timeline it can see.
@@ -166,6 +168,100 @@ const RENDER_TOOL: Anthropic.Tool = {
   },
 };
 
+const REVISE_TOOL: Anthropic.Tool = {
+  name: "revise_scene",
+  description:
+    "Change what is INSIDE a scene block — its elements, shapes, colours, labels, layout, the motion within it. The scene writer rewrites that block's design from your instructions, checks its own frames, and the block keeps its place and length on the timeline. Put EVERY note for this block into one call, in the person's own words plus anything they pointed at; it takes a few minutes per call. Not for moving, trimming or layering a block — the other tools do that.",
+  input_schema: {
+    type: "object",
+    properties: {
+      itemId: { type: "string", description: "The scene item to revise, exactly as the outline gives it." },
+      instructions: {
+        type: "string",
+        description: "Everything to change inside this scene, complete and specific. The scene writer sees the scene's code and these words, nothing else from this conversation.",
+      },
+    },
+    required: ["itemId", "instructions"],
+  },
+};
+
+/** Pull the last fenced code block out of a reply. */
+function lastCodeBlock(text: string): string | null {
+  const matches = [...text.matchAll(/```(?:tsx|jsx|typescript|ts)?\n([\s\S]*?)```/g)];
+  if (!matches.length) return null;
+  const last = matches[matches.length - 1][1].trim();
+  return last.length > 50 ? last : null;
+}
+
+/**
+ * Rewrite one scene block's design through /api/generate.
+ *
+ * Called over HTTP rather than by importing its loop so there is exactly ONE
+ * scene writer: the same system prompt, brand rules, motion bans, model and
+ * render→look→fix loop as a fresh generation, with the block's current code as
+ * the starting point. Duplicating that loop here is how the two would drift.
+ */
+async function reviseSceneCode(
+  origin: string,
+  project: Project,
+  code: string,
+  instructions: string,
+  timing: string,
+): Promise<string> {
+  const res = await fetch(`${origin}/api/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: "user",
+          content: `Revise this scene. Change only what is asked below and keep everything else as it is.\n\n${timing}\n\n=== WHAT TO CHANGE ===\n${instructions}\n\nReturn the COMPLETE revised file in one \`\`\`tsx block.`,
+        },
+      ],
+      currentCode: code,
+      projectSettings: project.settings,
+      // A scene block is Remotion TSX whatever the project around it is — a
+      // footage project's cards included — so it is always written as one.
+      animationType: "animation",
+      projectId: project.id,
+      styleMode: project.styleMode,
+      transitionStyle: project.transitionStyle,
+      useSfx: project.useSfx,
+    }),
+  });
+  if (!res.ok || !res.body) throw new Error(`scene writer returned HTTP ${res.status}`);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6);
+      if (data === "[DONE]") continue;
+      let parsed: { text?: string; error?: string };
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      if (parsed.error) throw new Error(parsed.error);
+      if (parsed.text) text += parsed.text;
+    }
+  }
+  const revised = lastCodeBlock(text);
+  if (!revised) throw new Error("the scene writer finished without returning a scene");
+  return revised;
+}
+
+const MAX_REVISIONS = 3;
+
 // Editing is a handful of steps; ASSEMBLING a cut from an empty timeline is not —
 // it reads every source's transcript, lays the footage out, looks up a card,
 // places two or three, and only then renders to check. At 8 turns that ran out
@@ -222,7 +318,7 @@ export async function POST(request: Request) {
   const origin = new URL(request.url).origin;
 
   const tools: Anthropic.Tool[] = toolsWithSnippets(
-    [...DOC_TOOLS, RENDER_TOOL, ...(mediaFolder ? [TRANSCRIBE_TOOL] : [])],
+    [...DOC_TOOLS, RENDER_TOOL, ...(project ? [REVISE_TOOL] : []), ...(mediaFolder ? [TRANSCRIBE_TOOL] : [])],
     (ctx.snippets ?? []).map((sn) => sn.id),
   );
 
@@ -251,12 +347,20 @@ export async function POST(request: Request) {
     async start(controller) {
       const send = (obj: unknown) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      // A scene revision can run for minutes with nothing to say. A comment
+      // every 15s keeps the connection from being dropped as idle.
+      const heartbeatTimer = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(": keep-alive\n\n"));
+        } catch { /* the client has gone */ }
+      }, 15000);
       try {
         let working = incomingDoc;
         const convo: Anthropic.MessageParam[] = [...anthropicMessages];
         let toolTurns = 0;
         let ops = 0;
         let renders = 0;
+        let revisions = 0;
         let lastStopReason: string | null = null;
         // The model speaks across several turns, before and after each tool
         // round, and the pieces need joining carefully. Run them together raw and
@@ -365,6 +469,62 @@ export async function POST(request: Request) {
               continue;
             }
 
+            if (block.name === "revise_scene" && project) {
+              const input = (block.input ?? {}) as { itemId?: string; instructions?: string };
+              const found = working.tracks.flatMap((t) => t.items).find((i) => i.id === input.itemId);
+              if (!found || found.type !== "scene") {
+                results.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  is_error: true,
+                  content: `No scene block called "${input.itemId}". Only scene items can be revised; copy the id from the outline.`,
+                });
+                continue;
+              }
+              if (!input.instructions?.trim()) {
+                results.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  is_error: true,
+                  content: "instructions are required — say exactly what should change inside the scene.",
+                });
+                continue;
+              }
+              revisions++;
+              if (revisions > MAX_REVISIONS) {
+                results.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  is_error: true,
+                  content: `That is ${MAX_REVISIONS} scene revisions this turn, which is the limit. Tell the person what is done and what is left.`,
+                });
+                continue;
+              }
+              const fps = working.size.fps;
+              const offset = found.sourceOffsetFrames ?? 0;
+              const timing = sceneFit(found) === "retime"
+                ? `Keep its length and the timing of its beats. It plays for ${found.durationInFrames} frames at ${fps}fps.`
+                : `Keep its total length, fps and the timing of its beats exactly as they are. This block of the video shows only frames ${offset}–${offset + found.durationInFrames} of the composition, so that stretch is what the viewer sees; the rest must stay intact.`;
+              try {
+                const revised = await reviseSceneCode(origin, project, found.code, input.instructions, timing);
+                working = reviseSceneItem(working, found.id, revised, fps);
+                docChanged = true;
+                results.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  content: "The scene is revised and back on the timeline at the same place and length. Render frames to check it before you report back.",
+                });
+              } catch (e) {
+                results.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  is_error: true,
+                  content: `The revision failed: ${(e instanceof Error ? e.message : "unknown error").slice(-400)}. Nothing was changed.`,
+                });
+              }
+              continue;
+            }
+
             if (block.name === "transcribe_clip" && mediaFolder && projectId) {
               const itemId = (block.input as { itemId?: string } | null)?.itemId;
               const found = working.tracks
@@ -438,7 +598,7 @@ export async function POST(request: Request) {
         }
 
         console.log(
-          `[edit-doc] turns=${toolTurns} ops=${ops} renders=${renders} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
+          `[edit-doc] turns=${toolTurns} ops=${ops} renders=${renders} revisions=${revisions} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
         );
 
         // A turn that does the work and then says nothing leaves the user
@@ -468,6 +628,8 @@ export async function POST(request: Request) {
       } catch (err) {
         send({ error: err instanceof Error ? err.message : "Unknown error" });
         controller.close();
+      } finally {
+        clearInterval(heartbeatTimer);
       }
     },
   });

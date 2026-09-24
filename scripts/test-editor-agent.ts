@@ -14,10 +14,10 @@
 import {
   addAsset, addItem, addTrack, docDuration, emptyDoc, findItem, isValidDoc,
   moveItem, moveItemToTrack, removeItem, setItemKey, setLayout, trimItem, updateItem,
-  type Asset, type EditorDoc, type SolidItem, type TextItem, type VideoItem,
+  type Asset, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
 } from "../lib/editor-doc";
 import {
-  applyDocTool, describeDoc, DOC_TOOLS, summariseDocChange, type AgentContext,
+  applyDocTool, describeDoc, DOC_TOOLS, reviseSceneItem, summariseDocChange, type AgentContext,
 } from "../lib/editor-agent";
 import {
   cutRange, docTranscript, frameToSourceSecond, itemSourceWindow,
@@ -813,6 +813,37 @@ head("the edit receipt says what actually moved");
   // And the contract that makes an empty list safe to act on.
   a(summariseDocChange(before, { ...before, tracks: [...before.tracks] }).length === 0,
     "an equal document still reports nothing, so empty means empty");
+}
+
+{
+  head("reviseSceneItem: a new design, the same place on the timeline");
+  const src = (dur: number, body: string) =>
+    `export const durationInFrames = ${dur};\nexport const fps = 30;\nexport default () => <div>${body}</div>;`;
+  const card: SceneItem = {
+    type: "scene", id: "card", from: 90, durationInFrames: 120, layout: { ...box },
+    code: src(120, "old"), snippet: { id: "EndCard", values: { title: "Hi" } },
+  };
+  const win: SceneItem = {
+    type: "scene", id: "win", from: 300, durationInFrames: 60, layout: { ...box },
+    code: src(900, "old"), sourceOffsetFrames: 240,
+  };
+  const before = addItem(addItem(base(), t0(base()), card), t0(base()), win);
+
+  // The scene writer is free to change its mind about length; the block is not.
+  const c = findItem(reviseSceneItem(before, "card", src(200, "new"), FPS), "card")!.item as SceneItem;
+  a(c.code.includes("new"), "the revised design replaces the old one");
+  a(c.from === 90 && c.durationInFrames === 120, "the block keeps its place and length");
+  a(sceneMeta(c.code).durationInFrames === 120, "a retiming card is pinned to its own frames");
+  a(c.snippet === undefined, "snippet provenance is dropped so reopening the form cannot undo the revision");
+  a(c.fit === "retime", "and it still retimes without the snippet tag to infer that from");
+
+  const w = findItem(reviseSceneItem(before, "win", src(450, "new"), FPS), "win")!.item as SceneItem;
+  a(sceneMeta(w.code).durationInFrames === 900, "a window keeps the length of the composition it was cut from");
+  a(w.sourceOffsetFrames === 240 && w.fit === "window", "and still shows the same stretch of it");
+
+  a(reviseSceneItem(before, "nope", src(1, "x"), FPS) === before, "an unknown id changes nothing");
+  a(summariseDocChange(before, reviseSceneItem(before, "card", src(120, "new"), FPS)).some((ch) => ch.field === "design"),
+    "the receipt names the design change");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
