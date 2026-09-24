@@ -12,6 +12,9 @@ const MIME: Record<string, "image/png" | "image/jpeg" | "image/webp" | "image/gi
   ".gif": "image/gif",
 };
 
+// Keep every reference at or under 1568px on the long edge: Opus 5.5 rejects
+// any image over 2000px in a many-image request (the render loop makes it
+// one), and the API downsizes to ~1568px anyway, so nothing is lost.
 let cached: Anthropic.ImageBlockParam[] | null = null;
 
 export function getApifyReferenceImages(): Anthropic.ImageBlockParam[] {

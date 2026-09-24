@@ -425,17 +425,21 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") continue;
+            let parsed: { text?: string; error?: string };
             try {
-              const parsed = JSON.parse(data);
-              if (parsed.text) {
-                fullResponse += parsed.text;
-                const extracted = extractCodeFromResponse(fullResponse, animationType);
-                if (extracted && extracted.length > 50) {
-                  onCodeUpdate(extracted);
-                }
-              }
+              parsed = JSON.parse(data);
             } catch {
-              // incomplete JSON chunk
+              continue; // incomplete JSON chunk
+            }
+            // A failure mid-run arrives as an event, not an HTTP error. It was
+            // being dropped, so the chat just said "empty response".
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.text) {
+              fullResponse += parsed.text;
+              const extracted = extractCodeFromResponse(fullResponse, animationType);
+              if (extracted && extracted.length > 50) {
+                onCodeUpdate(extracted);
+              }
             }
           }
         }

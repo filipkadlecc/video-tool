@@ -114,10 +114,15 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
   {
     name: "render_frames",
     description:
-      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message, then call this tool. Frames come back as images. Inspect them for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as near-black #161718 with a single orange accent — no other accent colours, no pure white/black), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
+      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. Inspect them for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as near-black #161718 with a single orange accent — no other accent colours, no pure white/black), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
     input_schema: {
       type: "object",
       properties: {
+        code: {
+          type: "string",
+          description:
+            "The COMPLETE scene source to render. Optional if you wrote it as a ```tsx block in this message; pass it here when you'd rather not.",
+        },
         frames: {
           type: "array",
           items: { type: "integer" },
@@ -165,6 +170,7 @@ export async function POST(request: Request) {
     topicCardStyle,
     transitionStyle,
     useSfx,
+    effort: requestedEffort,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -178,7 +184,13 @@ export async function POST(request: Request) {
     topicCardStyle?: TopicCardStyle;
     transitionStyle?: TransitionStyle;
     useSfx?: boolean;
+    effort?: string;
   };
+
+  // Scenes are written by Opus 5.5 at "high". "max" is there for showcase
+  // pieces: noticeably better, but a run can take half an hour.
+  const effort: "high" | "xhigh" | "max" =
+    requestedEffort === "max" || requestedEffort === "xhigh" ? requestedEffort : "high";
 
   if (!messages || !messages.length) {
     return Response.json({ error: "messages are required" }, { status: 400 });
@@ -307,22 +319,32 @@ export async function POST(request: Request) {
   // Cache the big (~25K-token) system prompt so follow-up edits, error retries,
   // and every render→fix round re-pay ~0.1x on it instead of full price. The
   // dynamic tail (asset list / SFX / agentic guidance) is stable within a
-  // session, so the cached prefix holds. Opus 4.8 caches a >=4096-token prefix.
+  // session, so the cached prefix holds.
   const systemText = toolsEnabled ? systemPrompt + AGENTIC_GUIDANCE : systemPrompt;
   const systemBlocks: Anthropic.TextBlockParam[] = [
     { type: "text", text: systemText, cache_control: { type: "ephemeral" } },
   ];
 
-  // Hard safety caps so a model-driven loop can never run away or exceed the
-  // 300s route budget: at most a few tool rounds and a few renders per request.
-  const MAX_TOOL_TURNS = 3;
-  const MAX_RENDERS = 4;
+  // Hard safety caps so a model-driven loop can never run away: at most a few
+  // tool rounds and a few renders per request.
+  const MAX_TOOL_TURNS = 6;
+  const MAX_RENDERS = 6;
 
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
     async start(controller) {
       const send = (obj: unknown) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      // Opus 5.5 can think silently for minutes before its first word. An SSE
+      // comment now gets the response headers out, and one every 15s keeps the
+      // connection from being dropped as idle by anything in between.
+      const heartbeat = () => {
+        try {
+          controller.enqueue(encoder.encode(": keep-alive\n\n"));
+        } catch { /* the client has gone; the loop's own error path cleans up */ }
+      };
+      heartbeat();
+      const heartbeatTimer = setInterval(heartbeat, 15000);
       try {
         // The agentic loop: stream a turn and forward its text; if the model
         // asked to use tools (render_frames / read_snippet_source), run them
@@ -346,10 +368,10 @@ export async function POST(request: Request) {
                 messages,
               })
             : anthropic.messages.stream({
-                model: "claude-opus-4-8",
-                max_tokens: 64000,
+                model: "claude-opus-5-5",
+                max_tokens: 128000,
                 thinking: { type: "adaptive" },
-                output_config: { effort: "high" },
+                output_config: { effort },
                 system: systemBlocks,
                 messages,
                 ...(toolsEnabled
@@ -378,6 +400,13 @@ export async function POST(request: Request) {
             .join("\n");
           const codeInTurn = extractLastCodeBlock(turnText);
           if (codeInTurn) latestCode = codeInTurn;
+          // Opus 5.5 may put its between-tool-call text in thinking blocks, so
+          // it can also hand the scene over as the render tool's `code` input.
+          for (const block of finalMessage.content) {
+            if (block.type !== "tool_use" || block.name !== "render_frames") continue;
+            const codeArg = (block.input as { code?: string } | null)?.code;
+            if (codeArg && codeArg.trim().length > 50) latestCode = codeArg;
+          }
 
           if (finalMessage.stop_reason !== "tool_use") break;
 
@@ -457,6 +486,9 @@ export async function POST(request: Request) {
         console.log(
           `[generate] agentic turns=${toolTurns} renders=${renderCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
         );
+        if (lastStopReason === "refusal") {
+          send({ error: "The model declined this request. Try rewording it." });
+        }
         send({ done: true, stopReason: lastStopReason });
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
@@ -464,6 +496,8 @@ export async function POST(request: Request) {
         const message = err instanceof Error ? err.message : "Unknown error";
         send({ error: message });
         controller.close();
+      } finally {
+        clearInterval(heartbeatTimer);
       }
     },
   });

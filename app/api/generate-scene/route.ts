@@ -97,8 +97,10 @@ export async function POST(request: Request) {
     // non-streaming request at this token budget, because one could outlast the
     // 10-minute request ceiling. Nothing here needs the tokens as they arrive.
     const stream = anthropic.messages.stream({
-      model: "claude-opus-4-8",
-      max_tokens: 32000,
+      model: "claude-opus-5-5",
+      // Opus 5.5 always thinks, and thinking counts against this ceiling.
+      max_tokens: 64000,
+      output_config: { effort: "high" },
       system,
       messages: [{ role: "user", content: blocks }],
     });
