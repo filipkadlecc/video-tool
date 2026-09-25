@@ -155,6 +155,75 @@ const AGENTIC_GUIDANCE =
   "\n\n=== SELF-REVIEW (you can SEE your own output) ===\n" +
   "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene, call render_frames, look at the frames, and fix any problems you see (overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing). Then return the corrected complete file. One or two render passes is plenty — don't over-iterate. For a trivial edit you can skip rendering. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
 
+// The scene being edited, as the text editor tool sees it. It only ever
+// exists in memory here — nothing is written to disk.
+const SCENE_PATH = "scene.tsx";
+
+// Retyping a 23k-character scene to change one number took ~95 s; a patch is a
+// few hundred tokens. So when there IS a scene, the model gets the built-in
+// text editor tool (the find-and-replace editing it is trained on) and uses it
+// for targeted changes, writing the whole file only for a real redesign.
+const TEXT_EDITOR_TOOL: Anthropic.ToolTextEditor20250728 = {
+  type: "text_editor_20250728",
+  name: "str_replace_based_edit_tool",
+};
+
+const EDITING_GUIDANCE =
+  "\n\n=== EDITING AN EXISTING SCENE ===\n" +
+  `The current scene is also open as the file \`${SCENE_PATH}\` in your \`str_replace_based_edit_tool\`. For a targeted change (a size, a colour, a word, a timing, one element), EDIT that file with \`str_replace\` instead of rewriting the scene — it is far faster. Each \`old_str\` must match the file exactly once, so include enough surrounding lines to make it unique. Rewrite the complete file in a \`\`\`tsx block only for a redesign or a large restructure. When you edit with the tool, do NOT paste the scene or any code block in your reply — the final file is handed back for you; just say in a sentence what you changed. \`render_frames\` renders the file as edited. This replaces the Error Handling rule about always outputting the complete file: fixing an error with the tool is fine.`;
+
+/**
+ * Run one text editor command against the in-memory scene.
+ * Returns the new code (unchanged for `view`) or an error for the model.
+ */
+function applyTextEditorCommand(
+  code: string,
+  input: Record<string, unknown>,
+): { code: string; result: string; edited: boolean } | { error: string } {
+  const command = String(input.command ?? "");
+  const path = String(input.path ?? "").replace(/^\/+/, "");
+  if (path !== SCENE_PATH) return { error: `Only ${SCENE_PATH} exists. Use path "${SCENE_PATH}".` };
+
+  if (command === "view") {
+    const lines = code.split("\n");
+    const range = Array.isArray(input.view_range) ? (input.view_range as number[]) : null;
+    const start = range ? Math.max(1, range[0]) : 1;
+    const end = range && range[1] !== -1 ? Math.min(lines.length, range[1]) : lines.length;
+    const out = lines.slice(start - 1, end).map((l, i) => `${start + i}\t${l}`).join("\n");
+    return { code, result: out, edited: false };
+  }
+  if (command === "str_replace") {
+    const oldStr = typeof input.old_str === "string" ? input.old_str : "";
+    const newStr = typeof input.new_str === "string" ? input.new_str : "";
+    if (!oldStr) return { error: "old_str is required." };
+    const count = code.split(oldStr).length - 1;
+    if (count === 0) {
+      return { error: "No match for old_str — the text must match the file exactly, whitespace included. View the file and try again, or rewrite the complete file." };
+    }
+    if (count > 1) {
+      return { error: `old_str matches ${count} places. Include more surrounding lines so it matches exactly one.` };
+    }
+    const idx = code.indexOf(oldStr);
+    return { code: code.slice(0, idx) + newStr + code.slice(idx + oldStr.length), result: "Edited.", edited: true };
+  }
+  if (command === "insert") {
+    const text = typeof input.insert_text === "string" ? input.insert_text : typeof input.new_str === "string" ? input.new_str : "";
+    const line = Number(input.insert_line);
+    const lines = code.split("\n");
+    if (!Number.isInteger(line) || line < 0 || line > lines.length) {
+      return { error: `insert_line must be between 0 and ${lines.length}.` };
+    }
+    lines.splice(line, 0, ...text.split("\n"));
+    return { code: lines.join("\n"), result: "Inserted.", edited: true };
+  }
+  if (command === "create") {
+    const text = typeof input.file_text === "string" ? input.file_text : "";
+    if (text.trim().length < 50) return { error: "file_text must be the complete scene." };
+    return { code: text, result: "File written.", edited: true };
+  }
+  return { error: `Unsupported command "${command}". Use view, str_replace, insert or create.` };
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const {
@@ -320,7 +389,11 @@ export async function POST(request: Request) {
   // and every render→fix round re-pay ~0.1x on it instead of full price. The
   // dynamic tail (asset list / SFX / agentic guidance) is stable within a
   // session, so the cached prefix holds.
-  const systemText = toolsEnabled ? systemPrompt + AGENTIC_GUIDANCE : systemPrompt;
+  const editingEnabled = toolsEnabled && !!currentCode?.trim();
+  const systemText = toolsEnabled
+    ? systemPrompt + AGENTIC_GUIDANCE + (editingEnabled ? EDITING_GUIDANCE : "")
+    : systemPrompt;
+  const tools: Anthropic.ToolUnion[] = editingEnabled ? [...AGENTIC_TOOLS, TEXT_EDITOR_TOOL] : AGENTIC_TOOLS;
   const systemBlocks: Anthropic.TextBlockParam[] = [
     { type: "text", text: systemText, cache_control: { type: "ephemeral" } },
   ];
@@ -355,6 +428,10 @@ export async function POST(request: Request) {
         let latestCode: string | null = currentCode ?? null;
         let toolTurns = 0;
         let renderCount = 0;
+        let editCount = 0;
+        // Whether the scene's latest version came from the edit tool rather
+        // than a ```tsx block the model wrote — then we hand the file back.
+        let codeFromEdits = false;
         let lastStopReason: string | null = null;
         const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
 
@@ -375,7 +452,7 @@ export async function POST(request: Request) {
                 system: systemBlocks,
                 messages,
                 ...(toolsEnabled
-                  ? { tools: AGENTIC_TOOLS, tool_choice: forceFinal ? { type: "none" as const } : { type: "auto" as const } }
+                  ? { tools, tool_choice: forceFinal ? { type: "none" as const } : { type: "auto" as const } }
                   : {}),
               });
 
@@ -399,13 +476,19 @@ export async function POST(request: Request) {
             .map((b) => b.text)
             .join("\n");
           const codeInTurn = extractLastCodeBlock(turnText);
-          if (codeInTurn) latestCode = codeInTurn;
+          if (codeInTurn) {
+            latestCode = codeInTurn;
+            codeFromEdits = false;
+          }
           // Opus 5.5 may put its between-tool-call text in thinking blocks, so
           // it can also hand the scene over as the render tool's `code` input.
           for (const block of finalMessage.content) {
             if (block.type !== "tool_use" || block.name !== "render_frames") continue;
             const codeArg = (block.input as { code?: string } | null)?.code;
-            if (codeArg && codeArg.trim().length > 50) latestCode = codeArg;
+            if (codeArg && codeArg.trim().length > 50) {
+              latestCode = codeArg;
+              codeFromEdits = false;
+            }
           }
 
           if (finalMessage.stop_reason !== "tool_use") break;
@@ -463,6 +546,20 @@ export async function POST(request: Request) {
                   content: `Render failed: ${msg.slice(-400)}. This usually means the scene has a compile or runtime error — fix it and return the corrected complete file.`,
                 });
               }
+            } else if (block.name === TEXT_EDITOR_TOOL.name) {
+              const outcome = latestCode
+                ? applyTextEditorCommand(latestCode, (block.input ?? {}) as Record<string, unknown>)
+                : { error: "There is no scene yet. Write the complete scene as a ```tsx block." };
+              if ("error" in outcome) {
+                toolResults.push({ type: "tool_result", tool_use_id: block.id, is_error: true, content: outcome.error });
+              } else {
+                if (outcome.edited) {
+                  latestCode = outcome.code;
+                  codeFromEdits = true;
+                  editCount++;
+                }
+                toolResults.push({ type: "tool_result", tool_use_id: block.id, content: outcome.result });
+              }
             } else if (block.name === "read_snippet_source") {
               const name = String((block.input as { name?: string } | null)?.name ?? "");
               toolResults.push({
@@ -483,8 +580,14 @@ export async function POST(request: Request) {
           toolTurns++;
         }
 
+        // The callers take the last ```tsx block in the stream as the scene, so
+        // a scene that was patched rather than rewritten is handed back whole.
+        if (codeFromEdits && latestCode) {
+          send({ text: `\n\n\`\`\`tsx\n${latestCode}\n\`\`\`\n` });
+        }
+
         console.log(
-          `[generate] agentic turns=${toolTurns} renders=${renderCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
+          `[generate] agentic turns=${toolTurns} renders=${renderCount} edits=${editCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
         );
         if (lastStopReason === "refusal") {
           send({ error: "The model declined this request. Try rewording it." });

@@ -215,7 +215,7 @@ async function reviseSceneCode(
       messages: [
         {
           role: "user",
-          content: `Revise this scene. Change only what is asked below and keep everything else as it is.\n\n${timing}\n\n=== WHAT TO CHANGE ===\n${instructions}\n\nReturn the COMPLETE revised file in one \`\`\`tsx block.`,
+          content: `Revise this scene. Change only what is asked below and keep everything else as it is.\n\n${timing}\n\n=== WHAT TO CHANGE ===\n${instructions}\n\nFor targeted changes, patch scene.tsx with the edit tool; rewrite the complete file in one \`\`\`tsx block only if the change is a redesign.`,
         },
       ],
       currentCode: code,
