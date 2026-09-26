@@ -86,7 +86,7 @@ export function evalSceneCode(code: string): EvalResult | null {
   if (!code || !code.trim() || !looksLikeCode(code)) return null;
 
   try {
-    const result = evalSceneModule(code, resolveWithLocals);
+    const result = evalSceneModule(code, resolveWithLocals, { tagElements: true });
     if (!result) return null;
 
     // Find component

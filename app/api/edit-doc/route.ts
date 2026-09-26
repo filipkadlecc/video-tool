@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { resolveLevel, type ModelLevel } from "@/lib/models";
 import { withPlanInstruction } from "@/lib/plan-mode";
+import { describeElement, elementBrief, type ElementPick, type SceneElement } from "@/lib/scene-elements";
 import fs from "fs";
 import path from "path";
 import { EDITOR_AGENT_PROMPT } from "@/lib/prompts/editor-agent";
@@ -286,6 +287,7 @@ export async function POST(request: Request) {
     playheadFrame,
     level: requestedLevel,
     plan,
+    element: pick,
   } = body as {
     messages: ChatMessage[];
     doc: EditorDoc;
@@ -294,8 +296,18 @@ export async function POST(request: Request) {
     playheadFrame?: number;
     level?: string;
     plan?: boolean;
+    element?: ElementPick;
   };
   const { level, model, effort } = resolveLevel(requestedLevel);
+
+  // An element double-clicked inside a scene block: resolved against the code
+  // the person was looking at, so "make this orange" means exactly that tag.
+  let picked: { itemId: string; element: SceneElement } | null = null;
+  if (pick?.itemId && typeof pick.offset === "number") {
+    const host = incomingDoc?.tracks?.flatMap((t) => t.items).find((i) => i.id === pick.itemId);
+    const element = host?.type === "scene" ? describeElement(host.code, pick.offset) : null;
+    if (element) picked = { itemId: pick.itemId, element };
+  }
 
   if (!messages?.length) return Response.json({ error: "messages are required" }, { status: 400 });
   if (!incomingDoc?.tracks) return Response.json({ error: "doc is required" }, { status: 400 });
@@ -341,9 +353,12 @@ export async function POST(request: Request) {
   const conversation: Anthropic.MessageParam[] = messages.map((msg, i) => {
     const isLastUser = msg.role === "user" && i === messages.length - 1;
     if (!isLastUser) return { role: msg.role, content: msg.content };
+    const pickedNote = picked
+      ? `\n\n=== THEY HAVE SELECTED ONE ELEMENT ===\nInside scene block ${picked.itemId} they double-clicked the element below. "This", "it" and "here" mean this element. Change only it unless they say otherwise — use revise_scene on ${picked.itemId}; the scene writer is shown the element too.\n${elementBrief(picked.element)}`
+      : "";
     return {
       role: "user",
-      content: `${describeDoc(incomingDoc, ctx)}\n\n=== THE REQUEST ===\n${msg.content}`,
+      content: `${describeDoc(incomingDoc, ctx)}${pickedNote}\n\n=== THE REQUEST ===\n${msg.content}`,
     };
   });
   const anthropicMessages = plan ? withPlanInstruction(conversation) : conversation;
@@ -518,7 +533,12 @@ export async function POST(request: Request) {
                 ? `Keep its length and the timing of its beats. It plays for ${found.durationInFrames} frames at ${fps}fps.`
                 : `Keep its total length, fps and the timing of its beats exactly as they are. This block of the video shows only frames ${offset}–${offset + found.durationInFrames} of the composition, so that stretch is what the viewer sees; the rest must stay intact.`;
               try {
-                const revised = await reviseSceneCode(origin, project, found.code, input.instructions, timing, level);
+                // The picked element travels with its own block's revision, so
+                // the writer patches that tag instead of guessing from words.
+                const instructions = picked && picked.itemId === found.id
+                  ? `${input.instructions}\n\n${elementBrief(picked.element)}\nThe person selected this element on the canvas. Change ONLY it (and what is inside it) unless the instructions above say otherwise, and patch it in place with the edit tool — do not rewrite the scene.`
+                  : input.instructions;
+                const revised = await reviseSceneCode(origin, project, found.code, instructions, timing, level);
                 working = reviseSceneItem(working, found.id, revised, fps);
                 docChanged = true;
                 results.push({

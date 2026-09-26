@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { evalSceneCode } from "./DynamicScene";
+import { ITEM_ATTR } from "../lib/scene-elements";
 import { SPRINGS } from "./motion";
 import { animationFrames, composeEffects, itemEffects, presetStyle, visibleCharacters, wordProgress } from "../lib/editor-effects";
 import type { Effect } from "../lib/editor-effects";
@@ -297,7 +298,8 @@ const SceneLayer: React.FC<{ item: SceneItem; layout: ResolvedLayout }> = ({ ite
   const offset = item.sourceOffsetFrames ?? 0;
   const scene = <Component />;
   return (
-    <div style={layoutStyle(layout)}>
+    // ITEM_ATTR scopes a click in the editor to this block's own elements.
+    <div style={layoutStyle(layout)} {...{ [ITEM_ATTR]: item.id }}>
       {offset > 0 ? (
         // Shift the embedded composition back so this item shows the stretch
         // starting at `offset` — the same mechanism Remotion uses for trimBefore.

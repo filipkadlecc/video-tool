@@ -1,5 +1,6 @@
 "use client";
 
+import type { ElementPick } from "@/lib/scene-elements";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { AbsoluteFill } from "remotion";
@@ -29,6 +30,8 @@ export default function EditorPreview({
   onTogglePlay,
   range,
   projectId,
+  selectedElement,
+  onSelectElement,
 }: {
   doc: EditorDoc;
   /** Only used to remember the safe-zone choice per project. */
@@ -40,6 +43,8 @@ export default function EditorPreview({
   onSeek?: (frame: number) => void;
   onTogglePlay?: () => void;
   range?: { in: number | null; out: number | null };
+  selectedElement?: ElementPick | null;
+  onSelectElement?: (pick: ElementPick | null) => void;
 }) {
   // Subscribes: the selection box must sit on the item as RENDERED, and the
   // transport's timecode ticks. Both genuinely change every frame.
@@ -175,6 +180,8 @@ export default function EditorPreview({
             onChange={onChange!}
             boxW={box.w}
             boxH={box.h}
+            selectedElement={selectedElement}
+            onSelectElement={onSelectElement}
           />
         )}
         {box.w > 0 && (

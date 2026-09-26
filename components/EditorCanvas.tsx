@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   itemLayoutAt, itemsAtFrame, resizeLayout, setItemKey, setLayout, snapBox, updateItem,
   type EditorDoc, type EditorItem, type ItemLayout, type ResizeHandle, type TextItem,
 } from "@/lib/editor-doc";
 import { isAnimated } from "@/lib/editor-keys";
+import {
+  describeElement, elementLabel, findPickedNode, pickFromNode, ITEM_ATTR, SRC_ATTR, type ElementPick,
+} from "@/lib/scene-elements";
 
 /**
  * Direct manipulation over the preview: click to select, drag to move, handles
@@ -46,12 +49,16 @@ const HANDLES: { id: Handle; x: number; y: number; cursor: string }[] = [
 
 export default function EditorCanvas({
   doc, currentFrame, selectedIds, onSelectionChange, onChange, boxW, boxH,
+  selectedElement, onSelectElement,
 }: {
   doc: EditorDoc;
   currentFrame: number;
   selectedIds: Set<string>;
   onSelectionChange: (next: Set<string>) => void;
   onChange: (next: EditorDoc) => void;
+  /** One element picked INSIDE a scene block (double-click), or null. */
+  selectedElement?: ElementPick | null;
+  onSelectElement?: (pick: ElementPick | null) => void;
   /** Size of the rendered video box, in screen pixels. */
   boxW: number;
   boxH: number;
@@ -71,6 +78,8 @@ export default function EditorCanvas({
     if (editing?.id === item.id) return; // let the caret take the pointer
     e.preventDefault();
     e.stopPropagation();
+    // A pick belongs to one block; touching another one lets it go.
+    if (selectedElement && selectedElement.itemId !== item.id) onSelectElement?.(null);
     onSelectionChange(e.shiftKey || e.metaKey || e.ctrlKey
       ? new Set([...selectedIds, item.id])
       : new Set([item.id]));
@@ -80,7 +89,33 @@ export default function EditorCanvas({
     latest.current = { layout: at, itemId: item.id };
     setPreview(at);
     setDrag({ itemId: item.id, handle, startX: e.clientX, startY: e.clientY, origin: at, scale });
-  }, [scale, selectedIds, onSelectionChange, editing, currentFrame]);
+  }, [scale, selectedIds, onSelectionChange, editing, currentFrame, selectedElement, onSelectElement]);
+
+  // Esc lets go of a picked element (before it lets go of anything else).
+  useEffect(() => {
+    if (!selectedElement || !onSelectElement) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "Escape" || t?.closest("input, textarea, select, [contenteditable]")) return;
+      e.stopPropagation();
+      onSelectElement(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [selectedElement, onSelectElement]);
+
+  /**
+   * Double-click inside a scene block: find the element under the pointer in
+   * the Player beneath this overlay. elementsFromPoint sees through the overlay,
+   * so the scene's own DOM is right there, stamped with where each tag lives.
+   */
+  const pickAt = useCallback((clientX: number, clientY: number, itemId: string) => {
+    const scope = `[${ITEM_ATTR}="${CSS.escape(itemId)}"]`;
+    const hit = document.elementsFromPoint(clientX, clientY)
+      .find((n) => n.closest(scope) && n.closest(`[${SRC_ATTR}]`));
+    const pick = pickFromNode(hit ?? null);
+    if (pick && pick.itemId === itemId) onSelectElement?.(pick);
+  }, [onSelectElement]);
 
   useEffect(() => {
     if (!drag) return;
@@ -200,7 +235,7 @@ export default function EditorCanvas({
   return (
     <div
       ref={rootRef}
-      onPointerDown={() => onSelectionChange(new Set())}
+      onPointerDown={() => { onSelectionChange(new Set()); onSelectElement?.(null); }}
       style={{ position: "absolute", left: 0, top: 0, width: boxW, height: boxH, zIndex: 3 }}
     >
       {visible.map((item) => {
@@ -212,6 +247,11 @@ export default function EditorCanvas({
             key={item.id}
             onPointerDown={(e) => begin(e, item, null)}
             onDoubleClick={(e) => {
+              if (item.type === "scene" && onSelectElement) {
+                e.stopPropagation();
+                pickAt(e.clientX, e.clientY, item.id);
+                return;
+              }
               // Editing the words where you can see them beats hunting for a
               // field in a side panel.
               if (item.type !== "text") return;
@@ -294,12 +334,86 @@ export default function EditorCanvas({
         );
       })}
 
+      {selectedElement && (
+        <ElementOutline
+          pick={selectedElement}
+          code={(doc.tracks.flatMap((t) => t.items).find((i) => i.id === selectedElement.itemId) as { code?: string } | undefined)?.code ?? ""}
+          frame={currentFrame}
+          rootRef={rootRef}
+          onPick={(p) => onSelectElement?.(p)}
+        />
+      )}
+
       {guides.x != null && (
         <div style={{ position: "absolute", left: guides.x * scale, top: 0, bottom: 0, width: 1, background: "var(--brand)", opacity: 0.8, pointerEvents: "none" }} />
       )}
       {guides.y != null && (
         <div style={{ position: "absolute", top: guides.y * scale, left: 0, right: 0, height: 1, background: "var(--brand)", opacity: 0.8, pointerEvents: "none" }} />
       )}
+    </div>
+  );
+}
+
+/**
+ * The outline on a picked element, re-measured every frame: the element is
+ * animated, and the box has to follow it rather than stay where it was clicked.
+ */
+function ElementOutline({ pick, code, frame, rootRef, onPick }: {
+  pick: ElementPick;
+  code: string;
+  frame: number;
+  rootRef: React.RefObject<HTMLDivElement | null>;
+  onPick: (pick: ElementPick) => void;
+}) {
+  const [rect, setRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  const described = useMemo(() => describeElement(code, pick.offset), [code, pick.offset]);
+
+  useLayoutEffect(() => {
+    // After the Player has painted this frame, not before.
+    const raf = requestAnimationFrame(() => {
+      const node = findPickedNode(pick);
+      const root = rootRef.current?.getBoundingClientRect();
+      if (!node || !root) { setRect(null); return; }
+      const b = node.getBoundingClientRect();
+      setRect({ left: b.left - root.left, top: b.top - root.top, width: b.width, height: b.height });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pick, frame, rootRef]);
+
+  // One level out: the element that contains this one.
+  const parent = () => {
+    const node = findPickedNode(pick);
+    const up = pickFromNode(node?.parentElement ?? null);
+    if (up && up.itemId === pick.itemId) onPick(up);
+  };
+
+  if (!rect) return null;
+  return (
+    <div
+      style={{
+        position: "absolute", left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+        outline: "1.5px solid var(--brand)", outlineOffset: 1, pointerEvents: "none", zIndex: 2,
+      }}
+    >
+      <span
+        className="t-data-s"
+        style={{
+          position: "absolute", left: -2, top: -20, height: 18,
+          display: "inline-flex", alignItems: "center", gap: 6, padding: "0 4px 0 6px",
+          background: "var(--brand)", color: "var(--brand-ink)",
+          borderRadius: "2px 2px 0 0", whiteSpace: "nowrap", pointerEvents: "auto",
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {described ? elementLabel(described) : "element"}
+        <button
+          onClick={parent}
+          title="Select the element around this one"
+          style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: "0 2px", font: "inherit" }}
+        >
+          ↑
+        </button>
+      </span>
     </div>
   );
 }

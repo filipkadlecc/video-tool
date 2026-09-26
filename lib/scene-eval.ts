@@ -29,6 +29,7 @@
 import * as React from "react";
 import type { Orientation } from "./types";
 import { transform } from "sucrase";
+import { tagSceneElements } from "./scene-elements";
 import { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, VERTICAL_CENTRE_X, figmaPlane, figmaBaselineNudge } from "../remotion/theme";
 
 const THEME_MODULE = { BRAND, BRAND_FONT_FACE_CSS, VERTICAL_DESIGN, VERTICAL_CENTRE_X, figmaPlane, figmaBaselineNudge };
@@ -143,9 +144,13 @@ export function looksLikeCode(code: string): boolean {
 export function evalSceneModule(
   code: string,
   req: (name: string) => unknown = resolveModule,
+  opts: { tagElements?: boolean } = {},
 ): Record<string, unknown> | null {
   if (!code || !code.trim() || !looksLikeCode(code)) return null;
-  const transformed = transform(code, {
+  // The preview stamps each DOM tag with where it sits in the code, so a click
+  // on the canvas can find its element (lib/scene-elements.ts).
+  const source = opts.tagElements ? tagSceneElements(code) : code;
+  const transformed = transform(source, {
     transforms: ["typescript", "jsx", "imports"],
     jsxRuntime: "classic",
     production: true,

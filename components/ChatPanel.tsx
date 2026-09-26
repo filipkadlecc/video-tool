@@ -13,6 +13,7 @@ import { usePlayheadStore, usePlayheadFrame } from "@/hooks/usePlayhead";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import type { DocChange } from "@/lib/editor-agent";
 import Segmented from "@/components/ui/Segmented";
+import { describeElement, elementLabel, type ElementPick } from "@/lib/scene-elements";
 import { MODEL_LEVELS, readStoredLevel, storeLevel, type ModelLevel } from "@/lib/models";
 
 function extractCodeFromResponse(text: string, animationType?: string): string {
@@ -157,6 +158,9 @@ interface ChatPanelProps {
   onReceipt?: (receipt: DocChange[] | null) => void;
   /** Drop a context chip — the clip stops being sent with the next message. */
   onDeselectItem?: (id: string) => void;
+  /** An element picked inside a scene; the next message is about it. */
+  selectedElement?: ElementPick | null;
+  onClearElement?: () => void;
 }
 
 const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel(
@@ -192,6 +196,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     receipt,
     onReceipt,
     onDeselectItem,
+    selectedElement,
+    onClearElement,
   },
   ref,
 ) {
@@ -239,6 +245,14 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     : null;
 
   /** The selected clips, named and coloured, for the composer's context chips. */
+  // The picked element, named the way the canvas names it.
+  const elementChip = (() => {
+    if (!selectedElement || !doc) return null;
+    const item = findItem(doc, selectedElement.itemId)?.item;
+    const el = item?.type === "scene" ? describeElement(item.code, selectedElement.offset) : null;
+    return el ? elementLabel(el) : null;
+  })();
+
   const contextClips = (selectedIds ?? []).flatMap((id) => {
     const found = doc ? findItem(doc, id) : null;
     if (!found) return [];
@@ -323,7 +337,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     // doc === undefined — so a first pass would write a TSX file and silently
     // ignore the timeline it was supposed to fill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError, doc, selectedIds, playhead, onDocChanged, level],
+    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError, doc, selectedIds, playhead, onDocChanged, level, selectedElement],
   );
 
   async function sendMessage(text: string, overrideCode?: string, opts: { force?: boolean; plan?: boolean } = {}) {
@@ -557,6 +571,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         playheadFrame: playhead.getFrame(),
         level,
         plan,
+        element: selectedElement ?? undefined,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -1002,6 +1017,22 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 )}
               </span>
             ))}
+            {elementChip && (
+              <span style={{ ...chipStyle, color: "var(--brand)", borderColor: "var(--brand-tint-line)", background: "var(--brand-tint-bg)" }}>
+                <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  Editing: {elementChip}
+                </span>
+                {onClearElement && (
+                  <button
+                    onClick={onClearElement}
+                    aria-label="Stop editing this element"
+                    style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0, display: "grid", placeItems: "center" }}
+                  >
+                    <Icon name="close" size={10} />
+                  </button>
+                )}
+              </span>
+            )}
             <TimecodeChip fps={doc.size.fps} />
           </div>
         )}

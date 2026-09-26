@@ -1,6 +1,7 @@
 "use client";
 
 import { readStoredLevel } from "@/lib/models";
+import type { ElementPick } from "@/lib/scene-elements";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import GeneratingOverlay from "@/components/GeneratingOverlay";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -153,6 +154,8 @@ export default function ProjectEditor() {
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   // Shared by the canvas, the timeline and the inspector.
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  // One element picked INSIDE a scene block, by double-click on the canvas.
+  const [selectedElement, setSelectedElement] = useState<ElementPick | null>(null);
   // Which tab each panel is showing while the visual editor is open. Code-first
   // projects keep the old single-purpose panels.
   const [bottomTab, setBottomTab] = useState<"footage" | "assets" | "snippets" | "effects">("footage");
@@ -646,6 +649,19 @@ export default function ProjectEditor() {
   }, [forceSave, code, codeHistory, doc, docHistory, playhead]);
 
   const docView = doc && !showCodeEditor ? doc : undefined;
+
+  // A pick points at a place in one block's code. It lets go when that block is
+  // deselected, or when its code changes under it (an edit moves every offset).
+  const pickedCode = selectedElement
+    ? (doc?.tracks.flatMap((t) => t.items).find((i) => i.id === selectedElement.itemId) as { code?: string } | undefined)?.code
+    : undefined;
+  const pickedCodeRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!selectedElement) { pickedCodeRef.current = undefined; return; }
+    if (!selectedItemIds.has(selectedElement.itemId) || pickedCode === undefined) { setSelectedElement(null); return; }
+    if (pickedCodeRef.current !== undefined && pickedCodeRef.current !== pickedCode) { setSelectedElement(null); return; }
+    pickedCodeRef.current = pickedCode;
+  }, [selectedElement, selectedItemIds, pickedCode]);
 
   const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
     // The document comes FIRST. Every doc so far was born from "Open in editor"
@@ -1350,6 +1366,8 @@ export default function ProjectEditor() {
       onChange={commitDoc}
       onSeek={seekTo}
       onTogglePlay={togglePlay}
+      selectedElement={selectedElement}
+      onSelectElement={setSelectedElement}
     />
   ) : null;
 
@@ -1862,6 +1880,8 @@ export default function ProjectEditor() {
                 sceneError={sceneError}
                 doc={docView}
                 selectedIds={[...selectedItemIds]}
+                selectedElement={selectedElement}
+                onClearElement={() => setSelectedElement(null)}
                 onDocChanged={commitAiDoc}
                 onUndoEdit={undoAiEdit}
                 onSelectItems={(ids) => setSelectedItemIds(new Set(ids))}
