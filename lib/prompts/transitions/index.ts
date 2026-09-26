@@ -31,14 +31,14 @@ export const TRANSITION_MODES: TransitionModeMeta[] = [
 // the non-negotiables so they win on recency.
 const SHARED = `## Transitions — how scenes hand off
 
-The background is painted ONCE at the composition root, inside the \`cameraDrift\` wrapper, and every scene is TRANSPARENT foreground-only (see "Main Composition"). A transition therefore only ever swaps the FOREGROUND — the world never resets. That is what keeps scene changes from looking like a slideshow.
+The background is painted ONCE at the composition root, outside any camera transform, and every scene is TRANSPARENT foreground-only (see "Main Composition"). A transition therefore only ever swaps the FOREGROUND — the world never resets. That is what keeps scene changes from looking like a slideshow.
 
 Non-negotiable for every transition:
 - NEVER render \`<Background />\` inside a scene. NEVER give a scene's outer \`<AbsoluteFill>\` a \`backgroundColor\`.
 - NEVER use \`sceneExit\` or any recede-before-transition (no scale-down + drift-away). That "shrink then fade" is the cheap move we are eliminating.
 - NEVER use \`slide\` / \`wipe\` / \`clock-wipe\` / \`flip\` / \`iris\` — they read as PowerPoint.
 - The \`timing={linearTiming({ durationInFrames: TRANSITION })}\` attribute is REQUIRED and must stay literal on every \`<TransitionSeries.Transition>\` (the timeline editor reads the overlap from it).
-- Keep the \`cameraDrift(useCurrentFrame(), durationInFrames)\` wrapper around the whole composition — it is the always-on backbone for all modes.`;
+- NO \`cameraDrift\` zoom unless the user explicitly asks for one (base rule 17). If they do, it goes on the content layer only — the background never zooms.`;
 
 const TRANSITION_PROMPTS: Record<TransitionStyle, string> = {
   cut: `${SHARED}
@@ -70,7 +70,7 @@ A motivated camera move between scenes — a dolly/push "through the lens", NEVE
 
 - Use \`presentation={cameraPush()}\` on EVERY \`<TransitionSeries.Transition>\` (pure dolly — do NOT pass pan options; a pan without a push is a slide).
 - Set \`const TRANSITION = Math.round(20 * fps / 25);\` — long enough to read the move.
-- \`cameraDrift\` remains the slow backbone over the whole piece; \`cameraPush\` is the punctuation at each seam. The exiting scene pushes forward and softens while the next arrives from depth into focus — one continuous push.`,
+- \`cameraPush\` is the ONLY camera move — no \`cameraDrift\` over the whole piece unless the user also asks for a slow zoom. The push moves the scenes only; the root background stays still. The exiting scene pushes forward and softens while the next arrives from depth into focus — one continuous push.`,
 };
 
 export function getTransitionPrompt(mode: TransitionStyle | undefined): string {

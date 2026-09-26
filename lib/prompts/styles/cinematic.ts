@@ -1,13 +1,13 @@
 export const CINEMATIC_STYLE_PROMPT = `
 === STYLE: CINEMATIC ===
 
-Inspired by Apple product films, Anthropic launches, A24 trailers. Slow, deliberate, deep. The camera does the work; subjects barely move.
+Inspired by Apple product films, Anthropic launches, A24 trailers. Slow, deliberate, deep. Depth, light and patient timing do the work; subjects barely move.
 
 **MANDATORY SIGNATURES — must appear in every cinematic scene. These override any composition you see in the few-shot snippets.**
 
 1. LETTERBOX BANDS — 8-12% empty dark gradient bands at TOP AND BOTTOM of the canvas. Use linear-gradient masks (from #000 to transparent over the band height) to create the cinema feel.
 2. Background is BLURRED — \`filter: blur(12-24px)\` on background elements. Foreground stays sharp. Even on a solid color background, layer a faint blur over a noise/gradient layer.
-3. SLOW CONTINUOUS CAMERA MOTION on root content: wrap your entire scene content in a container with \`transform: scale(\${1 + frame * 0.0003}) translateY(\${frame * 0.12}px)\`. Imperceptible per frame but present every frame.
+3. SLOW CONTINUOUS DRIFT on the sharp content layer: wrap the scene's sharp content in a container with \`transform: translateY(\${frame * 0.12}px)\` — a pan, NOT a zoom. NO \`scale()\` camera move unless the user explicitly asked for a zoom (base rule 17), and even then only on the content layer — the background never zooms.
 4. Crossfades between phases — 25-40 frame opacity overlaps. NEVER hard cuts (those are kinetic's signature).
 5. VIGNETTE via inset radial gradient at the root — dark corners, lighter center.
 6. HEAVY soft shadows on every floating element — \`box-shadow: 0 24px 64px rgba(0,0,0,0.5)\`. Long, soft, never sharp.
@@ -21,9 +21,9 @@ Composition:
 - Add a subtle letterbox feel — 8-12% empty bands at top/bottom (use top/bottom gradient masks if no actual bars).
 
 Motion:
-- Camera-like motion is THE signature: every scene has a slow continuous transform on the root content — e.g. \`transform: scale(\${1 + frame * 0.0003}) translateY(\${frame * 0.15}px)\`. Imperceptibly slow zoom-in or pan. Always present.
+- A slow continuous drift on the sharp content layer — e.g. \`transform: translateY(\${frame * 0.15}px)\`. An imperceptible pan, never a zoom-in unless the user asked for one. The background layer never moves with it.
 - GENTLE springs for entrances (mass: 1.0, damping: 30, stiffness: 80). Reveals are unhurried.
-- Entrance reveals use motion — translate + scale over 40-80 frames. NEVER animate a \`filter: blur(Npx → 0)\` on the entrance (reveal blur is banned; the blurred layer below is a STATIC background only). Content must be visible from frame 0; do NOT hold a black or near-black canvas before the reveal. Cinematic pacing comes from slow camera motion and patient holds AFTER the reveal, never from black anticipation.
+- Entrance reveals use motion — translate + scale over 40-80 frames. NEVER animate a \`filter: blur(Npx → 0)\` on the entrance (reveal blur is banned; the blurred layer below is a STATIC background only). Content must be visible from frame 0; do NOT hold a black or near-black canvas before the reveal. Cinematic pacing comes from slow drift and patient holds AFTER the reveal, never from black anticipation.
 - Crossfades between phases at 25-40 frame overlap, never hard cuts.
 
 Typography:
@@ -41,13 +41,12 @@ Depth & color:
 
 ### Cinematic root pattern — copy this skeleton
 
-Every cinematic scene wraps its content like this. The letterbox bands, vignette, blurred background, and slow camera motion are NOT optional — they're what makes it cinematic.
+Every cinematic scene wraps its content like this. The letterbox bands, vignette, blurred background, and slow drift are NOT optional — they're what makes it cinematic.
 
 \`\`\`tsx
 const CinematicScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const cameraScale = 1 + frame * 0.0003;          // imperceptible slow zoom
-  const cameraY = frame * 0.12;                    // very slow downward drift
+  const cameraY = frame * 0.12;                    // very slow downward drift — a pan, NOT a zoom
 
   return (
     <AbsoluteFill style={{ fontFamily: "'GT Walsheim', Inter, sans-serif", overflow: "hidden" }}>
@@ -58,8 +57,8 @@ const CinematicScene: React.FC = () => {
         {/* large abstract gradient blob or color wash here */}
       </AbsoluteFill>
 
-      {/* All sharp content gets wrapped in the slow camera transform */}
-      <AbsoluteFill style={{ transform: \`scale(\${cameraScale}) translateY(\${cameraY}px)\` }}>
+      {/* All sharp content gets the slow drift. No scale() unless the user asked for a zoom. */}
+      <AbsoluteFill style={{ transform: \`translateY(\${cameraY}px)\` }}>
         {/* hero text, supporting content, floating cards — all here */}
         {/* each card uses box-shadow: 0 24px 64px rgba(0,0,0,0.5) */}
       </AbsoluteFill>

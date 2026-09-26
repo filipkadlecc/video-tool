@@ -63,7 +63,7 @@ import { TransitionSeries, linearTiming } from "@remotion/transitions";
 // "Transitions" section. Never use canned effects (slide/wipe/clock-wipe/flip).
 // The host resolves "../transitions" / "./transitions" / "remotion/transitions".
 import {
-  cameraDrift,   // cameraDrift(rootFrame, totalFrames) — ONE unbroken camera move over the whole comp (always on)
+  cameraDrift,   // cameraDrift(rootFrame, totalFrames) — slow camera zoom/pan. ONLY when the user explicitly asks for one; wraps the CONTENT layer, never the background
   hardCut,       // hardCut()       — clean instant cut    (transition style: cut)
   crossDissolve, // crossDissolve() — quick soft blend     (transition style: blend)
   cameraPush,    // cameraPush()    — motivated dolly push  (transition style: camera)
@@ -352,9 +352,10 @@ DO NOT do any of the following. If you catch yourself starting any of these, swi
 11. **Do NOT use \`<Trail>\` from \`@remotion/motion-blur\` casually.** It's render-expensive — reserve for short high-velocity moments (a number snapping into place, a card flying across the frame). Never on holds.
 12. **Do NOT reinvent IntroCard / LowerThird / EndCard / StatCallout etc. from scratch** when the brief calls for one. Adapt the snippet — see "Reusable Snippets" below.
 13. **Do NOT omit \`fontFamily\` on any text element.** The renderer's default is serif/Times. If a single text node forgets \`fontFamily\`, the exported MP4 will show it in serif while the preview looks correct — invisible-until-export bug. Every \`<div>\`, \`<span>\`, or styled element with text content needs \`fontFamily: "'GT Walsheim', Inter, sans-serif"\` (the default for ~90% of text) or \`fontFamily: "Inter, sans-serif"\` (only for subtitles and long body copy).
-14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, use slow camera motion (a continuous slow zoom or pan) on already-visible content — NOT a black hold. If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
+14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, let already-visible content breathe with ambient micro-motion and staged sub-element reveals — NOT a black hold (and not a zoom — see rule 17). If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
 15. **ABSOLUTE RULE — NEVER animate a Gaussian / focus-pull blur on a reveal.** Elements must arrive SHARP. Do NOT ramp \`filter: blur()\` (or \`backdrop-filter: blur()\`) from a positive value down to 0 as anything enters, and NEVER put an animated blur on text or on a hero as it appears — that split-second fuzziness is explicitly banned and keeps regressing. Reveals combine opacity + translate + scale (+ rotate) ONLY. This OVERRIDES every style file (default, kinetic, editorial, cinematic) and every few-shot example: if any guidance or snippet shows \`blur(Npx → 0)\` on an entrance, drop the blur term. The ONLY permitted blur is a STATIC (non-animated) \`filter: blur\` on a purely decorative BACKGROUND layer for depth-of-field — it must never touch foreground text and must never animate in.
 16. **ABSOLUTE RULE — GT Walsheim has exactly THREE weights here: 300 (Light), 400 (Regular), 500 (Medium).** Never set \`fontWeight\` above 500, and never use the keyword \`bold\` as a weight. 600, 700, 800 and 900 are not shipped; asking for one resolves to Medium anyway, so a heavier number achieves nothing except a lie in the source. Weight is NOT how you make something dominant — size, colour and space are. A hero headline is Medium at 8-12% of canvas height, not Bold at 5%. Body copy and long text are Regular; Light is for a secondary clause set against a Medium one (as in "**Watch the full video** on our channel"). This overrides every style file and every example: if a snippet anywhere shows a weight above 500, use 500.
+17. **ABSOLUTE RULE — NO zoom unless the user asks for it.** Do NOT add a camera zoom, push-in, dolly, Ken Burns, slow scale-up of the frame, or \`cameraDrift\` on your own initiative — not for "cinematic feel", not for pacing, not in any style. Only when the user's message explicitly asks for a zoom / push-in / camera move (or the project's transition style is CAMERA, which the user chose) may the frame move. And when it does: **the background NEVER zooms.** The camera transform goes on the CONTENT layer only; the root \`<Background />\` stays still behind it (see "Main Composition"). Individual elements may still scale as part of their own reveal — that is not a zoom. This overrides every style file and every example.
 
 ---
 
@@ -881,24 +882,27 @@ Use \`<Img>\` from Remotion (not \`<img>\`) for all images.
 
 ## Main Composition (TransitionSeries)
 
-The composition has THREE layers, in order:
+The composition has TWO layers, in order:
 
-1. **The camera** — wrap everything in a single \`AbsoluteFill\` whose transform is \`cameraDrift(useCurrentFrame(), durationInFrames)\`. Call \`useCurrentFrame()\` at the composition's TOP LEVEL (outside every \`Sequence\`) so it reads the ROOT timeline frame — one slow, monotonic move across the whole video that **never resets at a scene boundary**. Always on, every mode.
-2. **The background — painted ONCE.** Render a single \`<Background />\` directly inside the camera wrapper, behind the scenes. This is the persistent "world": it never resets, never dissolves, never blinks between scenes. (On transparent/alpha exports it is automatically stripped — leave it in; do NOT make it conditional.)
-3. **The scenes** — a \`<TransitionSeries>\` of TRANSPARENT, foreground-only scenes. Because the world is already painted, a transition only ever swaps the FOREGROUND — that's what stops scene changes looking like a slideshow.
+1. **The background — painted ONCE, and it never moves.** Render a single \`<Background />\` at the root, behind everything. This is the persistent "world": it never resets, never dissolves, never blinks between scenes, and it is NEVER inside a camera/zoom transform. (On transparent/alpha exports it is automatically stripped — leave it in; do NOT make it conditional.)
+2. **The content** — a plain \`<AbsoluteFill>\` holding a \`<TransitionSeries>\` of TRANSPARENT, foreground-only scenes. Because the world is already painted, a transition only ever swaps the FOREGROUND — that's what stops scene changes looking like a slideshow.
+
+**No camera move by default.** Only if the user explicitly asks for a zoom / push-in / camera move, put \`cameraDrift(useCurrentFrame(), durationInFrames)\` on the CONTENT \`<AbsoluteFill>\` (the one holding the \`TransitionSeries\`) — never on the background, never on the root. Call \`useCurrentFrame()\` at the composition's TOP LEVEL so the move reads the ROOT frame and never resets at a scene boundary. Pass a gentle \`zoom\` the user asked for (e.g. \`{ zoom: 0.05 }\`); \`{ zoom: 0 }\` with a pan is a pan only.
 
 The transition PRESENTATION and the \`TRANSITION\` value depend on this project's transition style (cut / blend / camera) — see the **Transitions** section below for exactly which to use. The skeleton is identical for all three:
 
 \`\`\`tsx
 const MainComposition: React.FC = () => {
   const { fps, durationInFrames } = useVideoConfig();
-  const camera = cameraDrift(useCurrentFrame(), durationInFrames); // ROOT frame — never resets
 
   return (
-    <AbsoluteFill style={{ transform: camera.transform, transformOrigin: "50% 50%" }}>
-      {/* The world — painted ONCE, behind every scene. Never reset, never dissolved. */}
+    <AbsoluteFill>
+      {/* The world — painted ONCE, behind every scene. Never reset, never dissolved, never zoomed. */}
       <Background />
 
+      {/* The content layer. NO transform by default. Only if the user asked for a zoom/camera move:
+          style={{ transform: cameraDrift(useCurrentFrame(), durationInFrames).transform, transformOrigin: "50% 50%" }} */}
+      <AbsoluteFill>
       {/* Foreground scenes only — transparent, no per-scene background. */}
       <TransitionSeries>
         {/* Scene 1 — content visible/arriving on frame 0, NO fade-in from black */}
@@ -921,14 +925,15 @@ const MainComposition: React.FC = () => {
           <SceneFinal />
         </TransitionSeries.Sequence>
       </TransitionSeries>
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 };
 \`\`\`
 
 Rules:
-- **One root \`<Background />\` inside the camera wrapper.** NEVER render \`<Background />\` (or set \`backgroundColor\`) inside a scene. Keep the camera wrapper \`transform\`-only (no \`backgroundColor\`) so alpha exports stay transparent.
-- **One \`cameraDrift\` camera for the whole video**, driven by the ROOT \`useCurrentFrame()\` — never a per-scene camera, never reset.
+- **One root \`<Background />\`, outside and behind the content layer.** NEVER render \`<Background />\` (or set \`backgroundColor\`) inside a scene, and NEVER put it inside a transform. Keep the content layer free of \`backgroundColor\` so alpha exports stay transparent.
+- **No zoom unless asked (rule 17).** If the user asked for one: ONE \`cameraDrift\` on the content layer, driven by the ROOT \`useCurrentFrame()\` — never per-scene, never reset, never on the background.
 - **Use the presentation + \`TRANSITION\` value from this project's transition style** (see Transitions). The \`timing={linearTiming({ durationInFrames: TRANSITION })}\` attribute is REQUIRED and must stay literal on every \`<TransitionSeries.Transition>\` (the timeline editor reads the overlap from it).
 - **Do NOT use \`slide\`/\`wipe\`/\`clock-wipe\`/\`flip\`/\`iris\`** — canned slideshow effects. \`fade()\` only for a rare deliberate mood reset.
 - **NEVER add a \`BlackScreen\` / black / empty opening or closing sequence**, and do NOT add any transition before the first scene or after the last. The first scene's content is visible/arriving on frame 0; the last scene holds fully present on its last frame.
@@ -996,7 +1001,7 @@ When the user's message includes \`[SCENE ERROR: ...]\`, the current code has a 
 1. Single file with all scenes and composition
 2. \`fps\` and \`durationInFrames\` exported
 3. \`COLORS\` object defined; \`SPRINGS\` / \`TIMING\` / \`springIn\` / \`ambientDrift\` IMPORTED from \`"../motion"\` (NOT redefined)
-4. ONE \`Background\` rendered at the composition root (inside the camera wrapper); scenes are TRANSPARENT with no \`backgroundColor\` and no per-scene \`<Background />\`
+4. ONE \`Background\` rendered at the composition root (outside any camera transform — the background never zooms); scenes are TRANSPARENT with no \`backgroundColor\` and no per-scene \`<Background />\`
 5. At least TWO different spring presets used in the file — never single-preset across all elements
 6. Every reveal combines 2–3 transforms (opacity + translate + scale/rotate — never an animated blur) — or uses \`compoundReveal\`
 7. At least one scene uses off-center / asymmetric layout (NOT alignItems+justifyContent:center)
@@ -1006,7 +1011,7 @@ When the user's message includes \`[SCENE ERROR: ...]\`, the current code has a 
 11. Staggered delays — \`TIMING.staggerLetter\` (≈2) for letters, \`TIMING.staggerItem\` (≈12) for cards, \`TIMING.staggerLong\` (≈18) for major phases
 12. Data arrays defined as constants, mapped with sub-components and \`staggeredSpring\`
 13. All styles are inline
-14. Camera wrapper (\`cameraDrift\`, root frame) → root \`<Background />\` → \`TransitionSeries\` of transparent scenes; the per-boundary presentation + \`TRANSITION\` match this project's transition style (cut/blend/camera, see Transitions); NO \`sceneExit\`/recede, NEVER slide/wipe/clock-wipe/flip, NO BlackScreen bookends, NO fade-in/out from/to black
+14. Root \`<Background />\` (never transformed) → content \`<AbsoluteFill>\` → \`TransitionSeries\` of transparent scenes; NO \`cameraDrift\`/zoom unless the user asked (then on the content layer only); the per-boundary presentation + \`TRANSITION\` match this project's transition style (cut/blend/camera, see Transitions); NO \`sceneExit\`/recede, NEVER slide/wipe/clock-wipe/flip, NO BlackScreen bookends, NO fade-in/out from/to black
 15. \`durationInFrames\` matches the actual total
 16. All images use \`<Img>\` + \`staticFile()\`
 17. No external CSS, no styled-components, no class names
