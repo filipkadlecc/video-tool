@@ -130,7 +130,7 @@ export default function EditorPreview({
         </div>
       )}
 
-      <div ref={boxRef} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 2, minHeight: 0, position: "relative" }}>
+      <div ref={boxRef} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#020202", padding: 2, minHeight: 0, position: "relative" }}>
         <div style={{ position: "relative", width: box.w || "100%", height: box.h || undefined }}>
         <Player
           ref={playerRef}
@@ -143,7 +143,7 @@ export default function EditorPreview({
           style={{ width: "100%", height: "100%" }}
           loop={loop}
           errorFallback={({ error }) => (
-            <AbsoluteFill style={{ backgroundColor: "#040D12", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+            <AbsoluteFill style={{ backgroundColor: "#020202", display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
               <div style={{ color: "#f87171", fontSize: 28, textAlign: "center", fontFamily: "sans-serif" }}>
                 <div style={{ marginBottom: 12 }}>Render error</div>
                 <div style={{ color: "var(--ink-tertiary)", fontSize: 20 }}>{error.message}</div>

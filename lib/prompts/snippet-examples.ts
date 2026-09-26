@@ -170,7 +170,7 @@ export default function SvgWalkthrough() {
   const cur = cursorPos(frame);
 
   return (
-    <AbsoluteFill style={{ background: "#161718" }}>
+    <AbsoluteFill style={{ background: "#020202" }}>
       {/* BASE: frame 1 (the empty modal) — stays visible until the form refresh */}
       <SvgFrame index={0} style={{ opacity: 1 - formT }} />
 
@@ -236,7 +236,7 @@ export default function SvgWalkthrough() {
 
 // One-liner inventory of every branded snippet. The LLM uses this to decide
 // which pattern to adapt when the full source isn't embedded as a few-shot.
-// Every snippet shares the Apify grammar: flat #161718 bg, orange-only accent,
+// Every snippet shares the Apify grammar: flat #020202 bg, orange-only accent,
 // highlighted-phrase headline. No top-left wordmark — that has been removed.
 export const SNIPPET_INVENTORY = `
 - **IntroCard** — PLGTM hero. Headline with ONE orange-highlighted phrase + muted subhead. SNAPPY title, LIQUID highlight pill reveal.

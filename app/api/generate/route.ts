@@ -114,7 +114,7 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
   {
     name: "render_frames",
     description:
-      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. Inspect them for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as near-black #161718 with a single orange accent — no other accent colours, no pure white/black), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
+      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. Inspect them for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
     input_schema: {
       type: "object",
       properties: {

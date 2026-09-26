@@ -7,7 +7,7 @@ ALWAYS import from \`@/lib/brand\` — never hardcode hex strings:
 \`\`\`tsx
 import { BRAND } from "@/lib/brand";
 
-BRAND.colors.bg          // #161718  — page/canvas background
+BRAND.colors.bg          // #020202  — page/canvas background
 BRAND.colors.card        // #1d1e1f  — slightly lifted card surface
 BRAND.colors.border      // #3d3f43  — 1px hairlines on cards
 BRAND.colors.text        // #f4f4f5  — primary text on dark
@@ -24,7 +24,7 @@ chip that sits directly on the backdrop, use an OPAQUE recipe instead: \`card\` 
 \`orange\` border (+ \`orange\` text), not an \`orangeTint\` fill.
 
 USAGE RULES
-- Background: ALWAYS \`BRAND.colors.bg\` (#161718). Never pure black, never anything else.
+- Background: ALWAYS \`BRAND.colors.bg\` (#020202). Not pure #000, never anything else.
 - Text on dark: \`BRAND.colors.text\` for headlines/body, \`textMuted\` for subheads, \`textSubtle\` for captions.
 - Orange is for emphasis — use it sparingly and on purpose:
   - One highlighted phrase per headline (wrap in an inline pill with an OPAQUE \`card\` bg + 1px \`orange\` bottom border, ~8px h-padding, 6px radius — \`orangeTint\` only if the pill sits over an opaque surface)

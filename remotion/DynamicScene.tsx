@@ -64,7 +64,7 @@ function makeErrorComponent(msg: string): React.ComponentType<Record<string, unk
       AbsoluteFill,
       {
         style: {
-          backgroundColor: "#040D12",
+          backgroundColor: "#020202",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -151,7 +151,7 @@ export const DynamicScene: React.FC<{ code?: string; svgContents?: SvgFrameSlot[
     return (
       <AbsoluteFill
         style={{
-          backgroundColor: "#040D12",
+          backgroundColor: "#020202",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

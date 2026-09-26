@@ -55,7 +55,7 @@ export default function ProjectSettingsDialog({
   const [width, setWidth] = useState(String(doc.size.width));
   const [height, setHeight] = useState(String(doc.size.height));
   const [fps, setFps] = useState(doc.size.fps);
-  const [background, setBackground] = useState(doc.background ?? "#000000");
+  const [background, setBackground] = useState(doc.background ?? "#020202");
   const [previewed, setPreviewed] = useState(false);
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function ProjectSettingsDialog({
     setWidth(String(doc.size.width));
     setHeight(String(doc.size.height));
     setFps(doc.size.fps);
-    setBackground(doc.background ?? "#000000");
+    setBackground(doc.background ?? "#020202");
     setPreviewed(false);
     // Only when the dialog opens: re-syncing while a preview is showing would
     // overwrite what you are looking at.
@@ -77,7 +77,7 @@ export default function ProjectSettingsDialog({
 
   const frameChanged = valid && (w !== original.size.width || h !== original.size.height);
   const rateChanged = fps !== original.size.fps;
-  const bgChanged = (background || "#000000") !== (original.background ?? "#000000");
+  const bgChanged = (background || "#020202") !== (original.background ?? "#020202");
   const dirty = frameChanged || rateChanged || bgChanged;
 
   /** What the document becomes. Built the same way for preview and for apply. */
@@ -85,7 +85,7 @@ export default function ProjectSettingsDialog({
     let out = original;
     if (valid && (w !== original.size.width || h !== original.size.height)) out = resizeDoc(out, w, h);
     if (fps !== original.size.fps) out = retimeDoc(out, fps);
-    if ((background || "#000000") !== (original.background ?? "#000000")) out = { ...out, background };
+    if ((background || "#020202") !== (original.background ?? "#020202")) out = { ...out, background };
     return out;
   }, [original, valid, w, h, fps, background]);
 
@@ -149,13 +149,13 @@ export default function ProjectSettingsDialog({
             <label
               style={{
                 width: 28, height: 28, borderRadius: "var(--r-control)", flexShrink: 0,
-                border: "1px solid var(--border-edge)", background: background || "#000000",
+                border: "1px solid var(--border-edge)", background: background || "#020202",
                 cursor: "pointer", position: "relative", overflow: "hidden",
               }}
             >
               <input
                 type="color"
-                value={/^#[0-9a-f]{6}$/i.test(background) ? background : "#000000"}
+                value={/^#[0-9a-f]{6}$/i.test(background) ? background : "#020202"}
                 onChange={(e) => setBackground(e.target.value)}
                 style={{ position: "absolute", inset: -4, opacity: 0, cursor: "pointer" }}
               />

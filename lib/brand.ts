@@ -11,7 +11,7 @@
 export const BRAND = {
   colors: {
     // === Canonical Apify marketing palette (use these in new scenes) ===
-    bg: "#161718",
+    bg: "#020202",
     card: "#1d1e1f",
     border: "#3d3f43",
     text: "#f4f4f5",

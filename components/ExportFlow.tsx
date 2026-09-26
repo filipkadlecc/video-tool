@@ -545,10 +545,7 @@ export default function ExportFlow({
             <Button size="dialog" variant="ghost" onClick={reset}>Export again…</Button>
             <div style={{ flex: 1 }} />
             <a href={result.url} download={`${fileName}.${ext}`} style={{ textDecoration: "none" }}>
-              <Button size="dialog" variant="secondary" icon="download">Save file</Button>
-            </a>
-            <a href={result.url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-              <Button size="dialog" variant="primary">Open</Button>
+              <Button size="dialog" variant="primary" icon="download">Save file</Button>
             </a>
           </>
         }

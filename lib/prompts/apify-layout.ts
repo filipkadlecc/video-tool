@@ -64,7 +64,7 @@ MOTION
 ANTI-PATTERNS (do not do)
 - Multiple accent colors — orange only.
 - Centered text across a wide column.
-- Gradient backgrounds (the canvas is flat #161718).
+- Gradient backgrounds (the canvas is flat #020202).
 - Drop shadows (the look is flat, not material).
 - Logos floating in the middle of the frame.
 - Bouncy springs on big headlines.

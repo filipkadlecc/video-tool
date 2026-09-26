@@ -1352,7 +1352,9 @@ export default function ProjectEditor() {
 
   return (
     <PlayheadContext.Provider value={playhead}>
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    {/* Locked to the window, but never smaller than a usable editor — below
+        that the page scrolls instead of clipping the panels off-screen. */}
+    <div style={{ height: "100vh", minHeight: 600, minWidth: 960, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Toolbar */}
       <div
         style={{
@@ -1771,7 +1773,7 @@ export default function ProjectEditor() {
                 </>
               )}
               <Panel id="preview" defaultSize={hasTimeline ? "50%" : "65%"} minSize="15%">
-                <div style={{ background: "#000", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden", position: "relative" }}>
+                <div style={{ background: "#020202", height: "100%", minHeight: 0, minWidth: 0, overflow: "hidden", position: "relative" }}>
                   {/*
                     The first-pass panel used to be one branch of this chain, so a
                     project WITH a document could never show it — and compose now

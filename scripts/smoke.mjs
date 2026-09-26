@@ -92,6 +92,54 @@ try {
       await p.close();
     }
   }
+
+  // Odd window shapes. The wizard used to clip its columns with overflow:hidden,
+  // so on a short or portrait window the style picker, Name and Collection were
+  // simply gone — nothing scrolled. Every control must be reachable by scrolling.
+  const unreachable = () => {
+    const root = document.querySelector('[role="dialog"]') || document;
+    const out = [];
+    for (const el of root.querySelectorAll("button, input:not([type=hidden]), select, textarea")) {
+      const cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || el.closest('[aria-hidden="true"]')) continue;
+      let r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      el.scrollIntoView({ block: "center", inline: "center" });
+      r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!hit || !(hit === el || el.contains(hit) || hit.contains(el))) {
+        out.push((el.innerText || el.getAttribute("aria-label") || el.placeholder || el.tagName).trim().slice(0, 30));
+      }
+    }
+    return out;
+  };
+  const shapes = [[1280, 1000], [1000, 1100], [1920, 800], [1440, 700]];
+  for (const [w, h] of shapes) {
+    const label = `wizard @ ${w}×${h}`;
+    ROUTES.push({ path: label });
+    const p = await browser.newPage();
+    await p.setViewport({ width: w, height: h });
+    try {
+      await p.goto(`${base}/animation`, { waitUntil: "networkidle2", timeout: 90000 });
+      await new Promise((r) => setTimeout(r, 1500));
+      const opened = await p.evaluate(() => {
+        const b = [...document.querySelectorAll("button")].find((x) => x.innerText.trim() === "New project");
+        b?.click();
+        return Boolean(b);
+      });
+      await new Promise((r) => setTimeout(r, 1200));
+      if (!opened) fail(label, "no New project button");
+      else {
+        const lost = await p.evaluate(unreachable);
+        if (lost.length) fail(label, `can't reach: ${lost.slice(0, 4).join(", ")}`);
+        else console.log(`  ok   ${label}`);
+      }
+    } catch (e) {
+      fail(label, e.message.slice(0, 90));
+    } finally {
+      await p.close();
+    }
+  }
 } finally {
   await browser.close();
 }

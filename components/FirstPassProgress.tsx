@@ -40,7 +40,7 @@ export default function FirstPassProgress({
         alignItems: "center",
         justifyContent: "center",
         padding: 24,
-        background: "#000",
+        background: "#020202",
       }}
     >
       <div style={{ width: 440, maxWidth: "90%", display: "flex", flexDirection: "column", gap: 20 }}>

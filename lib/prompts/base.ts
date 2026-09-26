@@ -120,7 +120,7 @@ Define a \`COLORS\` object at the top of the file with the project's color palet
 import { BRAND } from "@/lib/brand";
 
 const COLORS = {
-  bg: BRAND.colors.bg,             // #161718 — flat canvas background
+  bg: BRAND.colors.bg,             // #020202 — flat canvas background
   card: BRAND.colors.card,         // #1d1e1f — slightly lifted card surface
   border: BRAND.colors.border,     // #3d3f43 — hairline borders
   text: BRAND.colors.text,         // #f4f4f5 — primary text on dark
@@ -780,7 +780,7 @@ export default function Walkthrough() {
   const successT  = springIn(frame, vfps, 192, "LIQUID");   // large swap: SvgFrame 5 swap
 
   return (
-    <AbsoluteFill style={{ background: "#161718" }}>
+    <AbsoluteFill style={{ background: "#020202" }}>
       {/* Base — static frame 1 */}
       <SvgFrame index={0} style={{ opacity: 1 - successT }} />
       {/* 0→1: dropdown slides down inside its band */}

@@ -9,7 +9,7 @@ import { AbsoluteFill } from "remotion";
 const Fallback: React.FC = () => (
   <AbsoluteFill
     style={{
-      backgroundColor: "#040D12",
+      backgroundColor: "#020202",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -47,7 +47,7 @@ class PlayerErrorBoundary extends Component<
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#000",
+            background: "#020202",
             color: "var(--danger)",
             fontSize: 13,
             padding: 16,
@@ -127,7 +127,7 @@ export default function PreviewPanel({ code, width = 3840, height = 2160, svgCon
       </div>
 
       {/* Player */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#000", padding: 2, minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#020202", padding: 2, minHeight: 0 }}>
         <PlayerErrorBoundary code={code}>
           <Player
             ref={playerRef}
@@ -147,7 +147,7 @@ export default function PreviewPanel({ code, width = 3840, height = 2160, svgCon
             errorFallback={({ error }) => (
               <AbsoluteFill
                 style={{
-                  backgroundColor: "#040D12",
+                  backgroundColor: "#020202",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

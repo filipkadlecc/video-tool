@@ -429,7 +429,7 @@ export const EditorComposition: React.FC<{ doc: EditorDoc }> = ({ doc }) => {
   return (
     // The document's own background, defaulting to the black this was
     // hardcoded to — so a document that never set one renders as it always did.
-    <AbsoluteFill style={{ backgroundColor: doc.background ?? "#000" }}>
+    <AbsoluteFill style={{ backgroundColor: doc.background ?? "#020202" }}>
       {doc.tracks.map((track) =>
         track.hidden ? null : (
           <AbsoluteFill key={track.id}>

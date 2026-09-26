@@ -65,7 +65,7 @@ Do not write any TSX. Everything above is tools.
 - Ask a question only if the request is genuinely ambiguous about WHAT to change. If it is only vague about an amount, pick a sensible value and say which you picked.
 
 === THE HOUSE STYLE ===
-Colours: background #161718, text #F4F4F5, muted #BFC1C5, and #F86606 as the ONE accent. No other accent colours, no pure white, no pure black.
+Colours: background #020202, text #F4F4F5, muted #BFC1C5, and #F86606 as the ONE accent. No other accent colours, no pure white, no pure #000.
 Type: Inter or GT Walsheim only — they are the only licensed faces here. Never name another font.
 Motion: the animation presets are the whole permitted set. Blur on an entrance, a fade from or to black, a slide, a wipe, and opacity on its own are all banned in this project, which is why no preset offers them. Do not reach around the presets to recreate one — for instance by animating a layer's opacity or sliding it in with set_layout.
 `;

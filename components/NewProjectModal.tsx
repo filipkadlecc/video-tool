@@ -808,7 +808,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         {/* Left: the one question, and the one input that answers it. */}
         <div
           style={{
-            flex: 1, minWidth: 0, minHeight: 0, padding: "40px 44px", overflow: "hidden",
+            flex: 1, minWidth: 0, minHeight: 0, padding: "40px 44px", overflowY: "auto",
             display: "flex", flexDirection: "column", gap: 24,
           }}
         >
@@ -893,7 +893,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           {/* B · from a snippet — search, six results, and what the selected
               one actually lands as. */}
           {!isFootage && !isTerminal && source === "snippet" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 240 }}>
               <Input
                 value={snippetQuery}
                 onChange={setSnippetQuery}
@@ -1093,7 +1093,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               to brief an animation, so it sits with the other three rather
               than becoming a third kind. */}
           {!isFootage && !isTerminal && source === "artwork" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, minHeight: 240 }}>
               <label
                 style={{
                   height: 168, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
@@ -1211,7 +1211,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           {/* F · from footage — no source switcher, because there is no brief
               to source. */}
           {isFootage && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 24, flex: 1, minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 24, flex: 1, minHeight: 240 }}>
               <label
                 onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                 onDragLeave={() => setDragActive(false)}
@@ -1351,7 +1351,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         {/* Right panel, 396px: the settings, not the work. */}
         <div
           style={{
-            width: 396, flexShrink: 0, display: "flex", flexDirection: "column",
+            width: 396, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto",
             background: "var(--surface-chrome)", borderLeft: "1px solid var(--border-edge)",
           }}
         >

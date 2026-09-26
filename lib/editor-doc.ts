@@ -328,9 +328,9 @@ export interface EditorDoc {
   /**
    * What shows through where nothing is drawn. Hex, e.g. "#0A0A0B".
    *
-   * Optional, and absent means black — which is what the renderer hardcoded
-   * before this existed, so every stored document keeps rendering exactly as it
-   * did. A transparent export ignores it.
+   * Optional, and absent means the brand black #020202 (it was pure #000 until
+   * v0.1.152 — the two are indistinguishable on screen). A transparent export
+   * ignores it.
    */
   background?: string;
 }
