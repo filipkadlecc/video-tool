@@ -213,6 +213,9 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
   // the server render, and reading it in useState would mismatch hydration.
   const [level, setLevel] = useState<ModelLevel>("balanced");
   useEffect(() => { setLevel(readStoredLevel()); }, []);
+  // Plan mode: the next message gets a plan back, not a change.
+  const [planMode, setPlanMode] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
   const [svgPickerOpen, setSvgPickerOpen] = useState(false);
@@ -320,11 +323,14 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     // doc === undefined — so a first pass would write a TSX file and silently
     // ignore the timeline it was supposed to fill.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError, doc, selectedIds, playhead, onDocChanged],
+    [chatHistory, currentCode, isGenerating, projectSettings, animationType, notionContent, scriptWithTimestamps, svgContents, projectId, styleMode, topicCardStyle, transitionStyle, useSfx, attachedSvgs, sceneError, doc, selectedIds, playhead, onDocChanged, level],
   );
 
-  async function sendMessage(text: string, overrideCode?: string, opts: { force?: boolean } = {}) {
+  async function sendMessage(text: string, overrideCode?: string, opts: { force?: boolean; plan?: boolean } = {}) {
     if (!text.trim()) return;
+    // Only a message the user typed with Plan on is a plan turn — a first pass
+    // or a programmatic run always does the work.
+    const plan = opts.plan === true;
     if (generatingRef.current) {
       if (opts.force && abortRef.current) {
         // Cancel the in-flight stream. Its catch branch handles AbortError
@@ -375,7 +381,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     try {
       // The timeline is open: edit the document, not the code file.
       if (doc && onDocChanged) {
-        await editDocument(messagesForAI, updatedHistory, controller);
+        await editDocument(messagesForAI, updatedHistory, controller, plan);
         return;
       }
       /*
@@ -408,6 +414,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           transitionStyle,
           useSfx,
           level,
+          plan,
         }),
       });
 
@@ -443,13 +450,25 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             if (parsed.error) throw new Error(parsed.error);
             if (parsed.text) {
               fullResponse += parsed.text;
-              const extracted = extractCodeFromResponse(fullResponse, animationType);
+              // A plan never touches the scene, even if it quotes code.
+              const extracted = plan ? "" : extractCodeFromResponse(fullResponse, animationType);
               if (extracted && extracted.length > 50) {
                 onCodeUpdate(extracted);
               }
             }
           }
         }
+      }
+
+      if (plan) {
+        const planText = fullResponse.replace(/```[\s\S]*?```/g, "").trim();
+        onChatUpdate([
+          ...updatedHistory,
+          planText
+            ? { role: "assistant", content: planText, plan: true }
+            : { role: "assistant", content: "⚠️ The model returned an empty plan — try sending the message again." },
+        ]);
+        return;
       }
 
       const finalCode = extractCodeFromResponse(fullResponse, animationType);
@@ -520,6 +539,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     messagesForAI: ChatMessage[],
     updatedHistory: ChatMessage[],
     controller: AbortController,
+    plan: boolean,
   ) {
     let fullResponse = "";
     let latestDoc: EditorDoc | null = null;
@@ -536,6 +556,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         selectedIds: selectedIds ?? [],
         playheadFrame: playhead.getFrame(),
         level,
+        plan,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -581,6 +602,15 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     if (latestDoc) onDocChanged?.(latestDoc);
 
     const said = fullResponse.replace(/```[\s\S]*?```/g, "").trim();
+    if (plan) {
+      onChatUpdate([
+        ...updatedHistory,
+        said
+          ? { role: "assistant", content: said, plan: true }
+          : { role: "assistant", content: "⚠️ The model returned an empty plan — try sending the message again." },
+      ]);
+      return;
+    }
     const note = said
       ? said
       : edited
@@ -593,7 +623,13 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     if (!input.trim()) return;
     const text = input;
     setInput("");
-    sendMessage(text);
+    sendMessage(text, undefined, { plan: planMode });
+  }
+
+  /** The plan card's Build this: plan mode off, and the plan itself becomes the brief. */
+  function buildPlan(planText: string) {
+    setPlanMode(false);
+    sendMessage(`Build this plan:\n\n${planText}`, undefined, { plan: false });
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -766,12 +802,23 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 </div>
                 <span className="t-caption" style={{ fontWeight: 600, color: "var(--ink-secondary)" }}>Assistant</span>
               </div>
-              <div
-                className="t-body"
-                style={{ color: "var(--ink-primary)", paddingLeft: 24, whiteSpace: "pre-wrap" }}
-              >
-                <MessageContent content={msg.content} />
-              </div>
+              {msg.plan ? (
+                <PlanCard
+                  content={msg.content}
+                  // Only the latest plan can be built — an older one was
+                  // superseded by whatever came after it.
+                  actionable={i === chatHistory.length - 1 && !isGenerating}
+                  onBuild={() => buildPlan(msg.content)}
+                  onAdjust={() => { setPlanMode(true); inputRef.current?.focus(); }}
+                />
+              ) : (
+                <div
+                  className="t-body"
+                  style={{ color: "var(--ink-primary)", paddingLeft: 24, whiteSpace: "pre-wrap" }}
+                >
+                  <MessageContent content={msg.content} />
+                </div>
+              )}
             </div>
           )
         ))}
@@ -1029,10 +1076,15 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           }}
         >
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={doc ? "Describe the change, or drag a clip in here…" : "Ask for a change..."}
+            placeholder={
+              planMode
+                ? "Describe what you want — you'll get a plan first, nothing changes yet…"
+                : doc ? "Describe the change, or drag a clip in here…" : "Ask for a change..."
+            }
             rows={2}
             disabled={isGenerating}
             className="vt-scroll"
@@ -1048,7 +1100,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
               lineHeight: 1.5,
             }}
           />
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div className="vt-composer-row" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 6, gap: 4 }}>
             <div style={{ position: "relative" }} ref={svgPickerRef}>
               <IconButton icon="attach" size={22} title="Attach SVG" onClick={openSvgPicker} disabled={isGenerating} />
               {svgPickerOpen && (
@@ -1127,8 +1179,29 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 />
               </span>
             )}
+            {animationType !== "terminal" && (
+              <button
+                onClick={() => setPlanMode((v) => !v)}
+                disabled={isGenerating}
+                aria-pressed={planMode}
+                title="Plan first: the assistant replies with a plan you can approve, and changes nothing yet"
+                className="focus-ring"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 5, height: 26, padding: "0 9px",
+                  whiteSpace: "nowrap", flexShrink: 0,
+                  fontSize: "var(--t-control-size)",
+                  background: planMode ? "var(--brand-tint-bg)" : "var(--surface-void)",
+                  color: planMode ? "var(--brand)" : "var(--ink-tertiary)",
+                  border: `1px solid ${planMode ? "var(--brand-tint-line)" : "var(--border-hairline)"}`,
+                  borderRadius: "var(--r-control)",
+                  cursor: isGenerating ? "default" : "pointer",
+                }}
+              >
+                Plan
+              </button>
+            )}
             <div style={{ flex: 1 }} />
-            <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)", marginRight: 4 }}>
+            <span className="mono vt-hide-narrow" style={{ fontSize: 10, color: "var(--ink-disabled)", marginRight: 4 }}>
               <Kbd>&#9166;</Kbd>
             </span>
             <Button variant="primary" size="sm" onClick={handleSend} disabled={!input.trim() || isGenerating} icon="send">
@@ -1162,5 +1235,34 @@ function MessageContent({ content }: { content: string }) {
         return <span key={i}>{part}</span>;
       })}
     </>
+  );
+}
+
+/** A plan-mode reply: the plan, and the two ways forward from it. */
+function PlanCard({ content, actionable, onBuild, onAdjust }: {
+  content: string;
+  actionable: boolean;
+  onBuild: () => void;
+  onAdjust: () => void;
+}) {
+  return (
+    <div
+      style={{
+        marginLeft: 24,
+        background: "var(--surface-raised)",
+        border: "1px solid var(--border-edge)",
+        borderRadius: "var(--r-panel)",
+        padding: 12,
+      }}
+    >
+      <div className="t-section" style={{ color: "var(--ink-tertiary)", marginBottom: 8 }}>Plan</div>
+      <div className="t-body" style={{ color: "var(--ink-primary)", whiteSpace: "pre-wrap" }}>{content}</div>
+      {actionable && (
+        <div style={{ display: "flex", gap: 4, marginTop: 12 }}>
+          <Button size="chrome" variant="primary" onClick={onBuild}>Build this</Button>
+          <Button size="chrome" variant="ghost" onClick={onAdjust}>Adjust</Button>
+        </div>
+      )}
+    </div>
   );
 }

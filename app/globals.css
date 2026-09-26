@@ -256,6 +256,9 @@ input, textarea { font-family: inherit; color: inherit; }
 }
 @keyframes vt-stream-cursor { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 @keyframes vt-bg-drift { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } }
+/* The chat composer's Enter hint is the first thing to drop in a narrow panel. */
+.vt-composer-row { container-type: inline-size; }
+@container (max-width: 400px) { .vt-hide-narrow { display: none; } }
 @keyframes vt-fact-timer { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes vt-glitch-in {
   0% { clip-path: inset(50% 0 50% 0); opacity: 0; }

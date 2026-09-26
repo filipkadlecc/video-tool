@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { resolveLevel, type ModelLevel } from "@/lib/models";
+import { withPlanInstruction } from "@/lib/plan-mode";
 import fs from "fs";
 import path from "path";
 import { EDITOR_AGENT_PROMPT } from "@/lib/prompts/editor-agent";
@@ -284,6 +285,7 @@ export async function POST(request: Request) {
     selectedIds,
     playheadFrame,
     level: requestedLevel,
+    plan,
   } = body as {
     messages: ChatMessage[];
     doc: EditorDoc;
@@ -291,6 +293,7 @@ export async function POST(request: Request) {
     selectedIds?: string[];
     playheadFrame?: number;
     level?: string;
+    plan?: boolean;
   };
   const { level, model, effort } = resolveLevel(requestedLevel);
 
@@ -335,7 +338,7 @@ export async function POST(request: Request) {
     { type: "text", text: EDITOR_AGENT_PROMPT, cache_control: { type: "ephemeral" } },
   ];
 
-  const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg, i) => {
+  const conversation: Anthropic.MessageParam[] = messages.map((msg, i) => {
     const isLastUser = msg.role === "user" && i === messages.length - 1;
     if (!isLastUser) return { role: msg.role, content: msg.content };
     return {
@@ -343,6 +346,7 @@ export async function POST(request: Request) {
       content: `${describeDoc(incomingDoc, ctx)}\n\n=== THE REQUEST ===\n${msg.content}`,
     };
   });
+  const anthropicMessages = plan ? withPlanInstruction(conversation) : conversation;
 
   // An empty timeline means this is an assembly, not an edit.
   const isBuild = !incomingDoc.tracks.some((t) => t.items.length);
@@ -381,7 +385,9 @@ export async function POST(request: Request) {
         const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
 
         for (;;) {
-          const forceFinal = toolTurns >= maxToolTurns || ops >= MAX_OPS;
+          // Plan mode keeps the tool list (it's part of the cached prefix) but
+          // never lets the model call one, so the document can't change.
+          const forceFinal = plan || toolTurns >= maxToolTurns || ops >= MAX_OPS;
           const stream = anthropic.messages.stream({
             model,
             max_tokens: 32000,

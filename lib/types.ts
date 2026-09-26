@@ -37,6 +37,8 @@ export interface ProjectSettings {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  /** An assistant reply written in plan mode — shown as a plan card with Build this. */
+  plan?: boolean;
 }
 
 export interface SvgFile {

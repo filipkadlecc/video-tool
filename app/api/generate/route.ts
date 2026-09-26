@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { resolveLevel, isModelLevel } from "@/lib/models";
+import { withPlanInstruction } from "@/lib/plan-mode";
 import fs from "fs";
 import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
@@ -242,6 +243,7 @@ export async function POST(request: Request) {
     useSfx,
     effort: requestedEffort,
     level: requestedLevel,
+    plan,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -257,6 +259,7 @@ export async function POST(request: Request) {
     useSfx?: boolean;
     effort?: string;
     level?: string;
+    plan?: boolean;
   };
 
   // The chat's Fast / Balanced / Best switch (lib/models.ts). Balanced is Opus
@@ -332,7 +335,7 @@ export async function POST(request: Request) {
 
   // Build Anthropic messages from chat history
   // Enhance the last user message with context
-  const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg, i) => {
+  const conversation: Anthropic.MessageParam[] = messages.map((msg, i) => {
     const isLastUser = msg.role === "user" && i === messages.length - 1;
     const isFirstUser = msg.role === "user" && i === firstUserTurnIndex;
     const attachReferences = isFirstUser && referenceImages.length > 0;
@@ -390,7 +393,9 @@ export async function POST(request: Request) {
   // not terminal .tape, and not footage-overlay video projects (those can't be
   // still-rendered from code alone in this path). When enabled, the model drives
   // its own vision loop.
-  const toolsEnabled = !isTerminal && animationType !== "video";
+  // Plan mode answers in words only, so the loop's tools are off too.
+  const anthropicMessages = plan ? withPlanInstruction(conversation) : conversation;
+  const toolsEnabled = !isTerminal && animationType !== "video" && !plan;
   const { width: renderWidth, height: renderHeight } = getProjectSize(projectSettings);
 
   // Cache the big (~25K-token) system prompt so follow-up edits, error retries,
