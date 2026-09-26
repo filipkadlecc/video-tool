@@ -1,5 +1,6 @@
 "use client";
 
+import { readStoredLevel } from "@/lib/models";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import GeneratingOverlay from "@/components/GeneratingOverlay";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -1004,6 +1005,7 @@ export default function ProjectEditor() {
         projectSettings: project.settings,
         animationType: project.animationType,
         styleMode,
+        level: readStoredLevel(),
       }),
     });
     const data = await res.json();

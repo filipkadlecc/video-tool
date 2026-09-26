@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { buildSystemPrompt } from "@/lib/prompts";
+import { resolveLevel } from "@/lib/models";
 import type { AnimationType, ProjectSettings, StyleMode, TransitionStyle } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
     styleMode,
     transitionStyle,
     images = [],
+    level,
   } = body as {
     prompt?: string;
     projectSettings?: ProjectSettings;
@@ -55,7 +57,9 @@ export async function POST(request: Request) {
     styleMode?: StyleMode;
     transitionStyle?: TransitionStyle;
     images?: string[];
+    level?: string;
   };
+  const { model, effort } = resolveLevel(level);
 
   if (!prompt || !prompt.trim()) {
     return Response.json({ error: "prompt is required" }, { status: 400 });
@@ -97,10 +101,11 @@ export async function POST(request: Request) {
     // non-streaming request at this token budget, because one could outlast the
     // 10-minute request ceiling. Nothing here needs the tokens as they arrive.
     const stream = anthropic.messages.stream({
-      model: "claude-opus-5-5",
+      model,
       // Opus 5.5 always thinks, and thinking counts against this ceiling.
       max_tokens: 64000,
-      output_config: { effort: "high" },
+      thinking: { type: "adaptive" },
+      output_config: { effort },
       system,
       messages: [{ role: "user", content: blocks }],
     });

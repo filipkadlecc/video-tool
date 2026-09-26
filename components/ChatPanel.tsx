@@ -12,6 +12,8 @@ import { normalizeTapeQuotes } from "@/lib/tape-parser";
 import { usePlayheadStore, usePlayheadFrame } from "@/hooks/usePlayhead";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import type { DocChange } from "@/lib/editor-agent";
+import Segmented from "@/components/ui/Segmented";
+import { MODEL_LEVELS, readStoredLevel, storeLevel, type ModelLevel } from "@/lib/models";
 
 function extractCodeFromResponse(text: string, animationType?: string): string {
   // Accept tsx/js/html fences — older responses used a variety of them.
@@ -207,6 +209,10 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
    */
   const setReceipt = onReceipt ?? (() => {});
   const [input, setInput] = useState("");
+  // Fast / Balanced / Best. Read after mount — localStorage isn't there during
+  // the server render, and reading it in useState would mismatch hydration.
+  const [level, setLevel] = useState<ModelLevel>("balanced");
+  useEffect(() => { setLevel(readStoredLevel()); }, []);
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
   const [svgPickerOpen, setSvgPickerOpen] = useState(false);
@@ -401,6 +407,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           topicCardStyle,
           transitionStyle,
           useSfx,
+          level,
         }),
       });
 
@@ -528,6 +535,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         projectId,
         selectedIds: selectedIds ?? [],
         playheadFrame: playhead.getFrame(),
+        level,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -1106,6 +1114,19 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
                 </div>
               )}
             </div>
+            {/* Which model answers. Terminal projects always use their own
+                cheap model, so the switch would be a lie there. */}
+            {animationType !== "terminal" && (
+              <span title={MODEL_LEVELS.find((m) => m.id === level)?.hint}>
+                <Segmented
+                  height={20}
+                  value={level}
+                  onChange={(v) => { setLevel(v as ModelLevel); storeLevel(v as ModelLevel); }}
+                  options={MODEL_LEVELS.map((m) => ({ value: m.id, label: m.label, disabled: isGenerating }))}
+                  style={{ fontSize: 11 }}
+                />
+              </span>
+            )}
             <div style={{ flex: 1 }} />
             <span className="mono" style={{ fontSize: 10, color: "var(--ink-disabled)", marginRight: 4 }}>
               <Kbd>&#9166;</Kbd>

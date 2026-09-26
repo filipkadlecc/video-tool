@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { resolveLevel, type ModelLevel } from "@/lib/models";
 import fs from "fs";
 import path from "path";
 import { EDITOR_AGENT_PROMPT } from "@/lib/prompts/editor-agent";
@@ -207,6 +208,7 @@ async function reviseSceneCode(
   code: string,
   instructions: string,
   timing: string,
+  level: ModelLevel,
 ): Promise<string> {
   const res = await fetch(`${origin}/api/generate`, {
     method: "POST",
@@ -227,6 +229,7 @@ async function reviseSceneCode(
       styleMode: project.styleMode,
       transitionStyle: project.transitionStyle,
       useSfx: project.useSfx,
+      level,
     }),
   });
   if (!res.ok || !res.body) throw new Error(`scene writer returned HTTP ${res.status}`);
@@ -280,13 +283,16 @@ export async function POST(request: Request) {
     projectId,
     selectedIds,
     playheadFrame,
+    level: requestedLevel,
   } = body as {
     messages: ChatMessage[];
     doc: EditorDoc;
     projectId?: string;
     selectedIds?: string[];
     playheadFrame?: number;
+    level?: string;
   };
+  const { level, model, effort } = resolveLevel(requestedLevel);
 
   if (!messages?.length) return Response.json({ error: "messages are required" }, { status: 400 });
   if (!incomingDoc?.tracks) return Response.json({ error: "doc is required" }, { status: 400 });
@@ -377,10 +383,10 @@ export async function POST(request: Request) {
         for (;;) {
           const forceFinal = toolTurns >= maxToolTurns || ops >= MAX_OPS;
           const stream = anthropic.messages.stream({
-            model: "claude-opus-5",
+            model,
             max_tokens: 32000,
             thinking: { type: "adaptive" },
-            output_config: { effort: "high" },
+            output_config: { effort },
             system: systemBlocks,
             messages: convo,
             tools,
@@ -506,7 +512,7 @@ export async function POST(request: Request) {
                 ? `Keep its length and the timing of its beats. It plays for ${found.durationInFrames} frames at ${fps}fps.`
                 : `Keep its total length, fps and the timing of its beats exactly as they are. This block of the video shows only frames ${offset}–${offset + found.durationInFrames} of the composition, so that stretch is what the viewer sees; the rest must stay intact.`;
               try {
-                const revised = await reviseSceneCode(origin, project, found.code, input.instructions, timing);
+                const revised = await reviseSceneCode(origin, project, found.code, input.instructions, timing, level);
                 working = reviseSceneItem(working, found.id, revised, fps);
                 docChanged = true;
                 results.push({
@@ -598,7 +604,7 @@ export async function POST(request: Request) {
         }
 
         console.log(
-          `[edit-doc] turns=${toolTurns} ops=${ops} renders=${renders} revisions=${revisions} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
+          `[edit-doc] ${model}@${effort} turns=${toolTurns} ops=${ops} renders=${renders} revisions=${revisions} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
         );
 
         // A turn that does the work and then says nothing leaves the user

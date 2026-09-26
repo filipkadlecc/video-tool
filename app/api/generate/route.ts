@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { resolveLevel, isModelLevel } from "@/lib/models";
 import fs from "fs";
 import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
@@ -240,6 +241,7 @@ export async function POST(request: Request) {
     transitionStyle,
     useSfx,
     effort: requestedEffort,
+    level: requestedLevel,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -254,12 +256,18 @@ export async function POST(request: Request) {
     transitionStyle?: TransitionStyle;
     useSfx?: boolean;
     effort?: string;
+    level?: string;
   };
 
-  // Scenes are written by Opus 5.5 at "high". "max" is there for showcase
-  // pieces: noticeably better, but a run can take half an hour.
-  const effort: "high" | "xhigh" | "max" =
-    requestedEffort === "max" || requestedEffort === "xhigh" ? requestedEffort : "high";
+  // The chat's Fast / Balanced / Best switch (lib/models.ts). Balanced is Opus
+  // 5.5 at "high"; Best is "max" — noticeably better, but a run can take half
+  // an hour. A bare `effort` of "max"/"xhigh" (older callers) still works.
+  const resolved = resolveLevel(requestedLevel);
+  const model = resolved.model;
+  const effort =
+    !isModelLevel(requestedLevel) && (requestedEffort === "max" || requestedEffort === "xhigh")
+      ? requestedEffort
+      : resolved.effort;
 
   if (!messages || !messages.length) {
     return Response.json({ error: "messages are required" }, { status: 400 });
@@ -445,7 +453,7 @@ export async function POST(request: Request) {
                 messages,
               })
             : anthropic.messages.stream({
-                model: "claude-opus-5-5",
+                model,
                 max_tokens: 128000,
                 thinking: { type: "adaptive" },
                 output_config: { effort },
@@ -587,7 +595,7 @@ export async function POST(request: Request) {
         }
 
         console.log(
-          `[generate] agentic turns=${toolTurns} renders=${renderCount} edits=${editCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
+          `[generate] ${isTerminal ? "claude-sonnet-4-6" : `${model}@${effort}`} agentic turns=${toolTurns} renders=${renderCount} edits=${editCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
         );
         if (lastStopReason === "refusal") {
           send({ error: "The model declined this request. Try rewording it." });
