@@ -1,7 +1,7 @@
 "use client";
 
 import { readStoredLevel } from "@/lib/models";
-import type { ElementPick } from "@/lib/scene-elements";
+import { describeElement, type ElementPick } from "@/lib/scene-elements";
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import GeneratingOverlay from "@/components/GeneratingOverlay";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -651,16 +651,19 @@ export default function ProjectEditor() {
   const docView = doc && !showCodeEditor ? doc : undefined;
 
   // A pick points at a place in one block's code. It lets go when that block is
-  // deselected, or when its code changes under it (an edit moves every offset).
+  // deselected, or when the code changes so that the place no longer holds the
+  // same tag (an AI rewrite). A hand edit from the Element panel only touches
+  // the element's own tag and what follows it, so the pick survives those.
   const pickedCode = selectedElement
     ? (doc?.tracks.flatMap((t) => t.items).find((i) => i.id === selectedElement.itemId) as { code?: string } | undefined)?.code
     : undefined;
-  const pickedCodeRef = useRef<string | undefined>(undefined);
+  const pickedTagRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!selectedElement) { pickedCodeRef.current = undefined; return; }
+    if (!selectedElement) { pickedTagRef.current = undefined; return; }
     if (!selectedItemIds.has(selectedElement.itemId) || pickedCode === undefined) { setSelectedElement(null); return; }
-    if (pickedCodeRef.current !== undefined && pickedCodeRef.current !== pickedCode) { setSelectedElement(null); return; }
-    pickedCodeRef.current = pickedCode;
+    const tag = describeElement(pickedCode, selectedElement.offset)?.tag;
+    if (!tag || (pickedTagRef.current !== undefined && pickedTagRef.current !== tag)) { setSelectedElement(null); return; }
+    pickedTagRef.current = tag;
   }, [selectedElement, selectedItemIds, pickedCode]);
 
   const { durationInFrames, fps: extractedFps, sceneError } = useMemo(() => {
@@ -895,6 +898,9 @@ export default function ProjectEditor() {
    */
   const commitAiDoc = useCallback((next: EditorDoc, opts?: { transient?: boolean }) => {
     if (!opts?.transient) pendingVersionRef.current = { label: "AI edit", checkpoint: true };
+    // An AI edit can move every offset in a block, so a pick would point at
+    // whatever tag now sits there. Let go; double-click again to pick.
+    if (!opts?.transient) setSelectedElement(null);
     commitDoc(next, opts);
   }, [commitDoc]);
 
@@ -1851,6 +1857,8 @@ export default function ProjectEditor() {
                   onChange={commitDoc}
                   onEditSnippet={setEditingSnippetId}
                   projectId={projectId}
+                  selectedElement={selectedElement}
+                  onClearElement={() => setSelectedElement(null)}
                 />
               ) : (
               <ChatPanel

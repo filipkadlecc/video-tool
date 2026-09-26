@@ -30,6 +30,8 @@ import {
 import { usePlayheadFrame } from "@/hooks/usePlayhead";
 import GradeSection from "@/components/inspector/GradeSection";
 import AddEffectPopover from "@/components/inspector/AddEffectPopover";
+import ElementSection from "@/components/inspector/ElementSection";
+import type { ElementPick } from "@/lib/scene-elements";
 
 /**
  * The inspector, as a STACK OF EFFECT SECTIONS.
@@ -374,11 +376,14 @@ function Section({
 type Category = "video" | "text" | "audio";
 
 export default function EditorInspector({
-  doc, selectedIds, onChange, onEditSnippet, projectId,
+  doc, selectedIds, onChange, onEditSnippet, projectId, selectedElement, onClearElement,
 }: {
   doc: EditorDoc;
   selectedIds: Set<string>;
   projectId?: string;
+  /** An element picked inside a scene block — edited by hand at the top of the panel. */
+  selectedElement?: ElementPick | null;
+  onClearElement?: () => void;
   /** `transient` values come from a drag in progress and must not be recorded for undo. */
   onChange: (next: EditorDoc, opts?: { transient?: boolean }) => void;
   onEditSnippet?: (itemId: string) => void;
@@ -554,6 +559,16 @@ export default function EditorInspector({
           />
         </Row>
       </div>
+
+      {selectedElement && selectedElement.itemId === item.id && (
+        <ElementSection
+          doc={doc}
+          pick={selectedElement}
+          frame={playheadFrame}
+          onChange={onChange}
+          onClear={() => onClearElement?.()}
+        />
+      )}
 
       <Tabs
         value={category}
