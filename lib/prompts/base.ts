@@ -248,7 +248,7 @@ const logoX = ambientDrift(frame, 2, 100, "logo-x");
 
 **Font family:** default to **\`"'GT Walsheim', Inter, sans-serif"\`** (\`BRAND.fonts.marketing\`) for ~90% of text — titles, eyebrows, list-item labels, CTAs, numbers, callouts, badges. Use **\`"Inter, sans-serif"\`** (\`BRAND.fonts.primary\`) only for subtitles directly below a hero and for paragraph-length body copy. Monospace stays specialised — only for code, terminal output, and metadata stamps (e.g. "v2.1 / 12:42").
 
-**Font weights:** use **Regular (400)** for body and supporting text, **Semibold (600)** for hero/main titles. Do NOT use weights 500, 700, 800, or 900 unless the user explicitly asks for a heavier or lighter look. This applies even when few-shot examples in this prompt show heavier weights — the rule above overrides them.
+**Font weights:** use **Regular (400)** for body and supporting text, **Medium (500)** for hero/main titles, and Light (300) only for a secondary clause set against a Medium one. Never go above 500 (see rule 16). This applies even when few-shot examples in this prompt show heavier weights — the rule above overrides them.
 
 ### Frame-Based Transitions (for phased scenes)
 
