@@ -1006,6 +1006,7 @@ export default function ProjectEditor() {
         animationType: project.animationType,
         styleMode,
         level: readStoredLevel(),
+        projectId: project.id,
       }),
     });
     const data = await res.json();

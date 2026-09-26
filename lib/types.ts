@@ -39,6 +39,8 @@ export interface ChatMessage {
   content: string;
   /** An assistant reply written in plan mode — shown as a plan card with Build this. */
   plan?: boolean;
+  /** When it was sent (ms). Absent on messages from before v0.1.156. */
+  ts?: number;
 }
 
 export interface SvgFile {
@@ -133,6 +135,9 @@ export interface Project {
   useSfx?: boolean;
   // Optional cross-type grouping — several projects for one final video.
   collectionId?: string;
+  // Prompts that don't live in the chat — the timeline's "add animation" box.
+  // Kept so "Export my prompts" sees everything that was asked of the AI.
+  promptLog?: { ts: number; kind: "generate-scene"; text: string }[];
   createdAt: string;
   updatedAt: string;
 }

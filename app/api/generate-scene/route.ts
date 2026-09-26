@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { buildSystemPrompt } from "@/lib/prompts";
 import { resolveLevel } from "@/lib/models";
+import { getProject, updateProject } from "@/lib/projects";
 import type { AnimationType, ProjectSettings, StyleMode, TransitionStyle } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
     transitionStyle,
     images = [],
     level,
+    projectId,
   } = body as {
     prompt?: string;
     projectSettings?: ProjectSettings;
@@ -58,8 +60,19 @@ export async function POST(request: Request) {
     transitionStyle?: TransitionStyle;
     images?: string[];
     level?: string;
+    projectId?: string;
   };
   const { model, effort } = resolveLevel(level);
+
+  // The chat keeps its own history; this box doesn't, so log what was asked.
+  if (projectId && prompt?.trim()) {
+    const project = getProject(projectId);
+    if (project) {
+      updateProject(projectId, {
+        promptLog: [...(project.promptLog ?? []), { ts: Date.now(), kind: "generate-scene", text: prompt.trim() }],
+      });
+    }
+  }
 
   if (!prompt || !prompt.trim()) {
     return Response.json({ error: "prompt is required" }, { status: 400 });

@@ -369,7 +369,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
       ? `${text.trim()}\n\nAttached SVGs: ${attachedSvgs.map((s) => s.filename).join(", ")}`
       : text.trim();
 
-    const userMessage: ChatMessage = { role: "user", content: displayText };
+    const userMessage: ChatMessage = { role: "user", content: displayText, ts: Date.now() };
     const messagesForAI: ChatMessage[] = [...chatHistory, { role: "user", content: messageForAI }];
     const updatedHistory = [...chatHistory, userMessage];
     onChatUpdate(updatedHistory);

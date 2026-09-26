@@ -303,6 +303,7 @@ export default function Workspace({
         onSettings={undefined}
         settingsMenu={[
           { label: "Storage…", icon: "storage", onSelect: () => setStorageOpen(true) },
+          { label: "Export my prompts", icon: "download", onSelect: () => { window.location.href = "/api/prompts/export"; } },
           { separator: true as const },
           { label: "About Video tool", icon: "info", onSelect: () => setAboutOpen(true) },
         ]}
@@ -339,6 +340,7 @@ export default function Workspace({
         onSettings={undefined}
         settingsMenu={[
           { label: "Storage…", icon: "storage", onSelect: () => setStorageOpen(true) },
+          { label: "Export my prompts", icon: "download", onSelect: () => { window.location.href = "/api/prompts/export"; } },
           { separator: true as const },
           { label: "About Video tool", icon: "info", onSelect: () => setAboutOpen(true) },
         ]}
@@ -378,6 +380,7 @@ export default function Workspace({
         onSettings={undefined}
         settingsMenu={[
           { label: "Storage…", icon: "storage", onSelect: () => setStorageOpen(true) },
+          { label: "Export my prompts", icon: "download", onSelect: () => { window.location.href = "/api/prompts/export"; } },
           { separator: true as const },
           { label: "About Video tool", icon: "info", onSelect: () => setAboutOpen(true) },
         ]}
