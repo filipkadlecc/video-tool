@@ -116,7 +116,7 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
   {
     name: "render_frames",
     description:
-      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. When you don't ask for specific frames, a contact sheet of 24 frames across the whole video comes first, so you can judge pacing and variety at a glance: something new should happen every 3–5 seconds, never one idea stretched over the runtime. Inspect the frames for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
+      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. When you don't ask for specific frames, a contact sheet of 24 frames across the whole video comes first, so you can judge pacing and variety at a glance: something new should happen every 3–5 seconds, never one idea stretched over the runtime. Inspect the frames for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). Then score what you see with submit_review; if anything is below the bar, return the COMPLETE corrected file in one ```tsx block and render again. Skip it for a tiny edit.",
     input_schema: {
       type: "object",
       properties: {
@@ -132,6 +132,35 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
             "Optional specific frame numbers to render. Omit to auto-sample a spread across the whole duration.",
         },
       },
+    },
+  },
+  {
+    name: "submit_review",
+    description:
+      "Score the frames you just rendered, honestly, like a demanding creative director — BEFORE deciding whether you're done. The bar is 8 on every score; below that, fix the problems you list, render again and re-score. A 6 you fix beats an 8 you invented. Call it after every render_frames pass on a substantial scene.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scores: {
+          type: "object",
+          description: "1–10 each. 8 means a senior motion designer would ship it.",
+          properties: {
+            hook: { type: "integer", description: "Do the first 2 seconds grab attention and make you want to keep watching?" },
+            readability: { type: "integer", description: "Is every word legible, on screen long enough to read, with nothing clipped or overlapping?" },
+            motion: { type: "integer", description: "Does motion feel deliberate and weighted — springs with mass, compound moves — rather than linear or floaty?" },
+            variety: { type: "integer", description: "From the contact sheet: does something new happen every 3–5 s, or is it one idea stretched out?" },
+            composition: { type: "integer", description: "Balanced, intentional layout; not everything dead centre; good use of the canvas." },
+            brand: { type: "integer", description: "Brand black background, a single orange accent, right fonts and weights, no banned effects." },
+          },
+          required: ["hook", "readability", "motion", "variety", "composition", "brand"],
+        },
+        problems: {
+          type: "array",
+          items: { type: "string" },
+          description: "The three biggest problems, most important first, each with WHERE it happens (a time or frame), e.g. \"0:04 — the subtitle clips the right edge\". Empty only if nothing is below 8.",
+        },
+      },
+      required: ["scores", "problems"],
     },
   },
   {
@@ -151,11 +180,42 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
   },
 ];
 
+const REVIEW_AXES = ["hook", "readability", "motion", "variety", "composition", "brand"] as const;
+
+/**
+ * Check a `submit_review` call against the pass bar. Scores are clamped to
+ * 1–10 so a stray 11 can't carry a weak axis.
+ */
+function judgeReview(
+  input: unknown,
+  bar: number,
+):
+  | { error: string }
+  | { passed: boolean; failing: string[]; line: (n: number) => string } {
+  const raw = (input ?? {}) as { scores?: Record<string, unknown>; problems?: unknown };
+  const scores: Record<string, number> = {};
+  for (const axis of REVIEW_AXES) {
+    const v = Number(raw.scores?.[axis]);
+    if (!Number.isFinite(v)) return { error: `Missing score for "${axis}". Score all six: ${REVIEW_AXES.join(", ")}.` };
+    scores[axis] = Math.max(1, Math.min(10, Math.round(v)));
+  }
+  const problems = Array.isArray(raw.problems) ? raw.problems.map(String).filter(Boolean) : [];
+  const failing = REVIEW_AXES.filter((a) => scores[a] < bar);
+  const passed = failing.length === 0;
+  const summary = REVIEW_AXES.map((a) => `${a} ${scores[a]}`).join(" · ");
+  return {
+    passed,
+    failing: [...failing],
+    line: (n) =>
+      `_Review ${n}: ${summary}${passed ? " — passed." : problems.length ? ` — fixing: ${problems[0]}` : ""}_`,
+  };
+}
+
 // Extra system guidance appended when the render tool is available, so the model
 // knows it can (and should) look at its own work.
 const AGENTIC_GUIDANCE =
   "\n\n=== SELF-REVIEW (you can SEE your own output) ===\n" +
-  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene, call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches). Then return the corrected complete file. One or two render passes is plenty — don't over-iterate. For a trivial edit you can skip rendering. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
+  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene, call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches). After each render, call `submit_review` to score it honestly on hook, readability, motion, variety, composition and brand. The bar is 8 on every score: if anything is below it, fix the problems you listed, render again and re-score, until it passes or you run out of renders. Iteration is the method, not a failure. For a trivial edit you can skip rendering and reviewing. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
 
 // The scene being edited, as the text editor tool sees it. It only ever
 // exists in memory here — nothing is written to disk.
@@ -413,8 +473,10 @@ export async function POST(request: Request) {
 
   // Hard safety caps so a model-driven loop can never run away: at most a few
   // tool rounds and a few renders per request.
-  const MAX_TOOL_TURNS = 6;
-  const MAX_RENDERS = 6;
+  const MAX_TOOL_TURNS = 10;
+  const MAX_RENDERS = 8;
+  // Every score has to reach this for the self-review to pass.
+  const REVIEW_PASS = 8;
 
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
@@ -442,6 +504,8 @@ export async function POST(request: Request) {
         let toolTurns = 0;
         let renderCount = 0;
         let editCount = 0;
+        let reviewCount = 0;
+        let rendersAtLastReview = 0;
         // Whether the scene's latest version came from the edit tool rather
         // than a ```tsx block the model wrote — then we hand the file back.
         let codeFromEdits = false;
@@ -548,7 +612,7 @@ export async function POST(request: Request) {
                   content: [
                     {
                       type: "text",
-                      text: "Rendered frames of your current scene — review them for overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, and pacing, then return the complete corrected file (or confirm it looks clean).",
+                      text: "Rendered frames of your current scene — review them for overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, and pacing, then score them with submit_review.",
                     },
                     ...contactSheetToContentBlocks(review.contactSheet),
                     ...framesToContentBlocks(review.frames, meta.durationInFrames),
@@ -577,6 +641,35 @@ export async function POST(request: Request) {
                 }
                 toolResults.push({ type: "tool_result", tool_use_id: block.id, content: outcome.result });
               }
+            } else if (block.name === "submit_review") {
+              const outcome = judgeReview(block.input, REVIEW_PASS);
+              if ("error" in outcome) {
+                toolResults.push({ type: "tool_result", tool_use_id: block.id, is_error: true, content: outcome.error });
+                continue;
+              }
+              if (renderCount === rendersAtLastReview) {
+                toolResults.push({
+                  type: "tool_result",
+                  tool_use_id: block.id,
+                  is_error: true,
+                  content: "Nothing new to review — render the scene first (render_frames), then score what you see.",
+                });
+                continue;
+              }
+              reviewCount++;
+              rendersAtLastReview = renderCount;
+              // One line per pass in the chat, so the person can watch it improve.
+              send({ text: `\n\n${outcome.line(reviewCount)}\n\n` });
+              const rendersLeft = MAX_RENDERS - renderCount;
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: outcome.passed
+                  ? `Passed — every score is ${REVIEW_PASS} or above. Return the COMPLETE final scene in one \`\`\`tsx block now; no more renders.`
+                  : rendersLeft > 0
+                    ? `Not there yet: ${outcome.failing.join(", ")} below ${REVIEW_PASS}. Fix the problems you listed (most important first), write the COMPLETE corrected scene, call render_frames, then submit_review again. ${rendersLeft} render${rendersLeft === 1 ? "" : "s"} left.`
+                    : `Below the bar (${outcome.failing.join(", ")}) and out of renders. Fix what you can from your list without rendering again, and return the COMPLETE final scene in one \`\`\`tsx block.`,
+              });
             } else if (block.name === "read_snippet_source") {
               const name = String((block.input as { name?: string } | null)?.name ?? "");
               toolResults.push({
@@ -604,7 +697,7 @@ export async function POST(request: Request) {
         }
 
         console.log(
-          `[generate] ${isTerminal ? "claude-sonnet-4-6" : `${model}@${effort}`} agentic turns=${toolTurns} renders=${renderCount} edits=${editCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
+          `[generate] ${isTerminal ? "claude-sonnet-4-6" : `${model}@${effort}`} agentic turns=${toolTurns} renders=${renderCount} reviews=${reviewCount} edits=${editCount} stop=${lastStopReason} usage: in=${usage.input} cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} out=${usage.output}`,
         );
         if (lastStopReason === "refusal") {
           send({ error: "The model declined this request. Try rewording it." });

@@ -211,6 +211,7 @@ async function reviseSceneCode(
   instructions: string,
   timing: string,
   level: ModelLevel,
+  onReview?: (line: string) => void,
 ): Promise<string> {
   const res = await fetch(`${origin}/api/generate`, {
     method: "POST",
@@ -257,7 +258,13 @@ async function reviseSceneCode(
         continue;
       }
       if (parsed.error) throw new Error(parsed.error);
-      if (parsed.text) text += parsed.text;
+      if (parsed.text) {
+        text += parsed.text;
+        // The scene writer's self-review scores, passed on so the chat shows
+        // the revision getting better rather than going quiet for minutes.
+        const review = parsed.text.match(/_Review \d+:[^\n]*_/);
+        if (review) onReview?.(review[0]);
+      }
     }
   }
   const revised = lastCodeBlock(text);
@@ -541,7 +548,9 @@ export async function POST(request: Request) {
                 const instructions = picked && picked.itemId === found.id
                   ? `${input.instructions}\n\n${elementBrief(picked.element)}\nThe person selected this element on the canvas. Change ONLY it (and what is inside it) unless the instructions above say otherwise, and patch it in place with the edit tool — do not rewrite the scene.`
                   : input.instructions;
-                const revised = await reviseSceneCode(origin, project, found.code, instructions, timing, level);
+                const revised = await reviseSceneCode(origin, project, found.code, instructions, timing, level, (line) =>
+                  send({ text: `\n\n${line}\n\n` }),
+                );
                 working = reviseSceneItem(working, found.id, revised, fps);
                 docChanged = true;
                 results.push({
