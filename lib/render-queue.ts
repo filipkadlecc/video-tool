@@ -4,7 +4,8 @@ import os from "os";
 import path from "path";
 import PQueue from "p-queue";
 import { bundle } from "@remotion/bundler";
-import { selectComposition, renderStill } from "@remotion/renderer";
+import { selectComposition, renderStill, openBrowser } from "@remotion/renderer";
+import sharp from "sharp";
 import { stripBackgroundsForTransparency } from "./transparent-bg";
 import { leanPublicDir, sweepStaleBundles } from "./remotion-bundle";
 
@@ -669,6 +670,41 @@ export async function renderSampleFrames(
   frames: number[],
   svgContents?: { filename: string; content: string }[],
 ): Promise<SampleFrame[]> {
+  const { frames: out } = await renderReviewFrames(projectId, code, durationInFrames, fps, width, height, frames, svgContents, { contactSheet: false });
+  return out;
+}
+
+export interface ReviewRender {
+  frames: SampleFrame[];
+  /** One PNG tiling a spread of small frames across the whole scene, or null. */
+  contactSheet: string | null;
+}
+
+// The contact sheet: the whole scene at a glance, the way an editor scrubs a
+// cut. 6×4 tiles with a long edge of 310px keep the sheet under 2000px in every
+// orientation (6×310 plus gaps is 1890), which Opus 5.5 needs in a many-image
+// request.
+const SHEET_COLS = 6;
+const SHEET_ROWS = 4;
+const SHEET_TILE_LONG_EDGE = 310;
+const SHEET_GAP = 6;
+
+/**
+ * `renderSampleFrames`, plus an optional contact sheet, from ONE bundle and ONE
+ * browser. The bundle is the slow part and the browser the next slowest, so the
+ * sheet's 24 tiny stills cost seconds, not another cold start.
+ */
+export async function renderReviewFrames(
+  projectId: string,
+  code: string,
+  durationInFrames: number,
+  fps: number,
+  width: number,
+  height: number,
+  frames: number[],
+  svgContents?: { filename: string; content: string }[],
+  opts: { contactSheet?: boolean } = {},
+): Promise<ReviewRender> {
   const scenesDir = path.join(process.cwd(), "remotion", "scenes");
   fs.mkdirSync(scenesDir, { recursive: true });
 
@@ -689,6 +725,7 @@ export async function renderSampleFrames(
    * tens of gigabytes within a day.
    */
   const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), "vt-frames-bundle-"));
+  let browser: Awaited<ReturnType<typeof openBrowser>> | null = null;
   try {
     // Bundle once — the cold bundle dominates; each still after it is cheap.
     const serveUrl = await bundle({
@@ -696,23 +733,92 @@ export async function renderSampleFrames(
       outDir: bundleDir,
       publicDir: leanPublicDir(),
     });
-    const composition = await selectComposition({ serveUrl, id: "Scene" });
+    browser = await openBrowser("chrome");
+    const puppeteerInstance = browser;
+    const composition = await selectComposition({ serveUrl, id: "Scene", puppeteerInstance });
+
+    const still = async (frame: number, s: number): Promise<string> => {
+      const outPath = path.join(tmpDir, `frame_${frame}_${s.toFixed(3)}.png`);
+      await renderStill({ composition, serveUrl, output: outPath, frame, scale: s, imageFormat: "png", puppeteerInstance });
+      const data = fs.readFileSync(outPath);
+      try { fs.unlinkSync(outPath); } catch {}
+      return data.toString("base64");
+    };
+    const clamp = (raw: number) => Math.max(0, Math.min(durationInFrames - 1, Math.round(raw)));
 
     const out: SampleFrame[] = [];
     for (const raw of frames) {
-      const frame = Math.max(0, Math.min(durationInFrames - 1, Math.round(raw)));
-      const outPath = path.join(tmpDir, `frame_${frame}.png`);
-      await renderStill({ composition, serveUrl, output: outPath, frame, scale, imageFormat: "png" });
-      out.push({ frame, pngBase64: fs.readFileSync(outPath).toString("base64") });
-      try { fs.unlinkSync(outPath); } catch {}
+      const frame = clamp(raw);
+      out.push({ frame, pngBase64: await still(frame, scale) });
     }
-    return out;
+
+    let contactSheet: string | null = null;
+    if (opts.contactSheet) {
+      const tileScale = Math.min(1, SHEET_TILE_LONG_EDGE / longEdge);
+      const tileW = Math.round(width * tileScale);
+      const tileH = Math.round(height * tileScale);
+      const count = SHEET_COLS * SHEET_ROWS;
+      const tiles: { frame: number; png: Buffer }[] = [];
+      for (const frame of contactSheetFrameNumbers(durationInFrames, count)) {
+        tiles.push({ frame, png: Buffer.from(await still(frame, tileScale), "base64") });
+      }
+      contactSheet = await tileContactSheet(tiles, tileW, tileH, fps);
+    }
+    return { frames: out, contactSheet };
   } finally {
+    if (browser) { try { await browser.close({ silent: true }); } catch {} }
     try { fs.unlinkSync(scenePath); } catch {}
     try { fs.unlinkSync(entryPath); } catch {}
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     try { fs.rmSync(bundleDir, { recursive: true, force: true }); } catch {}
   }
+}
+
+/** `count` evenly spaced frames from the first to the last, inclusive. */
+export function contactSheetFrameNumbers(durationInFrames: number, count: number): number[] {
+  const last = Math.max(0, durationInFrames - 1);
+  if (count <= 1) return [0];
+  return Array.from({ length: count }, (_, i) => Math.round((i * last) / (count - 1)));
+}
+
+/**
+ * Lay the tiles out left to right, top to bottom, each stamped with its
+ * timestamp so the model can say "the title clips at 0:04" rather than "tile 9".
+ */
+async function tileContactSheet(
+  tiles: { frame: number; png: Buffer }[],
+  tileW: number,
+  tileH: number,
+  fps: number,
+): Promise<string> {
+  const sheetW = SHEET_COLS * tileW + (SHEET_COLS + 1) * SHEET_GAP;
+  const sheetH = SHEET_ROWS * tileH + (SHEET_ROWS + 1) * SHEET_GAP;
+  const parts: sharp.OverlayOptions[] = [];
+  tiles.forEach((t, i) => {
+    const left = SHEET_GAP + (i % SHEET_COLS) * (tileW + SHEET_GAP);
+    const top = SHEET_GAP + Math.floor(i / SHEET_COLS) * (tileH + SHEET_GAP);
+    parts.push({ input: t.png, left, top });
+    const secs = t.frame / fps;
+    const label = `${Math.floor(secs / 60)}:${(secs % 60).toFixed(1).padStart(4, "0")} · f${t.frame}`;
+    const labelW = 8 + label.length * 7;
+    parts.push({
+      input: Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${labelW}" height="18">` +
+          `<rect width="100%" height="100%" rx="3" fill="#000" fill-opacity="0.72"/>` +
+          `<text x="4" y="13" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#fff">${label}</text>` +
+          `</svg>`,
+      ),
+      left: left + 4,
+      top: top + 4,
+    });
+  });
+  const png = await sharp({
+    create: { width: sheetW, height: sheetH, channels: 3, background: "#3a3a3a" },
+  })
+    .composite(parts)
+    .png()
+    .toBuffer();
+  return png.toString("base64");
 }
 
 /**

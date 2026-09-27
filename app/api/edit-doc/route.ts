@@ -5,8 +5,8 @@ import { describeElement, elementBrief, type ElementPick, type SceneElement } fr
 import fs from "fs";
 import path from "path";
 import { EDITOR_AGENT_PROMPT } from "@/lib/prompts/editor-agent";
-import { framesToContentBlocks } from "@/lib/prompts/reference-images";
-import { renderSampleFrames, sampleFrameNumbers } from "@/lib/render-queue";
+import { framesToContentBlocks, contactSheetToContentBlocks } from "@/lib/prompts/reference-images";
+import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { getProject } from "@/lib/projects";
 import { sceneCodeFromDoc } from "@/lib/editor-render";
 import { docDuration, isValidDoc, sceneFit, type AssetKind, type EditorDoc } from "@/lib/editor-doc";
@@ -464,7 +464,7 @@ export async function POST(request: Request) {
                   /(["'`])\/api\/media\//g,
                   `$1${origin}/api/media/`,
                 );
-                const sampled = await renderSampleFrames(
+                const review = await renderReviewFrames(
                   projectId ?? "editor",
                   code,
                   duration,
@@ -472,6 +472,8 @@ export async function POST(request: Request) {
                   working.size.width,
                   working.size.height,
                   frames,
+                  undefined,
+                  { contactSheet: !wanted?.length },
                 );
                 results.push({
                   type: "tool_result",
@@ -481,7 +483,8 @@ export async function POST(request: Request) {
                       type: "text",
                       text: "The timeline as it stands. Check legibility, anything clipped or off screen, anything overlapping badly, and whether a frame is unintentionally empty — then fix what you see.",
                     },
-                    ...framesToContentBlocks(sampled, duration),
+                    ...contactSheetToContentBlocks(review.contactSheet),
+                    ...framesToContentBlocks(review.frames, duration),
                   ],
                 });
               } catch (e) {

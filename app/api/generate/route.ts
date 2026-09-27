@@ -5,8 +5,8 @@ import fs from "fs";
 import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
 import { listSfx } from "@/lib/sfx";
-import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks } from "@/lib/prompts/reference-images";
-import { renderSampleFrames, sampleFrameNumbers } from "@/lib/render-queue";
+import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks, contactSheetToContentBlocks } from "@/lib/prompts/reference-images";
+import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
 import { buildEnrichedMediaFiles, type EnrichedMediaFile } from "@/lib/media-analysis";
@@ -116,7 +116,7 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
   {
     name: "render_frames",
     description:
-      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. Inspect them for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
+      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. When you don't ask for specific frames, a contact sheet of 24 frames across the whole video comes first, so you can judge pacing and variety at a glance: something new should happen every 3–5 seconds, never one idea stretched over the runtime. Inspect the frames for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). If anything is wrong, return the COMPLETE corrected file in one ```tsx block. Use this once or twice for a substantial scene; skip it for a tiny edit.",
     input_schema: {
       type: "object",
       properties: {
@@ -155,7 +155,7 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
 // knows it can (and should) look at its own work.
 const AGENTIC_GUIDANCE =
   "\n\n=== SELF-REVIEW (you can SEE your own output) ===\n" +
-  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene, call render_frames, look at the frames, and fix any problems you see (overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing). Then return the corrected complete file. One or two render passes is plenty — don't over-iterate. For a trivial edit you can skip rendering. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
+  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene, call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches). Then return the corrected complete file. One or two render passes is plenty — don't over-iterate. For a trivial edit you can skip rendering. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
 
 // The scene being edited, as the text editor tool sees it. It only ever
 // exists in memory here — nothing is written to disk.
@@ -529,7 +529,9 @@ export async function POST(request: Request) {
               const meta = extractSceneMeta(latestCode, projectSettings.fps);
               const frames = framesArg?.length ? framesArg : sampleFrameNumbers(meta.durationInFrames);
               try {
-                const sampled = await renderSampleFrames(
+                // The sheet only when the model didn't ask for specific frames:
+                // then it wants a closer look, not the overview again.
+                const review = await renderReviewFrames(
                   projectId ?? "preview",
                   latestCode,
                   meta.durationInFrames,
@@ -538,6 +540,7 @@ export async function POST(request: Request) {
                   renderHeight,
                   frames,
                   svgContents?.map((s) => ({ filename: s.filename, content: s.content })),
+                  { contactSheet: !framesArg?.length },
                 );
                 toolResults.push({
                   type: "tool_result",
@@ -547,7 +550,8 @@ export async function POST(request: Request) {
                       type: "text",
                       text: "Rendered frames of your current scene — review them for overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, and pacing, then return the complete corrected file (or confirm it looks clean).",
                     },
-                    ...framesToContentBlocks(sampled, meta.durationInFrames),
+                    ...contactSheetToContentBlocks(review.contactSheet),
+                    ...framesToContentBlocks(review.frames, meta.durationInFrames),
                   ],
                 });
               } catch (e) {

@@ -63,5 +63,22 @@ export function framesToContentBlocks(
   return blocks;
 }
 
+// The contact sheet goes first: the whole scene at a glance before the detail
+// frames, so pacing and sameness get judged before pixels.
+export function contactSheetToContentBlocks(
+  sheetBase64: string | null,
+): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam> {
+  if (!sheetBase64) return [];
+  return [
+    {
+      type: "text",
+      text:
+        "Contact sheet — 24 frames spread evenly across the WHOLE video, left to right, top to bottom, each stamped with its time. Read it like an editor scrubbing the cut: does something new happen every 3–5 seconds, or is it one idea stretched over the runtime? Are there dead stretches where nothing changes? Do the tiles all look alike? Does the ending land?",
+    },
+    { type: "image", source: { type: "base64", media_type: "image/png", data: sheetBase64 } },
+    { type: "text", text: "Detail frames:" },
+  ];
+}
+
 export const APIFY_REFERENCE_INTRO =
   "The image(s) attached are Apify marketing design references. Treat them as STYLE references only — match the dark canvas, the small top-left wordmark, the bold headline with one orange-highlighted phrase, the checkmark bullet rows, and the orange pill CTAs. Ignore any small '+' / crosshair corner marks you see in the references — those have been removed from the design system. DO NOT copy the literal text, layout coordinates, or specific frames pixel-for-pixel. Apply the visual grammar to whatever the user has actually asked for.";
