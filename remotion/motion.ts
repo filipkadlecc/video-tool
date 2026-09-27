@@ -87,6 +87,37 @@ export function staggeredSpring(
 }
 
 /**
+ * A value that changes target several times — a cursor moving A→B→C, a bar
+ * growing twice, a counter stepping up — as ONE continuous motion.
+ *
+ * Restarting a spring at each change makes the value jump back and snap.
+ * Instead, every change adds its own spring, starting at its own frame, that
+ * carries the difference to the new target. Mid-flight changes blend: the next
+ * move starts while the last is still settling, the way a real object would.
+ *
+ *   const x = track(frame, fps, 200, [{ at: 30, to: 900 }, { at: 75, to: 540 }]);
+ *
+ * `at` is the frame the change starts. Pure function of the frame, so every
+ * render is identical.
+ */
+export function track(
+  frame: number,
+  fps: number,
+  from: number,
+  steps: { at: number; to: number; preset?: keyof typeof SPRINGS }[],
+  preset: keyof typeof SPRINGS = "LIQUID"
+): number {
+  let value = from;
+  let target = from;
+  for (const step of steps) {
+    const p = spring({ frame, fps, delay: step.at, config: SPRINGS[step.preset ?? preset] });
+    value += (step.to - target) * p;
+    target = step.to;
+  }
+  return value;
+}
+
+/**
  * @deprecated The recede-before-transition (scale-down + drift) reads as the cheap
  * "shrink and fade" exit. The transition system now owns scene handoffs: a
  * persistent root background plus hardCut() / crossDissolve() / cameraPush() (see

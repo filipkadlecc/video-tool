@@ -78,6 +78,7 @@ import {
   TIMING,         // { entrance, staggerLetter, staggerItem, staggerLong, holdBeat, exitTail }
   springIn,       // springIn(frame, fps, delay, "SNAPPY")
   staggeredSpring,// staggeredSpring(frame, fps, index, baseDelay, stagger, preset)
+  track,          // track(frame, fps, from, [{ at, to }]) — one value, several targets, continuous
   ambientDrift,   // ambientDrift(frame, amplitude, period, seed) — noise-based
   compoundReveal, // returns { opacity, transform, filter } for fade+slide+scale (no reveal blur)
   inOutEnvelope,  // returns 0→1→0 envelope across the sequence
@@ -188,6 +189,12 @@ items.map((item, i) => {
   const p = staggeredSpring(frame, fps, i, TIMING.entrance, TIMING.staggerItem, "ELASTIC");
   return ...;
 });
+\`\`\`
+
+When ONE value changes target several times — a cursor moving A→B→C, a bar growing twice, a camera re-framing — use \`track\` instead of chaining interpolates or restarting a spring. Each change adds its own spring from its own frame, so moves blend continuously with no jump or snap-back:
+
+\`\`\`tsx
+const cursorX = track(frame, fps, 200, [{ at: 30, to: 900 }, { at: 75, to: 540, preset: "SNAPPY" }]);
 \`\`\`
 
 Stagger sibling elements with tight delays (\`TIMING.staggerLetter\` ≈ 2 frames for letter-by-letter, \`TIMING.staggerItem\` ≈ 12 for cards, \`TIMING.staggerLong\` ≈ 18 for major phases).
