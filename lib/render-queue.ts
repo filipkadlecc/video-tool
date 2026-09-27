@@ -678,7 +678,12 @@ export interface ReviewRender {
   frames: SampleFrame[];
   /** One PNG tiling a spread of small frames across the whole scene, or null. */
   contactSheet: string | null;
+  /** The same scene rendered at each other requested shape, one strip each. */
+  shapeStrips: { label: string; png: string }[];
 }
+
+/** Frames per strip when a scene is checked at its other shapes. */
+const STRIP_FRAMES = 6;
 
 // The contact sheet: the whole scene at a glance, the way an editor scrubs a
 // cut. 6×4 tiles with a long edge of 310px keep the sheet under 2000px in every
@@ -703,7 +708,11 @@ export async function renderReviewFrames(
   height: number,
   frames: number[],
   svgContents?: { filename: string; content: string }[],
-  opts: { contactSheet?: boolean } = {},
+  opts: {
+    contactSheet?: boolean;
+    /** Other sizes to check the same scene at — its 9:16 and 1:1 cuts. */
+    shapes?: { label: string; width: number; height: number }[];
+  } = {},
 ): Promise<ReviewRender> {
   const scenesDir = path.join(process.cwd(), "remotion", "scenes");
   fs.mkdirSync(scenesDir, { recursive: true });
@@ -737,9 +746,12 @@ export async function renderReviewFrames(
     const puppeteerInstance = browser;
     const composition = await selectComposition({ serveUrl, id: "Scene", puppeteerInstance });
 
-    const still = async (frame: number, s: number): Promise<string> => {
-      const outPath = path.join(tmpDir, `frame_${frame}_${s.toFixed(3)}.png`);
-      await renderStill({ composition, serveUrl, output: outPath, frame, scale: s, imageFormat: "png", puppeteerInstance });
+    const still = async (frame: number, s: number, size?: { width: number; height: number }): Promise<string> => {
+      const outPath = path.join(tmpDir, `frame_${frame}_${s.toFixed(3)}_${size ? `${size.width}x${size.height}` : "base"}.png`);
+      // Another shape is the same bundle with the composition's size swapped:
+      // the scene reads it from useVideoConfig(), so nothing is rebuilt.
+      const comp = size ? { ...composition, width: size.width, height: size.height } : composition;
+      await renderStill({ composition: comp, serveUrl, output: outPath, frame, scale: s, imageFormat: "png", puppeteerInstance });
       const data = fs.readFileSync(outPath);
       try { fs.unlinkSync(outPath); } catch {}
       return data.toString("base64");
@@ -762,9 +774,21 @@ export async function renderReviewFrames(
       for (const frame of contactSheetFrameNumbers(durationInFrames, count)) {
         tiles.push({ frame, png: Buffer.from(await still(frame, tileScale), "base64") });
       }
-      contactSheet = await tileContactSheet(tiles, tileW, tileH, fps);
+      contactSheet = await tileContactSheet(tiles, tileW, tileH, fps, SHEET_COLS, SHEET_ROWS);
     }
-    return { frames: out, contactSheet };
+
+    const shapeStrips: { label: string; png: string }[] = [];
+    for (const shape of opts.shapes ?? []) {
+      const tileScale = Math.min(1, SHEET_TILE_LONG_EDGE / Math.max(shape.width, shape.height));
+      const tileW = Math.round(shape.width * tileScale);
+      const tileH = Math.round(shape.height * tileScale);
+      const tiles: { frame: number; png: Buffer }[] = [];
+      for (const frame of contactSheetFrameNumbers(durationInFrames, STRIP_FRAMES)) {
+        tiles.push({ frame, png: Buffer.from(await still(frame, tileScale, shape), "base64") });
+      }
+      shapeStrips.push({ label: shape.label, png: await tileContactSheet(tiles, tileW, tileH, fps, STRIP_FRAMES, 1) });
+    }
+    return { frames: out, contactSheet, shapeStrips };
   } finally {
     if (browser) { try { await browser.close({ silent: true }); } catch {} }
     try { fs.unlinkSync(scenePath); } catch {}
@@ -790,13 +814,15 @@ async function tileContactSheet(
   tileW: number,
   tileH: number,
   fps: number,
+  cols: number,
+  rows: number,
 ): Promise<string> {
-  const sheetW = SHEET_COLS * tileW + (SHEET_COLS + 1) * SHEET_GAP;
-  const sheetH = SHEET_ROWS * tileH + (SHEET_ROWS + 1) * SHEET_GAP;
+  const sheetW = cols * tileW + (cols + 1) * SHEET_GAP;
+  const sheetH = rows * tileH + (rows + 1) * SHEET_GAP;
   const parts: sharp.OverlayOptions[] = [];
   tiles.forEach((t, i) => {
-    const left = SHEET_GAP + (i % SHEET_COLS) * (tileW + SHEET_GAP);
-    const top = SHEET_GAP + Math.floor(i / SHEET_COLS) * (tileH + SHEET_GAP);
+    const left = SHEET_GAP + (i % cols) * (tileW + SHEET_GAP);
+    const top = SHEET_GAP + Math.floor(i / cols) * (tileH + SHEET_GAP);
     parts.push({ input: t.png, left, top });
     const secs = t.frame / fps;
     const label = `${Math.floor(secs / 60)}:${(secs % 60).toFixed(1).padStart(4, "0")} · f${t.frame}`;

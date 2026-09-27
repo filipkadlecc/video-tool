@@ -570,6 +570,32 @@ export function addAsset(doc: EditorDoc, asset: Asset): EditorDoc {
 
 /* ───────────────────── changing the frame, and the rate ───────────────────── */
 
+/** The three shapes a cut goes out in. */
+export type FrameShape = "16:9" | "9:16" | "1:1";
+export const FRAME_SHAPES: FrameShape[] = ["16:9", "9:16", "1:1"];
+
+/**
+ * The size of `shape` at this project's resolution: the short edge stays put,
+ * so a 1920×1080 cut becomes 1080×1920 or 1080×1080 and a 4K one stays 4K.
+ * Even numbers only — H.264 refuses odd dimensions.
+ */
+export function shapeSize(width: number, height: number, shape: FrameShape): { width: number; height: number } {
+  const short = Math.min(width, height);
+  const long = Math.round((short * 16) / 9 / 2) * 2;
+  if (shape === "16:9") return { width: long, height: short };
+  if (shape === "9:16") return { width: short, height: long };
+  return { width: short, height: short };
+}
+
+/** Which of the three shapes a size already is, if any. */
+export function shapeOf(width: number, height: number): FrameShape | null {
+  for (const shape of FRAME_SHAPES) {
+    const s = shapeSize(width, height, shape);
+    if (Math.abs(s.width - width) <= 2 && Math.abs(s.height - height) <= 2) return shape;
+  }
+  return null;
+}
+
 /**
  * Re-lay out the whole composition for a different frame size.
  *

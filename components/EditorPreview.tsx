@@ -8,7 +8,7 @@ import { EditorComposition } from "@/remotion/EditorComposition";
 import EditorCanvas from "@/components/EditorCanvas";
 import EditorPlayerControls from "@/components/EditorPlayerControls";
 import SafeZoneOverlay, { type SafeZone } from "@/components/SafeZoneOverlay";
-import { docDuration, type EditorDoc } from "@/lib/editor-doc";
+import { docDuration, resizeDoc, shapeSize, shapeOf, FRAME_SHAPES, type EditorDoc, type FrameShape } from "@/lib/editor-doc";
 import { usePlayheadFrame, usePlayheadPlaying } from "@/hooks/usePlayhead";
 
 /**
@@ -51,8 +51,19 @@ export default function EditorPreview({
   const currentFrame = usePlayheadFrame();
   const isPlaying = usePlayheadPlaying();
   const durationInFrames = useMemo(() => docDuration(doc), [doc]);
-  const inputProps = useMemo(() => ({ doc }), [doc]);
-  const { width, height, fps } = doc.size;
+  // "What does this look like as a vertical?" — the same document re-laid out
+  // for another shape, shown and never saved. Editing waits until you're back
+  // on the real one, or a drag here would move things in a layout that isn't.
+  const nativeShape = shapeOf(doc.size.width, doc.size.height);
+  const [previewShape, setPreviewShape] = useState<FrameShape | null>(null);
+  const shownDoc = useMemo(() => {
+    if (!previewShape || previewShape === nativeShape) return doc;
+    const s = shapeSize(doc.size.width, doc.size.height, previewShape);
+    return resizeDoc(doc, s.width, s.height);
+  }, [doc, previewShape, nativeShape]);
+  const previewing = shownDoc !== doc;
+  const inputProps = useMemo(() => ({ doc: shownDoc }), [shownDoc]);
+  const { width, height, fps } = shownDoc.size;
   const isEmpty = doc.tracks.every((t) => t.items.length === 0);
 
   // The overlay has to sit exactly on the rendered video, so measure the largest
@@ -78,7 +89,7 @@ export default function EditorPreview({
     return () => ro.disconnect();
   }, [width, height]);
 
-  const canEdit = Boolean(onChange && onSelectionChange && selectedIds);
+  const canEdit = Boolean(onChange && onSelectionChange && selectedIds) && !previewing;
   const [loop, setLoop] = useState(true);
 
   // Safe zones only mean anything on a vertical canvas, so the control does not
@@ -110,6 +121,33 @@ export default function EditorPreview({
       >
         {durationInFrames}F / {fps}FPS / {(durationInFrames / fps).toFixed(1)}S
       </div>
+
+      {nativeShape && (
+        <div style={{
+          position: "absolute", top: 40, left: 12, zIndex: 3, display: "flex",
+          background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", borderRadius: 3,
+          border: "1px solid rgba(255,255,255,0.1)", overflow: "hidden",
+        }}>
+          {FRAME_SHAPES.map((shape) => {
+            const active = (previewShape ?? nativeShape) === shape;
+            return (
+              <button
+                key={shape}
+                type="button"
+                onClick={() => setPreviewShape(shape === nativeShape ? null : shape)}
+                title={shape === nativeShape ? "Back to the project's own shape" : `Preview this cut as ${shape} — nothing is changed`}
+                style={{
+                  padding: "4px 8px", fontSize: 10, lineHeight: 1.4, border: "none", cursor: "pointer",
+                  background: active ? "rgba(248,102,6,0.22)" : "transparent",
+                  color: active ? "#F86606" : "rgba(255,255,255,0.7)",
+                }}
+              >
+                {shape}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isVertical && (
         <div style={{
@@ -193,7 +231,7 @@ export default function EditorPreview({
               background: "rgba(10,10,11,0.7)", color: "var(--ink-tertiary)",
             }}
           >
-            {width} × {height} · {Math.round((box.w / width) * 100)}%
+            {previewing ? "Preview only · " : ""}{width} × {height} · {Math.round((box.w / width) * 100)}%
           </div>
         )}
 

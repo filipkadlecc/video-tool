@@ -11,7 +11,7 @@
 // variants to this module.
 
 import React, { createContext, useContext } from "react";
-import { spring, interpolate, type SpringConfig } from "remotion";
+import { spring, interpolate, useVideoConfig, type SpringConfig } from "remotion";
 import { noise2D } from "@remotion/noise";
 
 // =============================================================================
@@ -406,3 +406,37 @@ export const SvgFrame: React.FC<SvgFrameProps> = ({ index, style, className }) =
     dangerouslySetInnerHTML: { __html: svg.content },
   });
 };
+
+// =============================================================================
+// LAYOUT — one scene, every shape
+// =============================================================================
+
+export type LayoutOrientation = "horizontal" | "vertical" | "square";
+
+/**
+ * Lay a scene out against the canvas it is actually rendering at, so the same
+ * code exports 16:9, 9:16 and 1:1 without being rewritten.
+ *
+ * - `u` is the size unit: 1 at a 1080px short edge. Write `fontSize: 96 * u`,
+ *   never `fontSize: 96`, and a 4K render is a true 2× and a vertical cut keeps
+ *   its type readable.
+ * - `safe` is the margin nothing important should cross. Vertical leaves room
+ *   for the TikTok / Shorts UI on the right and bottom.
+ * - `pick` is for the few things that genuinely differ per shape — a row that
+ *   becomes a column, a headline that breaks onto two lines.
+ */
+export function useLayout() {
+  const { width, height } = useVideoConfig();
+  const orientation: LayoutOrientation =
+    width > height * 1.1 ? "horizontal" : height > width * 1.1 ? "vertical" : "square";
+  const u = Math.min(width, height) / 1080;
+  const safe =
+    orientation === "vertical"
+      ? { top: height * 0.08, right: width * 0.12, bottom: height * 0.2, left: width * 0.06 }
+      : orientation === "square"
+        ? { top: height * 0.07, right: width * 0.07, bottom: height * 0.07, left: width * 0.07 }
+        : { top: height * 0.07, right: width * 0.06, bottom: height * 0.07, left: width * 0.06 };
+  const pick = <T,>(options: { horizontal: T; vertical?: T; square?: T }): T =>
+    options[orientation] ?? options.horizontal;
+  return { width, height, orientation, u, safe, pick, cx: width / 2, cy: height / 2 };
+}

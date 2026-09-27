@@ -7,6 +7,7 @@ import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
 import { listSfx } from "@/lib/sfx";
 import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks, contactSheetToContentBlocks, userReferenceBlocks, USER_REFERENCE_INTRO } from "@/lib/prompts/reference-images";
 import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
+import { shapeOf, shapeSize, type FrameShape } from "@/lib/editor-doc";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
 import { buildEnrichedMediaFiles, type EnrichedMediaFile } from "@/lib/media-analysis";
@@ -179,6 +180,23 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
     },
   },
 ];
+
+const ORIENTATION_SHAPE: Record<string, FrameShape> = { horizontal: "16:9", vertical: "9:16", square: "1:1" };
+
+/**
+ * The shapes a scene declares (`export const orientation = [...]`) other than
+ * the one it's being built at. Absent means a scene from before shapes existed,
+ * which is only ever checked at its own size.
+ */
+function otherDeclaredShapes(code: string, width: number, height: number): { label: string; width: number; height: number }[] {
+  const m = code.match(/export\s+const\s+orientation\s*(?::[^=]+)?=\s*\[([^\]]*)\]/);
+  if (!m) return [];
+  const own = shapeOf(width, height);
+  const shapes = [...m[1].matchAll(/["'](horizontal|vertical|square)["']/g)]
+    .map((x) => ORIENTATION_SHAPE[x[1]])
+    .filter((shape, i, all) => shape !== own && all.indexOf(shape) === i);
+  return shapes.map((shape) => ({ label: shape, ...shapeSize(width, height, shape) }));
+}
 
 const REVIEW_AXES = ["hook", "readability", "motion", "variety", "composition", "brand"] as const;
 
@@ -608,7 +626,11 @@ export async function POST(request: Request) {
                   renderHeight,
                   frames,
                   svgContents?.map((s) => ({ filename: s.filename, content: s.content })),
-                  { contactSheet: !framesArg?.length },
+                  {
+                    contactSheet: !framesArg?.length,
+                    // A scene that says it works in other shapes is checked in them.
+                    shapes: framesArg?.length ? [] : otherDeclaredShapes(latestCode, renderWidth, renderHeight),
+                  },
                 );
                 toolResults.push({
                   type: "tool_result",
@@ -619,6 +641,13 @@ export async function POST(request: Request) {
                       text: "Rendered frames of your current scene — review them for overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, and pacing, then score them with submit_review.",
                     },
                     ...contactSheetToContentBlocks(review.contactSheet),
+                    ...review.shapeStrips.flatMap((strip) => [
+                      {
+                        type: "text" as const,
+                        text: `The same scene rendered at ${strip.label} — 6 frames across the video. It will be exported in this shape too: check nothing clips, crowds or leaves the safe area, and fix it with useLayout()'s u / safe / pick, never by special-casing pixel numbers. Score the review on the worst shape.`,
+                      },
+                      { type: "image" as const, source: { type: "base64" as const, media_type: "image/png" as const, data: strip.png } },
+                    ]),
                     ...framesToContentBlocks(review.frames, meta.durationInFrames),
                   ],
                 });

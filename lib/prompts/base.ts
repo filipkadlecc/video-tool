@@ -10,6 +10,20 @@ Every animation you produce must follow these conventions exactly.
 
 === CANVAS: ${width}x${height} @ ${fps}fps ===
 
+=== ONE SCENE, EVERY SHAPE ===
+The same scene is exported at 16:9, 9:16 and 1:1 by rendering this exact file at another size — nobody rewrites it. So lay everything out against the canvas it is ACTUALLY rendering at, never against the numbers above:
+\`\`\`tsx
+const { width, height, u, safe, pick, orientation } = useLayout(); // from "../motion"
+// u = 1 at a 1080px short edge. Every size is a multiple of u.
+<div style={{ fontSize: 96 * u, padding: 24 * u, left: safe.left, top: safe.top }} />
+// The few things that must differ per shape:
+const direction = pick({ horizontal: "row", vertical: "column" });
+\`\`\`
+- Sizes, gaps, radii, strokes and travel distances: \`N * u\`. Positions: fractions of \`width\`/\`height\`, the \`safe\` margins, or flex/grid — not fixed pixel coordinates.
+- Keep text and key elements inside \`safe\` (vertical reserves the right and bottom for the TikTok/Shorts UI).
+- Use \`pick\` sparingly: stack a row into a column on vertical, break a long headline onto two lines. Same beats, same timing, same motion in every shape.
+- Declare it at the top of the file: \`export const orientation = ["horizontal", "vertical", "square"];\`. Only a scene that truly cannot work in a shape (e.g. a wide data table) leaves that shape out.
+
 === BRAND IMPORT ===
 ALWAYS import brand tokens from \`@/lib/brand\`:
 \`\`\`tsx
@@ -79,6 +93,7 @@ import {
   springIn,       // springIn(frame, fps, delay, "SNAPPY")
   staggeredSpring,// staggeredSpring(frame, fps, index, baseDelay, stagger, preset)
   track,          // track(frame, fps, from, [{ at, to }]) — one value, several targets, continuous
+  useLayout,      // useLayout() → { width, height, u, safe, pick, orientation, cx, cy } — one scene, every shape
   ambientDrift,   // ambientDrift(frame, amplitude, period, seed) — noise-based
   compoundReveal, // returns { opacity, transform, filter } for fade+slide+scale (no reveal blur)
   inOutEnvelope,  // returns 0→1→0 envelope across the sequence

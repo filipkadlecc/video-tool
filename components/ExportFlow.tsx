@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Icon from "@/components/ui/Icon";
@@ -10,7 +10,7 @@ import Segmented from "@/components/ui/Segmented";
 import Tag from "@/components/ui/Tag";
 import { timecode, needsHours } from "@/lib/timecode";
 import { formatBytes } from "@/lib/format";
-import { relinkAsset, type EditorDoc } from "@/lib/editor-doc";
+import { relinkAsset, resizeDoc, shapeOf, shapeSize, FRAME_SHAPES, type EditorDoc, type FrameShape } from "@/lib/editor-doc";
 
 /**
  * The export arc: 4e -> 5d -> 5e or 5f, with 5g reachable from 4e's warning.
@@ -84,7 +84,7 @@ export interface MissingSource {
 }
 
 export default function ExportFlow({
-  open, onClose, code, durationInFrames, fps, width, height,
+  open, onClose, code, durationInFrames, fps, width: baseWidth, height: baseHeight,
   projectName, projectId, doc, range, onDocChange,
 }: {
   open: boolean;
@@ -102,6 +102,26 @@ export default function ExportFlow({
   onDocChange?: (doc: EditorDoc) => void;
 }) {
   const [status, setStatus] = useState<Status>("idle");
+  // The shape it goes out in. The same cut, re-laid out: a scene written with
+  // useLayout() adapts; an older fixed-pixel one is stretched, so the player's
+  // shape buttons are there to check it first.
+  const nativeShape = shapeOf(baseWidth, baseHeight);
+  const [shape, setShape] = useState<FrameShape | null>(null);
+  const { width, height } = shape && shape !== nativeShape
+    ? shapeSize(baseWidth, baseHeight, shape)
+    : { width: baseWidth, height: baseHeight };
+  const exportDoc = useMemo(
+    () => (doc && (doc.size.width !== width || doc.size.height !== height) ? resizeDoc(doc, width, height) : doc),
+    [doc, width, height],
+  );
+  const chooseShape = (next: FrameShape) => {
+    setShape(next === nativeShape ? null : next);
+    // The file says which cut it is, so three exports don't overwrite each other.
+    setFileName((prev) => {
+      const base = prev.replace(/-(16x9|9x16|1x1)$/, "");
+      return next === nativeShape ? base : `${base}-${next.replace(":", "x")}`;
+    });
+  };
   const [format, setFormat] = useState("h264");
   const [quality, setQuality] = useState<Quality>("standard");
   const [useRange, setUseRange] = useState(false);
@@ -252,7 +272,7 @@ export default function ExportFlow({
           codec: format, projectId,
           crf: format === "h264" ? CRF[quality] : undefined,
           frameRange: useRange && hasRange ? [rangeIn, rangeOut - 1] : undefined,
-          ...(doc ? { doc } : {}),
+          ...(exportDoc ? { doc: exportDoc } : {}),
         }),
       });
       if (!res.ok) throw new Error(`The render couldn't be started (HTTP ${res.status}).`);
@@ -291,7 +311,7 @@ export default function ExportFlow({
       setFailure({ message: e instanceof Error ? e.message : "The render couldn't be started." });
       setStatus("error");
     }
-  }, [fileName, code, durationInFrames, fps, width, height, format, projectId, quality, useRange, hasRange, rangeIn, rangeOut, doc]);
+  }, [fileName, code, durationInFrames, fps, width, height, format, projectId, quality, useRange, hasRange, rangeIn, rangeOut, exportDoc]);
 
   const reset = () => { setStatus("idle"); setResult(null); setFailure(null); setProgress(0); setFrames(null); setLeaving(false); };
   const close = () => { onClose(); };
@@ -702,6 +722,24 @@ export default function ExportFlow({
             />
           </Field>
         </div>
+
+        {nativeShape && (
+          <Field label="Shape">
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <Segmented
+                height={24}
+                value={shape ?? nativeShape}
+                onChange={(v) => chooseShape(v as FrameShape)}
+                options={FRAME_SHAPES.map((s) => ({ value: s, label: s === nativeShape ? `${s} · as built` : s }))}
+              />
+              {shape && shape !== nativeShape && (
+                <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                  Check it first with the {shape} button on the player
+                </span>
+              )}
+            </div>
+          </Field>
+        )}
 
         <Field label="Range">
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
