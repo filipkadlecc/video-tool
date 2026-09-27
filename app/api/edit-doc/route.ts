@@ -5,7 +5,7 @@ import { describeElement, elementBrief, type ElementPick, type SceneElement } fr
 import fs from "fs";
 import path from "path";
 import { EDITOR_AGENT_PROMPT } from "@/lib/prompts/editor-agent";
-import { framesToContentBlocks, contactSheetToContentBlocks } from "@/lib/prompts/reference-images";
+import { framesToContentBlocks, contactSheetToContentBlocks, userReferenceBlocks, USER_REFERENCE_INTRO, MAX_USER_REFERENCES } from "@/lib/prompts/reference-images";
 import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { getProject } from "@/lib/projects";
 import { sceneCodeFromDoc } from "@/lib/editor-render";
@@ -212,6 +212,7 @@ async function reviseSceneCode(
   timing: string,
   level: ModelLevel,
   onReview?: (line: string) => void,
+  images?: string[],
 ): Promise<string> {
   const res = await fetch(`${origin}/api/generate`, {
     method: "POST",
@@ -233,6 +234,7 @@ async function reviseSceneCode(
       transitionStyle: project.transitionStyle,
       useSfx: project.useSfx,
       level,
+      images: images?.length ? images : undefined,
     }),
   });
   if (!res.ok || !res.body) throw new Error(`scene writer returned HTTP ${res.status}`);
@@ -295,6 +297,7 @@ export async function POST(request: Request) {
     level: requestedLevel,
     plan,
     element: pick,
+    images,
   } = body as {
     messages: ChatMessage[];
     doc: EditorDoc;
@@ -304,8 +307,14 @@ export async function POST(request: Request) {
     level?: string;
     plan?: boolean;
     element?: ElementPick;
+    /** Reference images attached to THIS message, as data URIs. */
+    images?: string[];
   };
   const { level, model, effort } = resolveLevel(requestedLevel);
+  // Reference images go to the agent so it knows what was meant, and on to the
+  // scene writer with every revision this turn, because that is who draws.
+  const referenceUris = Array.isArray(images) ? images.slice(0, MAX_USER_REFERENCES) : [];
+  const userImages = await userReferenceBlocks(referenceUris);
 
   // An element double-clicked inside a scene block: resolved against the code
   // the person was looking at, so "make this orange" means exactly that tag.
@@ -363,9 +372,18 @@ export async function POST(request: Request) {
     const pickedNote = picked
       ? `\n\n=== THEY HAVE SELECTED ONE ELEMENT ===\nInside scene block ${picked.itemId} they double-clicked the element below. "This", "it" and "here" mean this element. Change only it unless they say otherwise — use revise_scene on ${picked.itemId}; the scene writer is shown the element too.\n${elementBrief(picked.element)}`
       : "";
+    const text = `${describeDoc(incomingDoc, ctx)}${pickedNote}\n\n=== THE REQUEST ===\n${msg.content}`;
+    if (userImages.length === 0) return { role: "user", content: text };
     return {
       role: "user",
-      content: `${describeDoc(incomingDoc, ctx)}${pickedNote}\n\n=== THE REQUEST ===\n${msg.content}`,
+      content: [
+        {
+          type: "text",
+          text: `${USER_REFERENCE_INTRO}\nWhen you use revise_scene this turn, the scene writer is shown these same images — say in your instructions what to take from them.`,
+        },
+        ...userImages,
+        { type: "text", text },
+      ],
     };
   });
   const anthropicMessages = plan ? withPlanInstruction(conversation) : conversation;
@@ -550,6 +568,7 @@ export async function POST(request: Request) {
                   : input.instructions;
                 const revised = await reviseSceneCode(origin, project, found.code, instructions, timing, level, (line) =>
                   send({ text: `\n\n${line}\n\n` }),
+                  referenceUris,
                 );
                 working = reviseSceneItem(working, found.id, revised, fps);
                 docChanged = true;

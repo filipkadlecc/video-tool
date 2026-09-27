@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
 import { listSfx } from "@/lib/sfx";
-import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks, contactSheetToContentBlocks } from "@/lib/prompts/reference-images";
+import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks, contactSheetToContentBlocks, userReferenceBlocks, USER_REFERENCE_INTRO } from "@/lib/prompts/reference-images";
 import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
@@ -304,6 +304,7 @@ export async function POST(request: Request) {
     effort: requestedEffort,
     level: requestedLevel,
     plan,
+    images,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -320,6 +321,8 @@ export async function POST(request: Request) {
     effort?: string;
     level?: string;
     plan?: boolean;
+    /** Reference images attached to THIS message, as data URIs. */
+    images?: string[];
   };
 
   // The chat's Fast / Balanced / Best switch (lib/models.ts). Balanced is Opus
@@ -391,7 +394,8 @@ export async function POST(request: Request) {
   // follow-up edits cheap (the visual grammar is also encoded in the system prompt).
   const isTerminal = animationType === "terminal";
   const firstUserTurnIndex = messages.findIndex((m) => m.role === "user");
-  const referenceImages = !isTerminal ? getApifyReferenceImages() : [];
+  const referenceImages = !isTerminal ? await getApifyReferenceImages() : [];
+  const userImages = !isTerminal ? await userReferenceBlocks(images) : [];
 
   // Build Anthropic messages from chat history
   // Enhance the last user message with context
@@ -421,12 +425,12 @@ export async function POST(request: Request) {
         }
         userContent = `${parts.join("\n\n")}\n\n${userContent}`;
       }
-      if (attachReferences) {
+      if (attachReferences || userImages.length > 0) {
         return {
           role: "user" as const,
           content: [
-            { type: "text", text: APIFY_REFERENCE_INTRO },
-            ...referenceImages,
+            ...(attachReferences ? [{ type: "text" as const, text: APIFY_REFERENCE_INTRO }, ...referenceImages] : []),
+            ...(userImages.length > 0 ? [{ type: "text" as const, text: USER_REFERENCE_INTRO }, ...userImages] : []),
             { type: "text", text: userContent },
           ],
         };

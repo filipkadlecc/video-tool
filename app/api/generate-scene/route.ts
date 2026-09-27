@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { buildSystemPrompt } from "@/lib/prompts";
+import { dataUriToImageBlock } from "@/lib/prompts/reference-images";
 import { resolveLevel } from "@/lib/models";
 import { getProject, updateProject } from "@/lib/projects";
 import type { AnimationType, ProjectSettings, StyleMode, TransitionStyle } from "@/lib/types";
@@ -25,20 +26,6 @@ function extractCode(text: string): string | null {
   if (!matches.length) return null;
   const last = matches[matches.length - 1][1].trim();
   return last.length > 50 ? last : null;
-}
-
-const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
-
-/** Turn a data: URI into an Anthropic image block, or null if it isn't a usable image. */
-function imageBlock(dataUri: string): Anthropic.ImageBlockParam | null {
-  const m = /^data:([^;,]+);base64,(.+)$/.exec(dataUri.trim());
-  if (!m) return null;
-  const mediaType = m[1].toLowerCase();
-  if (!IMAGE_TYPES.has(mediaType)) return null;
-  return {
-    type: "image",
-    source: { type: "base64", media_type: mediaType as "image/png", data: m[2] },
-  };
 }
 
 export async function POST(request: Request) {
@@ -95,7 +82,7 @@ export async function POST(request: Request) {
 
   const blocks: Anthropic.ContentBlockParam[] = [];
   for (const uri of images.slice(0, 8)) {
-    const block = imageBlock(uri);
+    const block = await dataUriToImageBlock(uri);
     if (block) blocks.push(block);
   }
   blocks.push({

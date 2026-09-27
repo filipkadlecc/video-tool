@@ -100,6 +100,45 @@ interface SvgAssetOption {
   path: string;
 }
 
+interface ImageAttachment {
+  name: string;
+  dataUri: string;
+}
+
+// A reference image rides along with the message. Six is plenty to show a look,
+// and the render loop adds its own images to the same request.
+const MAX_REFERENCE_IMAGES = 6;
+// Opus 5.5 refuses any image over 2000px in a many-image request, and the API
+// scales to about 1568px anyway, so shrink before sending, not after failing.
+const REFERENCE_LONG_EDGE = 1568;
+
+/** Read an image file as a JPEG data URI no larger than REFERENCE_LONG_EDGE. */
+async function readReferenceImage(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error(`Couldn't read ${file.name}`));
+      el.src = url;
+    });
+    const scale = Math.min(1, REFERENCE_LONG_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("No canvas");
+    // A transparent PNG would turn black as a JPEG; the brand canvas is near
+    // black anyway, but paint it deliberately so it's the brand black.
+    ctx.fillStyle = "#020202";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export interface ChatPanelHandle {
   /** Programmatically send a prompt as if the user had typed it.
    *  Pass `overrideCode` when the caller has just mutated the editor code
@@ -224,6 +263,8 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [streamingContent, setStreamingContent] = useState("");
   const [attachedSvgs, setAttachedSvgs] = useState<SvgAttachment[]>([]);
+  const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [svgPickerOpen, setSvgPickerOpen] = useState(false);
   const [svgOptions, setSvgOptions] = useState<SvgAssetOption[]>([]);
   const [svgLoading, setSvgLoading] = useState(false);
@@ -317,6 +358,20 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     }
   }
 
+  async function addReferenceImages(files: File[]) {
+    const images = files.filter((f) => /^image\/(png|jpe?g|webp|gif)$/.test(f.type));
+    for (const file of images) {
+      try {
+        const dataUri = await readReferenceImage(file);
+        setAttachedImages((prev) =>
+          prev.length >= MAX_REFERENCE_IMAGES ? prev : [...prev, { name: file.name || "pasted image", dataUri }],
+        );
+      } catch {
+        // an unreadable file is skipped; the rest still attach
+      }
+    }
+  }
+
   useImperativeHandle(
     ref,
     () => ({
@@ -379,9 +434,12 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
       messageForAI = `${svgBlock}\n\n${messageForAI}`;
     }
 
-    const displayText = attachedSvgs.length > 0
-      ? `${text.trim()}\n\nAttached SVGs: ${attachedSvgs.map((s) => s.filename).join(", ")}`
-      : text.trim();
+    const attachedNote = [
+      attachedSvgs.length > 0 ? `Attached SVGs: ${attachedSvgs.map((s) => s.filename).join(", ")}` : "",
+      attachedImages.length > 0 ? `Reference images: ${attachedImages.map((i) => i.name).join(", ")}` : "",
+    ].filter(Boolean).join("\n");
+    const displayText = attachedNote ? `${text.trim()}\n\n${attachedNote}` : text.trim();
+    const images = attachedImages.map((i) => i.dataUri);
 
     const userMessage: ChatMessage = { role: "user", content: displayText, ts: Date.now() };
     const messagesForAI: ChatMessage[] = [...chatHistory, { role: "user", content: messageForAI }];
@@ -389,13 +447,14 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     onChatUpdate(updatedHistory);
 
     setAttachedSvgs([]);
+    setAttachedImages([]);
 
     let fullResponse = "";
 
     try {
       // The timeline is open: edit the document, not the code file.
       if (doc && onDocChanged) {
-        await editDocument(messagesForAI, updatedHistory, controller, plan);
+        await editDocument(messagesForAI, updatedHistory, controller, plan, images);
         return;
       }
       /*
@@ -429,6 +488,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           useSfx,
           level,
           plan,
+          images: images.length ? images : undefined,
         }),
       });
 
@@ -554,6 +614,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
     updatedHistory: ChatMessage[],
     controller: AbortController,
     plan: boolean,
+    images: string[],
   ) {
     let fullResponse = "";
     let latestDoc: EditorDoc | null = null;
@@ -572,6 +633,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         level,
         plan,
         element: selectedElement ?? undefined,
+        images: images.length ? images : undefined,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
@@ -1076,6 +1138,51 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
           </div>
         )}
 
+        {/* Reference image chips */}
+        {attachedImages.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            {attachedImages.map((img, i) => (
+              <div
+                key={i}
+                title={img.name}
+                style={{
+                  position: "relative",
+                  width: 56,
+                  height: 40,
+                  borderRadius: 4,
+                  overflow: "hidden",
+                  border: "1px solid var(--border-hairline)",
+                  background: "var(--surface-void)",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.dataUri} alt={img.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <button
+                  onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
+                  title="Remove"
+                  style={{
+                    position: "absolute",
+                    top: 2,
+                    right: 2,
+                    width: 16,
+                    height: 16,
+                    borderRadius: 8,
+                    background: "rgba(0,0,0,0.7)",
+                    border: "none",
+                    color: "var(--ink-primary)",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  <Icon name="close" size={9} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/*
           A clip dragged in from the timeline becomes context — the same chip
           selecting it would produce. "Drag a clip in here" is in the
@@ -1083,14 +1190,21 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
         */}
         <div
           onDragOver={(e) => {
-            if (!e.dataTransfer.types.includes("application/x-vt-clip")) return;
+            const types = e.dataTransfer.types;
+            if (!types.includes("application/x-vt-clip") && !types.includes("Files")) return;
             e.preventDefault();
             setDropping(true);
           }}
           onDragLeave={() => setDropping(false)}
           onDrop={(e) => {
-            const id = e.dataTransfer.getData("application/x-vt-clip");
             setDropping(false);
+            // An image file dropped in is a reference for the look.
+            if (e.dataTransfer.files.length > 0) {
+              e.preventDefault();
+              void addReferenceImages(Array.from(e.dataTransfer.files));
+              return;
+            }
+            const id = e.dataTransfer.getData("application/x-vt-clip");
             if (!id) return;
             e.preventDefault();
             onSelectItems?.([...new Set([...(selectedIds ?? []), id])]);
@@ -1111,10 +1225,17 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={(e) => {
+              // A screenshot pasted into the box attaches as a reference image.
+              const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+              if (files.length === 0) return;
+              e.preventDefault();
+              void addReferenceImages(files);
+            }}
             placeholder={
               planMode
                 ? "Describe what you want — you'll get a plan first, nothing changes yet…"
-                : doc ? "Describe the change, or drag a clip in here…" : "Ask for a change..."
+                : doc ? "Describe the change, or drag in a clip or a reference image…" : "Ask for a change — paste a reference image if it helps…"
             }
             rows={2}
             disabled={isGenerating}
@@ -1132,6 +1253,24 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function ChatPanel
             }}
           />
           <div className="vt-composer-row" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 6, gap: 4 }}>
+            <IconButton
+              icon="image"
+              size={22}
+              title="Attach a reference image (or paste / drop one)"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={isGenerating || attachedImages.length >= MAX_REFERENCE_IMAGES}
+            />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              multiple
+              hidden
+              onChange={(e) => {
+                void addReferenceImages(Array.from(e.target.files ?? []));
+                e.target.value = "";
+              }}
+            />
             <div style={{ position: "relative" }} ref={svgPickerRef}>
               <IconButton icon="attach" size={22} title="Attach SVG" onClick={openSvgPicker} disabled={isGenerating} />
               {svgPickerOpen && (
