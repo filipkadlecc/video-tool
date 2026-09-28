@@ -156,12 +156,17 @@ function uploadFileWithProgress(
   });
 }
 
-/** The four frames, drawn at their real ratio. Selected on load: Cinema 4K. */
-const FRAME_PRESETS: { label: string; orientation: Orientation; resolution: Resolution; ratio: string }[] = [
-  { label: "Landscape", orientation: "horizontal", resolution: "1080p", ratio: "16:9" },
-  { label: "Square", orientation: "square", resolution: "1080p", ratio: "1:1" },
-  { label: "Vertical", orientation: "vertical", resolution: "1080p", ratio: "9:16" },
-  { label: "Cinema 4K", orientation: "horizontal", resolution: "4k", ratio: "16:9" },
+/** The three shapes, drawn at their real ratio. */
+const ASPECTS: { label: string; orientation: Orientation; ratio: string }[] = [
+  { label: "Landscape", orientation: "horizontal", ratio: "16:9" },
+  { label: "Square", orientation: "square", ratio: "1:1" },
+  { label: "Vertical", orientation: "vertical", ratio: "9:16" },
+];
+
+/** The two sizes each shape comes in. The pixels follow the shape. */
+const RESOLUTIONS: { id: Resolution; label: string }[] = [
+  { id: "1080p", label: "1080p" },
+  { id: "4k", label: "4K" },
 ];
 
 /** Where a brief can come from, in the order the switcher shows them. */
@@ -284,7 +289,7 @@ const SETTINGS_CARD: React.CSSProperties = {
 /** A right-panel row: a right-aligned 62px label beside its control. */
 function PanelRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "62px minmax(0,1fr)", gap: 6, alignItems: "center" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "74px minmax(0,1fr)", gap: 6, alignItems: "center" }}>
       <span className="t-control" style={{ color: "var(--ink-secondary)", textAlign: "right" }}>{label}</span>
       {children}
     </div>
@@ -301,7 +306,9 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
    * length is decided by what is on the timeline — so it goes into the brief,
    * where "a 20-second spot" is a real instruction the assistant can follow.
    */
-  const [targetSeconds, setTargetSeconds] = useState("20");
+  // Only ever set by a script's cues now: otherwise the length is left to the
+  // brief and the assistant, not asked for up front.
+  const [targetSeconds, setTargetSeconds] = useState("");
   // "broll" is still a valid stored value, but new projects are "animation" —
   // the two generate from an identical prompt (see normalizeAnimationType).
   const [animationType, setAnimationType] = useState<AnimationType>(
@@ -342,6 +349,28 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
    */
   const [step, setStep] = useState<WizardStep>(initialType === "terminal" ? "settings" : "kind");
   const [collections, setCollections] = useState<Collection[]>([]);
+  // "+ New collection…" in the picker opens a name field in its place.
+  const [newCollectionName, setNewCollectionName] = useState<string | null>(null);
+  const [creatingCollection, setCreatingCollection] = useState(false);
+  async function createCollectionNamed(nameIn: string) {
+    const trimmed = nameIn.trim();
+    if (!trimmed) return;
+    setCreatingCollection(true);
+    try {
+      const res = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) return;
+      const created: Collection = await res.json();
+      setCollections((prev) => [...prev, created]);
+      setCollectionId(created.id);
+      setNewCollectionName(null);
+    } finally {
+      setCreatingCollection(false);
+    }
+  }
   const [collectionId, setCollectionId] = useState<string>("");
 
   // Load collections so the user can file the new project into one at creation.
@@ -401,9 +430,10 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
 
   // A hand-typed frame — or one seeded by the first clip — is not a preset any
   // more, and the summary must not go on claiming it is.
-  const preset = customSize
+  const aspect = ASPECTS.find((a) => a.orientation === orientation) ?? ASPECTS[0];
+  const preset = customSize || resolution === "9x8"
     ? null
-    : FRAME_PRESETS.find((p) => p.orientation === orientation && p.resolution === resolution) ?? null;
+    : { label: `${aspect.label} ${RESOLUTIONS.find((r) => r.id === resolution)?.label ?? ""}`.trim() };
   const size = customSize ?? getResolution(orientation, resolution);
   // The canvas the project will actually have, which decides which scenes the
   // library offers — a custom width/height overrides the preset.
@@ -1437,20 +1467,77 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             <p className="t-body" style={{ color: "var(--ink-secondary)", margin: 0 }}>
               <span style={{ color: "var(--ink-primary)" }}>{preset?.label ?? "Custom"}</span>
               <span className="t-data-m" style={{ marginLeft: 10 }}>
-                {size.width}×{size.height} · {fps} fps · {targetSeconds || 0}s
+                {size.width}×{size.height} · {fps} fps{targetSeconds ? ` · ${targetSeconds}s` : ""}
               </span>
             </p>
           </div>
 
-          {/* Three cards across the full width: the frame, the look, the project. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, alignItems: "start" }}>
+          {/* One row: what it's called, its frame, how it looks. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16, alignItems: "start" }}>
           <div style={SETTINGS_CARD}>
-          {/* 2 · SHAPE — hard to change later, and said so. */}
+          <PanelSection label="Project" qualifier="renamable any time">
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <span className="t-control" style={{ color: "var(--ink-secondary)" }}>Name</span>
+              <Input value={name} onChange={setName} placeholder={suggestedName || "Untitled project"} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <span className="t-control" style={{ color: "var(--ink-secondary)" }}>Collection</span>
+              {newCollectionName === null ? (
+                <select
+                  value={collectionId}
+                  onChange={(e) => {
+                    if (e.target.value === "__new__") setNewCollectionName("");
+                    else setCollectionId(e.target.value);
+                  }}
+                  style={{
+                    width: "100%", height: 32, padding: "0 10px",
+                    background: "var(--surface-raised)", border: "1px solid var(--border-hairline)",
+                    borderRadius: "var(--r-control)", color: "var(--ink-primary)",
+                    fontSize: 14, cursor: "pointer",
+                  }}
+                >
+                  <option value="">None</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                  <option value="__new__">+ New collection…</option>
+                </select>
+              ) : (
+                <div
+                  style={{ display: "flex", gap: 6 }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void createCollectionNamed(newCollectionName); }
+                    if (e.key === "Escape") { e.stopPropagation(); setNewCollectionName(null); }
+                  }}
+                >
+                  <Input
+                    value={newCollectionName}
+                    onChange={setNewCollectionName}
+                    placeholder="New collection name"
+                    autoFocus
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={() => void createCollectionNamed(newCollectionName)}
+                    disabled={!newCollectionName.trim() || creatingCollection}
+                  >
+                    {creatingCollection ? "Creating…" : "Create"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setNewCollectionName(null)}>Cancel</Button>
+                </div>
+              )}
+            </div>
+          </PanelSection>
+          </div>
+
+          <div style={SETTINGS_CARD}>
+          {/* SHAPE — hard to change later, and said so. */}
           <PanelSection label="Shape" qualifier="hard to change later">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 4 }}>
-              {FRAME_PRESETS.map((p) => {
-                const dims = getResolution(p.orientation, p.resolution);
-                const active = !customSize && orientation === p.orientation && resolution === p.resolution;
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 4 }}>
+              {ASPECTS.map((a) => {
+                const dims = getResolution(a.orientation, "1080p");
+                const active = !customSize && orientation === a.orientation;
                 // Fit the real ratio into a 40×26 box — the point of showing a
                 // shape is that it IS the shape, so nothing is hardcoded.
                 const scale = Math.min(40 / dims.width, 26 / dims.height);
@@ -1458,14 +1545,14 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 const h = Math.round(dims.height * scale);
                 return (
                   <button
-                    key={p.label}
+                    key={a.ratio}
                     onClick={() => {
-                      setOrientation(p.orientation);
-                      setResolution(p.resolution);
+                      setOrientation(a.orientation);
+                      if (resolution === "9x8") setResolution("1080p");
                       setCustomSize(null);
                       setFrameTouched(true);
                     }}
-                    title={`${p.label} · ${dims.width}×${dims.height}`}
+                    title={a.label}
                     style={{
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
                       padding: "8px 4px 7px", borderRadius: "var(--r-control)",
@@ -1484,27 +1571,64 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                         }}
                       />
                     </span>
-                    <span className="t-data-s" style={{ color: "var(--ink-secondary)" }}>{p.ratio}</span>
+                    <span className="t-data-s" style={{ color: "var(--ink-secondary)" }}>{a.ratio}</span>
                   </button>
                 );
               })}
             </div>
 
-            <PanelRow label="Frame">
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Input
-                  height={24} mono value={String(size.width)}
-                  onChange={(v) => { setFrameTouched(true); setCustomSize({ width: Number(v) || 0, height: size.height }); }}
-                  style={{ flex: 1, minWidth: 0 }}
+            <PanelRow label="Resolution">
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <Segmented
+                  height={22}
+                  value={customSize ? "custom" : resolution}
+                  onChange={(v) => {
+                    if (v === "custom") {
+                      setCustomSize({ width: size.width, height: size.height });
+                    } else {
+                      setResolution(v as Resolution);
+                      setCustomSize(null);
+                    }
+                    setFrameTouched(true);
+                  }}
+                  options={RESOLUTIONS.map((r) => ({ value: r.id, label: r.label }))}
+                  stretch
+                  style={{ flex: 1 }}
                 />
-                <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>×</span>
-                <Input
-                  height={24} mono value={String(size.height)}
-                  onChange={(v) => { setFrameTouched(true); setCustomSize({ width: size.width, height: Number(v) || 0 }); }}
-                  style={{ flex: 1, minWidth: 0 }}
-                />
-              </span>
+              </div>
             </PanelRow>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 80 }}>
+              <span className="t-data-s" style={{ color: "var(--ink-tertiary)", flex: 1 }}>
+                {customSize ? "Custom size" : `${size.width}×${size.height} for ${aspect.ratio}`}
+              </span>
+              <Button
+                variant={customSize ? "secondary" : "ghost"}
+                onClick={() => {
+                  setCustomSize(customSize ? null : { width: size.width, height: size.height });
+                  setFrameTouched(true);
+                }}
+              >
+                {customSize ? "Use a preset" : "Custom resolution"}
+              </Button>
+            </div>
+
+            {customSize && (
+              <PanelRow label="Size">
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <Input
+                    height={24} mono value={String(size.width)}
+                    onChange={(v) => { setFrameTouched(true); setCustomSize({ width: Number(v) || 0, height: size.height }); }}
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                  <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>×</span>
+                  <Input
+                    height={24} mono value={String(size.height)}
+                    onChange={(v) => { setFrameTouched(true); setCustomSize({ width: size.width, height: Number(v) || 0 }); }}
+                    style={{ flex: 1, minWidth: 0 }}
+                  />
+                </span>
+              </PanelRow>
+            )}
 
             <PanelRow label="Rate">
               <Segmented
@@ -1513,18 +1637,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 onChange={(v) => setFps(v as FPS)}
                 options={[24, 25, 30, 50].map((r) => ({ value: r, label: String(r) }))}
                 stretch
-              />
-            </PanelRow>
-
-            <PanelRow label="Length">
-              {/* Seconds, not timecode: here the number is a brief, not a
-                  measurement. A script derives it. */}
-              <Input
-                height={24} mono
-                value={targetSeconds}
-                onChange={(v) => setTargetSeconds(v.replace(/[^0-9]/g, "").slice(0, 4))}
-                disabled={source === "script" && cues.length > 0}
-                suffix="seconds"
               />
             </PanelRow>
           </PanelSection>
@@ -1629,34 +1741,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             </PanelSection>
           )}
 
-          </div>
-
-          {/* 5 · The least interesting decisions, last. */}
-          <div style={SETTINGS_CARD}>
-          <PanelSection label="Project" qualifier="renamable any time">
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <span className="t-control" style={{ color: "var(--ink-secondary)" }}>Name</span>
-              <Input value={name} onChange={setName} placeholder={suggestedName || "Untitled project"} />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <span className="t-control" style={{ color: "var(--ink-secondary)" }}>Collection</span>
-              <select
-                value={collectionId}
-                onChange={(e) => setCollectionId(e.target.value)}
-                style={{
-                  width: "100%", height: 32, padding: "0 10px",
-                  background: "var(--surface-raised)", border: "1px solid var(--border-hairline)",
-                  borderRadius: "var(--r-control)", color: "var(--ink-primary)",
-                  fontSize: 14, cursor: "pointer",
-                }}
-              >
-                <option value="">None</option>
-                {collections.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </PanelSection>
           </div>
           </div>
         </div>
