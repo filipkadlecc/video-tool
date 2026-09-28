@@ -19,7 +19,7 @@ import TerminalPreview from "@/components/TerminalPreview";
 import ConvertAspectRatioButton from "@/components/ConvertAspectRatioButton";
 import { evalSceneCode } from "@/remotion/DynamicScene";
 import { sceneFramesAtFps } from "@/lib/scene-eval";
-import type { Project, ChatMessage, TerminalAnnotations, StyleMode, TopicCardStyle, TransitionStyle } from "@/lib/types";
+import type { Project, ChatMessage, TerminalAnnotations, StyleMode, TopicCardStyle, TransitionStyle, ProjectSettings } from "@/lib/types";
 import { normalizeAnimationType } from "@/lib/animation-types";
 import { getProjectSize, orientationOf } from "@/lib/types";
 import { buildTerminalExportPlan } from "@/lib/terminal-export";
@@ -98,12 +98,13 @@ const SAVE_TITLE = {
 } as const;
 
 /**
- * Code that already exists was written against the classic springs, so a
- * timeline made from it keeps them — it would otherwise start moving
- * differently the moment it's opened as a timeline. Flip it in the inspector.
+ * The timeline born from a project's code keeps the spring set the project was
+ * made with. A project from before the choice has none and was written against
+ * the classic springs, so it stays classic rather than moving differently the
+ * moment it becomes a timeline. Flip it in the inspector.
  */
-function keepClassicFeel(doc: EditorDoc): EditorDoc {
-  return { ...doc, motionStyle: "classic" };
+function withProjectFeel(doc: EditorDoc, settings: ProjectSettings): EditorDoc {
+  return { ...doc, motionStyle: settings.motionStyle === "new" ? "new" : "classic" };
 }
 
 export default function ProjectEditor() {
@@ -844,7 +845,7 @@ export default function ProjectEditor() {
     // an empty string as a scene block. This is the only way a document
     // can currently be born from scratch in the UI.
     if (!code.trim()) {
-      commitDoc(emptyDoc(size));
+      commitDoc(withProjectFeel(emptyDoc(size), project.settings));
       return;
     }
 
@@ -870,7 +871,7 @@ export default function ProjectEditor() {
       compositionDurationInFrames: evaluated?.durationInFrames,
     });
     if (imported) {
-      commitDoc(keepClassicFeel(imported));
+      commitDoc(withProjectFeel(imported, project.settings));
       const n = imported.tracks[0].items.length;
       const odd = suspiciousSegments(code, size.fps);
       if (odd.length > 0) {
@@ -891,13 +892,13 @@ export default function ProjectEditor() {
     // as authored and only the arrangement becomes editable.
     const asBlocks = docFromComposition(code, size, evaluated?.durationInFrames ?? 0);
     if (asBlocks) {
-      commitDoc(keepClassicFeel(asBlocks));
+      commitDoc(withProjectFeel(asBlocks, project.settings));
       return;
     }
 
     // Nothing to cut on — a continuous move, say. One block is then the
     // honest answer, not a failure.
-    commitDoc(keepClassicFeel(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name)));
+    commitDoc(withProjectFeel(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name), project.settings));
   }, [project, projectId, commitDoc]);
 
   /**

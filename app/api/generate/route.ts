@@ -346,7 +346,9 @@ export async function POST(request: Request) {
     /** The document's spring set (see SPRINGS in remotion/motion.ts). */
     motionStyle?: "classic" | "new";
   };
-  const motionStyle = requestedMotionStyle === "new" ? "new" : "classic";
+  // A timeline sends its document's style; a code-first project (a brand-new
+  // one's first pass) has only the choice made when it was created.
+  const motionStyle = (requestedMotionStyle ?? projectSettings?.motionStyle) === "new" ? "new" : "classic";
 
   // The chat's Fast / Balanced / Best switch (lib/models.ts). Balanced is Opus
   // 5.5 at "high"; Best is "max" — noticeably better, but a run can take half

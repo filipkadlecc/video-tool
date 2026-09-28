@@ -32,6 +32,13 @@ export interface ProjectSettings {
   // getProjectSize(); API-only for now (the New Project modal has no field).
   width?: number;
   height?: number;
+  /**
+   * The spring set picked when the project was made — "new" or "classic" (see
+   * SPRINGS in remotion/motion.ts). Carried onto the timeline when it is born;
+   * after that the document's own motionStyle is what counts. Absent means a
+   * project from before the choice existed: classic.
+   */
+  motionStyle?: "classic" | "new";
 }
 
 export interface ChatMessage {

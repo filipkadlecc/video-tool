@@ -316,6 +316,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [transitionStyle, setTransitionStyle] = useState<TransitionStyle>("cut");
   const [stylePreviewOpen, setStylePreviewOpen] = useState(false);
   const [useSfx, setUseSfx] = useState(true);
+  const [motionStyle, setMotionStyle] = useState<"classic" | "new">("new");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState<string>("");
 
@@ -589,7 +590,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     //
     // Smart trim gets none: it builds its own document from the cut plan.
     const composeSettings = {
-      resolution, orientation, fps,
+      resolution, orientation, fps, motionStyle,
       // A frame typed by hand (or seeded by the first clip) overrides the
       // preset — the same width/height override getProjectSize reads.
       ...(customSize ? { width: customSize.width, height: customSize.height } : {}),
@@ -618,7 +619,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
       engine,
       settings: composeSettings,
       ...(startsAsTimeline
-        ? { doc: emptyDoc({ ...getProjectSize(composeSettings), fps }) }
+        ? { doc: { ...emptyDoc({ ...getProjectSize(composeSettings), fps }), motionStyle } }
         : {}),
       initialPrompt: isSmartTrim
         ? briefed || "Smart trim recording"
@@ -1504,6 +1505,22 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 />
                 <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
                   {firstSentence(TRANSITION_MODES.find((m) => m.id === transitionStyle)?.description)}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                <span className="t-control" style={{ color: "var(--ink-secondary)" }}>Motion</span>
+                <Segmented
+                  height={22}
+                  value={motionStyle}
+                  onChange={(v) => setMotionStyle(v as "classic" | "new")}
+                  options={[{ value: "new", label: "New" }, { value: "classic", label: "Classic" }]}
+                  stretch
+                />
+                <span className="t-data-s" style={{ color: "var(--ink-tertiary)" }}>
+                  {motionStyle === "new"
+                    ? "Quicker to settle, heavier on big type and logos."
+                    : "The springs every project used before. Switchable later."}
                 </span>
               </div>
 
