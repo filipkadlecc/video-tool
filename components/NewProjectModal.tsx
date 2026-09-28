@@ -19,6 +19,14 @@ import StylePreviewModal from "@/components/StylePreviewModal";
 import IconButton from "@/components/ui/IconButton";
 
 /**
+ * New project — THREE steps (v0.1.167, Filip's call): 1 · Kind (animation or
+ * footage cut), 2 · Settings (the frame, the look, name and collection — the
+ * panel below), 3 · Brief (the source switcher, or the footage drop). Each
+ * step is one decision; the notes below on the single-screen design still
+ * describe what each part holds, only no longer all at once.
+ *
+ * The history, for context — it was:
+ *
  * New project — ONE screen.
  *
  * ── What this replaces ──────────────────────────────────────────────────────
@@ -60,6 +68,8 @@ interface SnippetSummary {
 }
 
 type VideoMode = "smarttrim" | "compose" | "manual";
+
+type WizardStep = "kind" | "settings" | "brief";
 
 /** Where the brief comes from. The core idea of the screen. */
 type Source = "describe" | "snippet" | "notion" | "script" | "artwork";
@@ -317,6 +327,12 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [stylePreviewOpen, setStylePreviewOpen] = useState(false);
   const [useSfx, setUseSfx] = useState(true);
   const [motionStyle, setMotionStyle] = useState<"classic" | "new">("new");
+  /*
+   * Three steps, one decision each: what kind of project, then its settings,
+   * then the brief. A terminal recording is already decided (it can only be
+   * opened from /terminal), so it starts at the settings.
+   */
+  const [step, setStep] = useState<WizardStep>(initialType === "terminal" ? "settings" : "kind");
   const [collections, setCollections] = useState<Collection[]>([]);
   const [collectionId, setCollectionId] = useState<string>("");
 
@@ -345,6 +361,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
       setSelectedSnippetId(null);
       setVideoMode("smarttrim");
       if (initialType) setAnimationType(initialType);
+      setStep(initialType === "terminal" ? "settings" : "kind");
     }
   }, [open, initialType]);
 
@@ -755,7 +772,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
       aria-modal="true"
       onKeyDown={(e) => {
         if (e.key === "Escape") handleClose();
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && ready() && !creating) handleCreate();
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && step === "brief" && ready() && !creating) handleCreate();
       }}
       style={{
         position: "fixed", inset: 0, zIndex: 60,
@@ -772,31 +789,41 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         }}
       >
         <span className="t-heading" style={{ color: "var(--ink-primary)", flex: "none" }}>New project</span>
-        <div style={{ display: "flex", gap: 4, alignSelf: "stretch" }}>
-          {(isTerminal
-            ? [{ id: "terminal" as AnimationType, label: "Terminal", hint: "A typed-out command recording" }]
-            : [
-                { id: "animation" as AnimationType, label: "Animation", hint: "The assistant builds the scene" },
-                { id: "video" as AnimationType, label: "From footage", hint: "Start with files you already have" },
-              ]
-          ).map((tab) => {
-            const active = animationType === tab.id;
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {(isTerminal ? (["settings", "brief"] as WizardStep[]) : (["kind", "settings", "brief"] as WizardStep[])).map((st, i, all) => {
+            const at = all.indexOf(step);
+            const active = st === step;
+            const done = i < at;
+            const label = st === "kind" ? "Kind" : st === "settings" ? "Settings" : isFootage ? "Footage" : "Brief";
             return (
-              <button
-                key={tab.id}
-                onClick={() => setAnimationType(tab.id)}
-                style={{
-                  display: "flex", flexDirection: "column", justifyContent: "center", gap: 2,
-                  padding: "0 14px", alignSelf: "stretch", background: "none", border: "none",
-                  cursor: "pointer", textAlign: "left",
-                  boxShadow: active ? "inset 0 -1px 0 0 var(--ink-primary)" : undefined,
-                }}
-              >
-                <span className="t-control" style={{ color: active ? "var(--ink-primary)" : "var(--ink-tertiary)" }}>
-                  {tab.label}
-                </span>
-                <span style={{ fontSize: 11, color: "var(--ink-disabled)" }}>{tab.hint}</span>
-              </button>
+              <React.Fragment key={st}>
+                {i > 0 && <span style={{ width: 16, height: 1, background: "var(--border-edge)" }} />}
+                <button
+                  type="button"
+                  // Back to any step already passed; forward only with Next.
+                  onClick={() => { if (done) setStep(st); }}
+                  disabled={!done}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px",
+                    background: "none", border: "none", borderRadius: "var(--r-control)",
+                    cursor: done ? "pointer" : "default",
+                  }}
+                >
+                  <span
+                    className="t-data-s"
+                    style={{
+                      width: 18, height: 18, borderRadius: 9, display: "grid", placeItems: "center",
+                      border: `1px solid ${active ? "var(--ink-primary)" : "var(--border-edge)"}`,
+                      color: active ? "var(--ink-primary)" : "var(--ink-tertiary)",
+                    }}
+                  >
+                    {done ? <Icon name="check" size={10} /> : i + 1}
+                  </span>
+                  <span className="t-control" style={{ color: active ? "var(--ink-primary)" : done ? "var(--ink-secondary)" : "var(--ink-tertiary)" }}>
+                    {label}
+                  </span>
+                </button>
+              </React.Fragment>
             );
           })}
         </div>
@@ -804,13 +831,50 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         <IconButton icon="close" title="Close" onClick={handleClose} />
       </div>
 
-      {/* ── The two columns ──────────────────────────────────────────────── */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-        {/* Left: the one question, and the one input that answers it. */}
+      {/* ── Step 1 · what kind of project ─────────────────────────────────── */}
+      {step === "kind" && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32, padding: 40 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center", textAlign: "center" }}>
+            <h2 className="t-display" style={{ color: "var(--ink-primary)", margin: 0 }}>What are you making?</h2>
+            <p className="t-body" style={{ color: "var(--ink-secondary)", margin: 0 }}>This decides what the next two steps ask for.</p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 320px))", gap: 16 }}>
+            {([
+              { id: "animation" as AnimationType, icon: "sparkle", label: "Animation", hint: "The assistant builds the scene from a brief, a snippet, Notion, a script or artwork." },
+              { id: "video" as AnimationType, icon: "film", label: "Footage cut", hint: "Start from files you already have — trim, compose or cut them yourself." },
+            ]).map((k) => {
+              const active = (k.id === "video") === isFootage;
+              return (
+                <button
+                  key={k.id}
+                  type="button"
+                  onClick={() => { setAnimationType(k.id); setStep("settings"); }}
+                  style={{
+                    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12,
+                    padding: 24, minHeight: 180, textAlign: "left", cursor: "pointer",
+                    background: active ? "var(--surface-raised)" : "var(--surface-chrome)",
+                    border: `1px solid ${active ? "var(--ink-primary)" : "var(--border-hairline)"}`,
+                    borderRadius: "var(--r-panel)",
+                  }}
+                >
+                  <Icon name={k.icon} size={22} style={{ color: active ? "var(--brand)" : "var(--ink-secondary)" }} />
+                  <span className="t-heading" style={{ color: "var(--ink-primary)" }}>{k.label}</span>
+                  <span className="t-body" style={{ color: "var(--ink-tertiary)", lineHeight: 1.5 }}>{k.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Steps 2 and 3 · the settings, then the brief ────────────────── */}
+      <div style={{ flex: 1, minHeight: 0, display: step === "kind" ? "none" : "flex" }}>
+        {/* Step 3 · the one question, and the one input that answers it. */}
         <div
           style={{
+            display: step === "brief" ? "flex" : "none",
             flex: 1, minWidth: 0, minHeight: 0, padding: "40px 44px", overflowY: "auto",
-            display: "flex", flexDirection: "column", gap: 24,
+            flexDirection: "column", gap: 24,
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1349,11 +1413,14 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           )}
         </div>
 
-        {/* Right panel, 396px: the settings, not the work. */}
+        {/* Step 2 · the settings, as one centred column built like the
+            inspector. Hidden rather than unmounted between steps, so nothing
+            typed is lost going back and forth. */}
         <div
           style={{
-            width: 396, flexShrink: 0, display: "flex", flexDirection: "column", minHeight: 0, overflowY: "auto",
-            background: "var(--surface-chrome)", borderLeft: "1px solid var(--border-edge)",
+            width: 448, maxWidth: "100%", margin: "0 auto", flexShrink: 0,
+            display: step === "settings" ? "flex" : "none", flexDirection: "column", minHeight: 0, overflowY: "auto",
+            background: "var(--surface-chrome)", borderLeft: "1px solid var(--border-edge)", borderRight: "1px solid var(--border-edge)",
           }}
         >
           {/* 1 · The frame preview. The ONLY summary of the frame — the box's
@@ -1607,9 +1674,22 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
         </span>
         <div style={{ flex: 1 }} />
         <Button variant="ghost" size="dialog" onClick={handleClose}>Cancel</Button>
-        <Button variant="primary" size="dialog" onClick={handleCreate} disabled={!ready() || creating}>
-          {creating ? "Creating…" : isFootage ? "Create project" : isTerminal ? "Create recording" : "Create animation"}
-        </Button>
+        {(step === "brief" || (step === "settings" && !isTerminal)) && (
+          <Button variant="secondary" size="dialog" onClick={() => setStep(step === "brief" ? "settings" : "kind")} disabled={creating}>
+            Back
+          </Button>
+        )}
+        {step === "kind" && (
+          <Button variant="primary" size="dialog" onClick={() => setStep("settings")}>Next</Button>
+        )}
+        {step === "settings" && (
+          <Button variant="primary" size="dialog" onClick={() => setStep("brief")}>Next</Button>
+        )}
+        {step === "brief" && (
+          <Button variant="primary" size="dialog" onClick={handleCreate} disabled={!ready() || creating}>
+            {creating ? "Creating…" : isFootage ? "Create project" : isTerminal ? "Create recording" : "Create animation"}
+          </Button>
+        )}
       </div>
 
       {phase.kind !== "idle" && (
