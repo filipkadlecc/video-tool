@@ -213,6 +213,7 @@ async function reviseSceneCode(
   level: ModelLevel,
   onReview?: (line: string) => void,
   images?: string[],
+  motionStyle?: "classic" | "new",
 ): Promise<string> {
   const res = await fetch(`${origin}/api/generate`, {
     method: "POST",
@@ -235,6 +236,7 @@ async function reviseSceneCode(
       useSfx: project.useSfx,
       level,
       images: images?.length ? images : undefined,
+      motionStyle,
     }),
   });
   if (!res.ok || !res.body) throw new Error(`scene writer returned HTTP ${res.status}`);
@@ -569,6 +571,7 @@ export async function POST(request: Request) {
                 const revised = await reviseSceneCode(origin, project, found.code, instructions, timing, level, (line) =>
                   send({ text: `\n\n${line}\n\n` }),
                   referenceUris,
+                  working.motionStyle,
                 );
                 working = reviseSceneItem(working, found.id, revised, fps);
                 docChanged = true;

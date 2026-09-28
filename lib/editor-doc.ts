@@ -333,6 +333,13 @@ export interface EditorDoc {
    * ignores it.
    */
   background?: string;
+  /**
+   * How springs feel across the whole video: "classic" (the presets every
+   * project used until v0.1.165) or "new" (the motion-design article's). Absent
+   * means classic, so nothing made before the switch moves any differently.
+   * See SPRINGS in remotion/motion.ts.
+   */
+  motionStyle?: "classic" | "new";
 }
 
 // ── construction ────────────────────────────────────────────────────────────
@@ -350,6 +357,8 @@ export function emptyDoc(size: DocSize): EditorDoc {
     size,
     tracks: [{ id: makeId("track"), name: "Track 1", items: [] }],
     assets: [],
+    // New documents start on the new springs; old ones stay classic until flipped.
+    motionStyle: "new",
   };
 }
 

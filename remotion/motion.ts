@@ -27,13 +27,67 @@ import { noise2D } from "@remotion/noise";
 //
 // DO NOT redefine these in generated code. Import them from motion.ts.
 
-export const SPRINGS: Record<string, Partial<SpringConfig>> = {
+// ── Motion style ─────────────────────────────────────────────────────────────
+// A document picks "classic" (the presets above, how every project moved until
+// v0.1.165) or "new" (the Opus 5.5 motion-design article's: quicker to settle,
+// heavier where it should be). Flipping it re-feels a whole video without
+// touching its code — the classic names resolve to their closest new match:
+//   SNAPPY → UI · ELASTIC → PLAYFUL · LIQUID → DEFAULT · GENTLE → HEAVY
+// The new names themselves (UI, DEFAULT, HEAVY, PLAYFUL) are always there, so
+// a scene can ask for HEAVY on purpose whichever style it is in.
+
+export type MotionStyle = "classic" | "new";
+
+const CLASSIC_SPRINGS: Record<string, Partial<SpringConfig>> = {
   SNAPPY:     { mass: 0.5, damping: 14, stiffness: 220 },
   ELASTIC:    { mass: 0.8, damping: 10, stiffness: 180 },
   LIQUID:     { mass: 1.0, damping: 22, stiffness: 120 },
   GENTLE:     { mass: 1.0, damping: 30, stiffness: 80 },
   OVERDAMPED: { damping: 200 },
 };
+
+const NEW_NAMED: Record<string, Partial<SpringConfig>> = {
+  UI:      { mass: 1, damping: 30, stiffness: 320 }, // buttons, toggles, leading edges
+  DEFAULT: { mass: 1, damping: 26, stiffness: 170 }, // cards, containers, camera
+  HEAVY:   { mass: 3, damping: 32, stiffness: 120 }, // big type, 3D, logo lockups
+  PLAYFUL: { mass: 1, damping: 12, stiffness: 260 }, // mascots, stickers — visible overshoot
+};
+
+const TABLES: Record<MotionStyle, Record<string, Partial<SpringConfig>>> = {
+  classic: { ...CLASSIC_SPRINGS, ...NEW_NAMED },
+  new: {
+    SNAPPY: NEW_NAMED.UI,
+    ELASTIC: NEW_NAMED.PLAYFUL,
+    LIQUID: NEW_NAMED.DEFAULT,
+    GENTLE: NEW_NAMED.HEAVY,
+    OVERDAMPED: CLASSIC_SPRINGS.OVERDAMPED,
+    ...NEW_NAMED,
+  },
+};
+
+/*
+ * Set by the composition root on every render (EditorComposition from the
+ * document, a render entry from the project) before any scene reads a spring.
+ * A module variable rather than context because springs are read in plain
+ * functions, not only in components.
+ */
+let activeStyle: MotionStyle = "classic";
+export function setMotionStyle(style: MotionStyle | undefined): void {
+  activeStyle = style === "new" ? "new" : "classic";
+}
+export function getMotionStyle(): MotionStyle {
+  return activeStyle;
+}
+
+export const SPRINGS: Record<string, Partial<SpringConfig>> = new Proxy({} as Record<string, Partial<SpringConfig>>, {
+  get: (_t, key) => (typeof key === "string" ? TABLES[activeStyle][key] : undefined),
+  has: (_t, key) => typeof key === "string" && key in TABLES[activeStyle],
+  ownKeys: () => Reflect.ownKeys(TABLES[activeStyle]),
+  getOwnPropertyDescriptor: (_t, key) =>
+    typeof key === "string" && key in TABLES[activeStyle]
+      ? { value: TABLES[activeStyle][key], enumerable: true, configurable: true, writable: false }
+      : undefined,
+});
 
 // =============================================================================
 // TIMING — frame counts that feel right across the snippet library.

@@ -8,6 +8,7 @@ import { listSfx } from "@/lib/sfx";
 import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks, contactSheetToContentBlocks, userReferenceBlocks, USER_REFERENCE_INTRO } from "@/lib/prompts/reference-images";
 import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
 import { shapeOf, shapeSize, type FrameShape } from "@/lib/editor-doc";
+import { motionStyleGuidance } from "@/lib/prompts/motion-style";
 import { listAssetPaths } from "@/lib/assets";
 import { getProject } from "@/lib/projects";
 import { buildEnrichedMediaFiles, type EnrichedMediaFile } from "@/lib/media-analysis";
@@ -323,6 +324,7 @@ export async function POST(request: Request) {
     level: requestedLevel,
     plan,
     images,
+    motionStyle: requestedMotionStyle,
   } = body as {
     messages: ChatMessage[];
     projectSettings: ProjectSettings;
@@ -341,7 +343,10 @@ export async function POST(request: Request) {
     plan?: boolean;
     /** Reference images attached to THIS message, as data URIs. */
     images?: string[];
+    /** The document's spring set (see SPRINGS in remotion/motion.ts). */
+    motionStyle?: "classic" | "new";
   };
+  const motionStyle = requestedMotionStyle === "new" ? "new" : "classic";
 
   // The chat's Fast / Balanced / Best switch (lib/models.ts). Balanced is Opus
   // 5.5 at "high"; Best is "max" — noticeably better, but a run can take half
@@ -485,9 +490,10 @@ export async function POST(request: Request) {
   // dynamic tail (asset list / SFX / agentic guidance) is stable within a
   // session, so the cached prefix holds.
   const editingEnabled = toolsEnabled && !!currentCode?.trim();
+  const motionNote = isTerminal ? "" : motionStyleGuidance(motionStyle);
   const systemText = toolsEnabled
-    ? systemPrompt + AGENTIC_GUIDANCE + (editingEnabled ? EDITING_GUIDANCE : "")
-    : systemPrompt;
+    ? systemPrompt + motionNote + AGENTIC_GUIDANCE + (editingEnabled ? EDITING_GUIDANCE : "")
+    : systemPrompt + motionNote;
   const tools: Anthropic.ToolUnion[] = editingEnabled ? [...AGENTIC_TOOLS, TEXT_EDITOR_TOOL] : AGENTIC_TOOLS;
   const systemBlocks: Anthropic.TextBlockParam[] = [
     { type: "text", text: systemText, cache_control: { type: "ephemeral" } },
@@ -630,6 +636,7 @@ export async function POST(request: Request) {
                     contactSheet: !framesArg?.length,
                     // A scene that says it works in other shapes is checked in them.
                     shapes: framesArg?.length ? [] : otherDeclaredShapes(latestCode, renderWidth, renderHeight),
+                    motionStyle,
                   },
                 );
                 toolResults.push({

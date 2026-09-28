@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { buildSystemPrompt } from "@/lib/prompts";
 import { dataUriToImageBlock } from "@/lib/prompts/reference-images";
+import { motionStyleGuidance } from "@/lib/prompts/motion-style";
 import { resolveLevel } from "@/lib/models";
 import { getProject, updateProject } from "@/lib/projects";
 import type { AnimationType, ProjectSettings, StyleMode, TransitionStyle } from "@/lib/types";
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
     images = [],
     level,
     projectId,
+    motionStyle,
   } = body as {
     prompt?: string;
     projectSettings?: ProjectSettings;
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
     images?: string[];
     level?: string;
     projectId?: string;
+    motionStyle?: "classic" | "new";
   };
   const { model, effort } = resolveLevel(level);
 
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
     false,
     undefined,
     transitionStyle,
-  );
+  ) + motionStyleGuidance(motionStyle);
 
   const blocks: Anthropic.ContentBlockParam[] = [];
   for (const uri of images.slice(0, 8)) {

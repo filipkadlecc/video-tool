@@ -8,6 +8,7 @@ import Toggle from "@/components/ui/Toggle";
 import Slider from "@/components/ui/Slider";
 import Select from "@/components/ui/Select";
 import Tabs from "@/components/ui/Tabs";
+import Segmented from "@/components/ui/Segmented";
 import Menu from "@/components/ui/Menu";
 import {
   findItem, hasSource, setLayout, updateItem, docDuration,
@@ -421,6 +422,24 @@ export default function EditorInspector({
             <Row label="Frame"><ReadOnly>{doc.size.width} × {doc.size.height}</ReadOnly></Row>
             <Row label="Rate"><ReadOnly>{doc.size.fps} fps</ReadOnly></Row>
             <Row label="Duration"><ReadOnly>{timecode(total, doc.size.fps, hours)}</ReadOnly></Row>
+            {/* How every spring in the video feels. Flipping it re-feels what's
+                already there, and the AI writes new scenes for it. */}
+            <Row label="Motion">
+              <Segmented
+                height={22}
+                value={doc.motionStyle ?? "classic"}
+                onChange={(v) => onChange({ ...doc, motionStyle: v as "classic" | "new" })}
+                options={[
+                  { value: "classic", label: "Classic" },
+                  { value: "new", label: "New" },
+                ]}
+              />
+            </Row>
+            <div className="t-caption" style={{ color: "var(--ink-tertiary)", padding: "0 2px" }}>
+              {(doc.motionStyle ?? "classic") === "new"
+                ? "Quicker to settle, heavier on big type and logos."
+                : "The springs every project used before."}
+            </div>
             <div style={{ height: 1, background: "var(--border-hairline)", margin: "6px 0" }} />
             <div className="t-caption" style={{ color: "var(--ink-tertiary)", padding: "0 2px" }}>
               Select a clip to edit it.

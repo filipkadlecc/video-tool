@@ -167,7 +167,7 @@ function cancelled(job: RenderJob): boolean {
   return job.status === "cancelled";
 }
 
-function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number, svgContents?: { filename: string; content: string }[]): string {
+function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number, svgContents?: { filename: string; content: string }[], motionStyle?: "classic" | "new"): string {
   const entryPath = scenePath.replace(".tsx", ".entry.tsx");
   const relativeScene = `./${path.basename(scenePath).replace(".tsx", "")}`;
   // SVG frames inline as JSON so the renderer doesn't need a side-channel
@@ -177,8 +177,12 @@ function createEntryFile(scenePath: string, durationInFrames: number, fps: numbe
 import { registerRoot } from "remotion";
 import { Composition } from "remotion";
 import React from "react";
-import { SvgFramesProvider } from "../motion";
+import { SvgFramesProvider, setMotionStyle } from "../motion";
 import SceneInner from "${relativeScene}";
+
+// The project's spring set, before anything renders. A document sets its own in
+// EditorComposition; this covers a bare scene.
+setMotionStyle(${JSON.stringify(motionStyle ?? "classic")});
 
 const __SVG_FRAMES__ = ${svgFramesJson};
 const SceneComponent: React.FC = () => (
@@ -712,6 +716,8 @@ export async function renderReviewFrames(
     contactSheet?: boolean;
     /** Other sizes to check the same scene at — its 9:16 and 1:1 cuts. */
     shapes?: { label: string; width: number; height: number }[];
+    /** The spring set the scene will play with. */
+    motionStyle?: "classic" | "new";
   } = {},
 ): Promise<ReviewRender> {
   const scenesDir = path.join(process.cwd(), "remotion", "scenes");
@@ -720,7 +726,7 @@ export async function renderReviewFrames(
   const tag = `_frames_${projectId.slice(0, 8)}_${Date.now().toString(36)}`;
   const scenePath = path.join(scenesDir, `${tag}.tsx`);
   fs.writeFileSync(scenePath, fixImportPaths(code), "utf-8");
-  const entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents);
+  const entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents, opts.motionStyle);
 
   // Downscale the long edge to ~1280px to cap image-token cost.
   const longEdge = Math.max(width, height);

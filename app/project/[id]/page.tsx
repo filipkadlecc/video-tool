@@ -97,6 +97,15 @@ const SAVE_TITLE = {
   error: "Could not save — your last change is still only in this tab",
 } as const;
 
+/**
+ * Code that already exists was written against the classic springs, so a
+ * timeline made from it keeps them — it would otherwise start moving
+ * differently the moment it's opened as a timeline. Flip it in the inspector.
+ */
+function keepClassicFeel(doc: EditorDoc): EditorDoc {
+  return { ...doc, motionStyle: "classic" };
+}
+
 export default function ProjectEditor() {
   const params = useParams();
   const router = useRouter();
@@ -861,7 +870,7 @@ export default function ProjectEditor() {
       compositionDurationInFrames: evaluated?.durationInFrames,
     });
     if (imported) {
-      commitDoc(imported);
+      commitDoc(keepClassicFeel(imported));
       const n = imported.tracks[0].items.length;
       const odd = suspiciousSegments(code, size.fps);
       if (odd.length > 0) {
@@ -882,13 +891,13 @@ export default function ProjectEditor() {
     // as authored and only the arrangement becomes editable.
     const asBlocks = docFromComposition(code, size, evaluated?.durationInFrames ?? 0);
     if (asBlocks) {
-      commitDoc(asBlocks);
+      commitDoc(keepClassicFeel(asBlocks));
       return;
     }
 
     // Nothing to cut on — a continuous move, say. One block is then the
     // honest answer, not a failure.
-    commitDoc(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name));
+    commitDoc(keepClassicFeel(docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name)));
   }, [project, projectId, commitDoc]);
 
   /**
@@ -1029,6 +1038,7 @@ export default function ProjectEditor() {
         styleMode,
         level: readStoredLevel(),
         projectId: project.id,
+        motionStyle: doc.motionStyle,
       }),
     });
     const data = await res.json();

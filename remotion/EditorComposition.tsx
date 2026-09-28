@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { evalSceneCode } from "./DynamicScene";
 import { ITEM_ATTR } from "../lib/scene-elements";
-import { SPRINGS } from "./motion";
+import { SPRINGS, setMotionStyle, getMotionStyle } from "./motion";
 import { animationFrames, composeEffects, itemEffects, presetStyle, visibleCharacters, wordProgress } from "../lib/editor-effects";
 import type { Effect } from "../lib/editor-effects";
 import { resolvedLayout, type ResolvedLayout } from "../lib/editor-keys";
@@ -293,7 +293,11 @@ const CaptionsLayer: React.FC<{ item: CaptionsItem; layout: ResolvedLayout }> = 
  * few generated scenes would recompile all of them on every frame.
  */
 const SceneLayer: React.FC<{ item: SceneItem; layout: ResolvedLayout }> = ({ item, layout }) => {
-  const Component = useMemo(() => evalSceneCode(item.code)?.component ?? null, [item.code]);
+  // Keyed on the motion style too: a scene that reads SPRINGS at module scope
+  // has to be evaluated again when the style flips, or it keeps the old feel.
+  const style = getMotionStyle();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const Component = useMemo(() => evalSceneCode(item.code)?.component ?? null, [item.code, style]);
   if (!Component) return null;
   const offset = item.sourceOffsetFrames ?? 0;
   const scene = <Component />;
@@ -428,6 +432,8 @@ const ItemLayer: React.FC<{ item: EditorItem; doc: EditorDoc; muted: boolean }> 
 };
 
 export const EditorComposition: React.FC<{ doc: EditorDoc }> = ({ doc }) => {
+  // Before any layer renders: every spring below reads this document's style.
+  setMotionStyle(doc.motionStyle);
   return (
     // The document's own background, defaulting to the black this was
     // hardcoded to — so a document that never set one renders as it always did.
