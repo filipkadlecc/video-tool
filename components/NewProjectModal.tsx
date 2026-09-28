@@ -1456,6 +1456,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
           style={{
             flex: 1, minWidth: 0, minHeight: 0, padding: "40px 44px", overflowY: "auto",
             display: step === "settings" ? "flex" : "none", flexDirection: "column", gap: 24,
+            // One column down the middle, wide enough for the rows to breathe.
+            width: "100%", maxWidth: 760, margin: "0 auto", boxSizing: "border-box",
           }}
         >
           {/* The summary of the frame, as the step's own heading. The old
@@ -1472,8 +1474,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             </p>
           </div>
 
-          {/* One row: what it's called, its frame, how it looks. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16, alignItems: "start" }}>
+          {/* Top to bottom: what it's called, its frame, how it looks. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div style={SETTINGS_CARD}>
           <PanelSection label="Project" qualifier="renamable any time">
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
