@@ -616,9 +616,21 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
     }
   }
 
-  const selectedSnippet = selectedSnippetId
+  /*
+   * The sources are alternatives, and only the one on screen when you press
+   * Create counts. Each keeps what you gave it while you look at the others —
+   * so flipping tabs doesn't throw work away — but none of it may ride along
+   * invisibly. It used to: a snippet clicked under "From a snippet" stayed
+   * selected after switching back to "Describe it", and the project was made
+   * from the snippet with the typed brief ignored.
+   */
+  const briefSource = isFootage || isTerminal ? null : source;
+  const selectedSnippet = briefSource === "snippet" && selectedSnippetId
     ? snippets.find((s) => s.id === selectedSnippetId) ?? null
     : null;
+  const activeNotion = briefSource === "notion" ? notionContent : undefined;
+  const activeScript = briefSource === "script" ? scriptWithTimestamps.trim() : "";
+  const activeSvgs = briefSource === "artwork" ? svgFiles : [];
 
   const isVideo = isFootage;
   const isSmartTrim = isVideo && videoMode === "smarttrim";
@@ -695,10 +707,10 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
        * A fetched Notion page and the notes box both land here (the page is
        * also the brief); joined, so neither silently wins.
        */
-      notionContent: [notionContent, notesText.trim() ? `Extra notes:\n${notesText.trim()}` : ""]
+      notionContent: [activeNotion, notesText.trim() ? `Extra notes:\n${notesText.trim()}` : ""]
         .filter(Boolean).join("\n\n") || undefined,
-      scriptWithTimestamps: scriptWithTimestamps.trim() || undefined,
-      svgContents: svgFiles.length > 0 ? svgFiles : undefined,
+      scriptWithTimestamps: activeScript || undefined,
+      svgContents: activeSvgs.length > 0 ? activeSvgs : undefined,
       styleMode: isTerminal || isVideo ? undefined : styleMode,
       topicCardStyle: isVideo ? topicCardStyle : undefined,
       transitionStyle: isTerminal || isVideo ? undefined : transitionStyle,
