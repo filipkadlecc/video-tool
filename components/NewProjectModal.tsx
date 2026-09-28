@@ -251,27 +251,35 @@ function firstSentence(text?: string): string {
 }
 
 /** A section in the right panel: 32px header, a qualifier, collapsible. */
-function PanelSection({ label, qualifier, open, onToggle, children }: {
-  label: string; qualifier: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+// A settings card's header and body. Always open: on the full-width settings
+// step there is room for everything, so collapsing only hid things.
+function PanelSection({ label, qualifier, children }: {
+  label: string; qualifier: string; children: React.ReactNode;
 }) {
   return (
-    <div style={{ flexShrink: 0, borderBottom: "1px solid var(--border-hairline)" }}>
-      <button
-        onClick={onToggle}
+    <div style={{ flexShrink: 0 }}>
+      <div
         style={{
-          display: "flex", alignItems: "center", gap: 8, width: "100%", height: 32,
-          padding: "0 8px 0 12px", background: "var(--surface-raised)", border: "none",
-          cursor: "pointer", textAlign: "left",
+          display: "flex", alignItems: "center", gap: 8, height: 32,
+          padding: "0 12px", background: "var(--surface-raised)",
+          borderBottom: "1px solid var(--border-hairline)",
         }}
       >
-        <Icon name={open ? "chevronDown" : "chevronRight"} size={13} style={{ color: "var(--ink-secondary)" }} />
         <span className="t-section" style={{ color: "var(--ink-primary)", flex: 1 }}>{label}</span>
         <span style={{ fontSize: 11, color: "var(--ink-tertiary)" }}>{qualifier}</span>
-      </button>
-      {open && <div style={{ padding: "10px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>{children}</div>}
+      </div>
+      <div style={{ padding: "10px 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>{children}</div>
     </div>
   );
 }
+
+/** One settings card on the full-width settings step. */
+const SETTINGS_CARD: React.CSSProperties = {
+  background: "var(--surface-chrome)",
+  border: "1px solid var(--border-edge)",
+  borderRadius: "var(--r-panel)",
+  overflow: "hidden",
+};
 
 /** A right-panel row: a right-aligned 62px label beside its control. */
 function PanelRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -374,8 +382,6 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const [snippetQuery, setSnippetQuery] = useState("");
   /** Which orientation `snippets` was fetched for, so a frame change refetches. */
   const [snippetsFor, setSnippetsFor] = useState<Orientation | null>(null);
-  const [shapeOpen, setShapeOpen] = useState(true);
-  const [lookOpen, setLookOpen] = useState(true);
   /**
    * Extra notes — the box the old b-roll flow had, back for every source.
    *
@@ -1418,37 +1424,29 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             typed is lost going back and forth. */}
         <div
           style={{
-            width: 448, maxWidth: "100%", margin: "0 auto", flexShrink: 0,
-            display: step === "settings" ? "flex" : "none", flexDirection: "column", minHeight: 0, overflowY: "auto",
-            background: "var(--surface-chrome)", borderLeft: "1px solid var(--border-edge)", borderRight: "1px solid var(--border-edge)",
+            flex: 1, minWidth: 0, minHeight: 0, padding: "40px 44px", overflowY: "auto",
+            display: step === "settings" ? "flex" : "none", flexDirection: "column", gap: 24,
           }}
         >
-          {/* 1 · The frame preview. The ONLY summary of the frame — the box's
-              ratio tracks the preset, so the shape is the readout. */}
-          <div style={{ flexShrink: 0, padding: 20, borderBottom: "1px solid var(--border-hairline)", display: "flex", flexDirection: "column", gap: 12 }}>
-            <div
-              style={{
-                width: "100%", aspectRatio: `${size.width} / ${size.height}`, maxHeight: 220,
-                margin: "0 auto", position: "relative", background: "var(--surface-void)",
-                border: "1px solid var(--border-hairline)", borderRadius: 2,
-                display: "grid", placeItems: "center",
-              }}
-            >
-              <span style={{ position: "absolute", inset: 16, border: "1px dashed var(--border-hairline)" }} />
-              <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>safe area</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span className="t-control" style={{ color: "var(--ink-primary)", flex: 1 }}>
-                {preset?.label ?? "Custom"}
-              </span>
-              <span className="t-data-m" style={{ color: "var(--ink-secondary)" }}>
+          {/* The summary of the frame, as the step's own heading. The old
+              safe-area box repeated it as a picture and earned nothing. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <h2 className="t-display" style={{ color: "var(--ink-primary)", margin: 0 }}>
+              {isFootage ? "How should the cut be set up?" : isTerminal ? "How should the recording look?" : "How should it look?"}
+            </h2>
+            <p className="t-body" style={{ color: "var(--ink-secondary)", margin: 0 }}>
+              <span style={{ color: "var(--ink-primary)" }}>{preset?.label ?? "Custom"}</span>
+              <span className="t-data-m" style={{ marginLeft: 10 }}>
                 {size.width}×{size.height} · {fps} fps · {targetSeconds || 0}s
               </span>
-            </div>
+            </p>
           </div>
 
+          {/* Three cards across the full width: the frame, the look, the project. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, alignItems: "start" }}>
+          <div style={SETTINGS_CARD}>
           {/* 2 · SHAPE — hard to change later, and said so. */}
-          <PanelSection label="Shape" qualifier="hard to change later" open={shapeOpen} onToggle={() => setShapeOpen((v) => !v)}>
+          <PanelSection label="Shape" qualifier="hard to change later">
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 4 }}>
               {FRAME_PRESETS.map((p) => {
                 const dims = getResolution(p.orientation, p.resolution);
@@ -1530,10 +1528,12 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               />
             </PanelRow>
           </PanelSection>
+          </div>
 
+          <div style={SETTINGS_CARD}>
           {/* 3 · LOOK — animation only. There is no AI style to set on a cut. */}
           {!isFootage && (
-            <PanelSection label="Look" qualifier="safe defaults" open={lookOpen} onToggle={() => setLookOpen((v) => !v)}>
+            <PanelSection label="Look" qualifier="safe defaults">
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <span className="t-control" style={{ color: "var(--ink-secondary)", flex: 1 }}>Style</span>
@@ -1607,7 +1607,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               drops it; keeping it here rather than in the left column keeps it
               a setting, which is what it is. */}
           {isFootage && (
-            <PanelSection label="First pass" qualifier="changeable in Tools" open={lookOpen} onToggle={() => setLookOpen((v) => !v)}>
+            <PanelSection label="First pass" qualifier="changeable in Tools">
               <Segmented
                 height={22}
                 value={videoMode}
@@ -1629,10 +1629,11 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
             </PanelSection>
           )}
 
-          <div style={{ flex: 1, minHeight: 0 }} />
+          </div>
 
           {/* 5 · The least interesting decisions, last. */}
-          <div style={{ flexShrink: 0, padding: 12, borderTop: "1px solid var(--border-hairline)", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={SETTINGS_CARD}>
+          <PanelSection label="Project" qualifier="renamable any time">
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <span className="t-control" style={{ color: "var(--ink-secondary)" }}>Name</span>
               <Input value={name} onChange={setName} placeholder={suggestedName || "Untitled project"} />
@@ -1655,6 +1656,8 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 ))}
               </select>
             </div>
+          </PanelSection>
+          </div>
           </div>
         </div>
       </div>
