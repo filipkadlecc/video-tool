@@ -27,6 +27,32 @@ export interface RenderJob {
    */
   renderedFrames?: number;
   totalFrames?: number;
+  /**
+   * Which phase the renderer is in.
+   *
+   * Stitching is not a formality. On a long 4K export it runs for as long as
+   * the frame render did, and it reports its own, separate frame count — so a
+   * job that only tracks "Rendered X/Y" goes silent for hours at exactly the
+   * moment the bar reads 100%, which is indistinguishable from a hang.
+   *
+   * "converting" covers the ffmpeg passes that run after the renderer exits
+   * (a LUT bake, the qtrle and hevc-alpha transcodes). Those report no frames,
+   * so that phase moves no numbers — it only stops the dialog asserting an
+   * encode that is already over. Parsing ffmpeg's own `time=` would give it
+   * real progress; `lib/scene-detect.ts` already has that helper.
+   */
+  phase?: "bundling" | "frames" | "encoding" | "converting";
+  /**
+   * Frames written into the file so far, from the renderer's own "Encoded X/Y".
+   *
+   * A separate pair from `renderedFrames`, because the count RESTARTS: the same
+   * frames go through a second pass. Reusing the first pair would show a number
+   * halving itself, which reads as "it threw the render away and started over".
+   */
+  encodedFrames?: number;
+  encodedTotalFrames?: number;
+  /** When the encode began, so its own "about N left" is not the render's. */
+  encodeStartedAt?: number;
   /** When the render actually started, for an honest "about N left". */
   startedAt?: number;
   finishedAt?: number;
@@ -52,37 +78,106 @@ export interface RenderOptions {
 }
 
 /**
- * Pull progress out of a line of the renderer's output.
+ * Pull progress out of a CHUNK of the renderer's output.
  *
- * "Rendered X/Y" is preferred and keeps the real numbers; a bare percentage is
- * the fallback for phases that don't report frames (bundling, stitching).
+ * Not a line: these arrive from a stream `data` event and routinely carry
+ * several lines, so every branch takes the LAST match in the chunk — the most
+ * recent state, not the first one still sitting in the buffer.
+ *
+ * Every phase maps into its own band of `progress` rather than clamping one
+ * branch, so the bar only ever moves forward:
+ *
+ *   bundling 0-10   frames 10-90   encoding 90-99   finished file 100
+ *
+ * That also closes a backward jump that predates this: "Bundling 100%" set 95,
+ * and the first "Rendered 0/600" immediately dropped it to 0.
  */
-function readProgress(job: RenderJob, line: string): void {
-  const rendered = line.match(/Rendered\s+(\d+)\/(\d+)/);
+export function readProgress(job: RenderJob, chunk: string): void {
+  /*
+   * The encode, checked FIRST because it is the later phase: a stale
+   * "Rendered X/Y" further down the same chunk must not drag the job back.
+   *
+   * Captured from the real CLI with no TTY, which is how this spawns it:
+   *
+   *   Rendered 24/25, time remaining: 0s
+   *   Rendered 25/25
+   *   Encoded 17/25
+   *   Encoded 25/25
+   *
+   * so the muxer reports "Encoded X/Y" — past tense, no media type. The padded
+   * "Encoded video <bar> X/Y" form is what a TTY gets; both are accepted. The
+   * media word is restricted to `video` because an "Encoded audio N/M" pass
+   * would otherwise write audio counts into these fields and complete twice.
+   *
+   * The gap and the digit runs are both bounded. Scene `console.log` output is
+   * forwarded verbatim into this stream, so a huge digit-heavy chunk is
+   * reachable rather than theoretical, and this runs on the server's event
+   * loop — an unbounded `\d+` walking 64KB looking for a delimiter that is not
+   * there costs over a second of it. No frame count has ten digits.
+   */
+  const encoded = [...chunk.matchAll(/(?:Encoded|Encoding|Muxed|Muxing)(?:\s+video)?[^\n]{0,40}?(\d{1,9})\s*\/\s*(\d{1,9})/g)].pop();
+  if (encoded) {
+    const done = parseInt(encoded[1], 10);
+    const total = parseInt(encoded[2], 10);
+    /*
+     * Two plausibility guards, because this matches prose as readily as
+     * progress: a path like ".../2026/04/clip.mov" parses as 2026/4, and a
+     * count larger than its own total is never real.
+     */
+    const sane = Number.isFinite(done) && Number.isFinite(total) && total > 0 && done <= total;
+    const ours = job.totalFrames === undefined || total === job.totalFrames;
+    if (sane && ours) {
+      if (job.phase !== "encoding") {
+        job.phase = "encoding";
+        job.encodeStartedAt = Date.now();
+      }
+      job.encodedFrames = done;
+      job.encodedTotalFrames = total;
+      job.progress = 90 + Math.round((done / total) * 9);
+      return;
+    }
+  }
+
+  // Once the encode has started, the job never goes back to counting frames.
+  // The ordering above only settles one chunk; this settles the sequence.
+  if (job.phase === "encoding" || job.phase === "converting") return;
+
+  const rendered = [...chunk.matchAll(/Rendered\s+(\d{1,9})\/(\d{1,9})/g)].pop();
   if (rendered) {
     const done = parseInt(rendered[1], 10);
     const total = parseInt(rendered[2], 10);
     if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+      job.phase = "frames";
       job.renderedFrames = done;
       job.totalFrames = total;
-      job.progress = Math.round((done / total) * 100);
+      /*
+       * Stops at 90, not 100. Every frame being rendered is not the end of the
+       * job — the encode still has to run, and on a 30-minute 4K export that
+       * ran ~20 further minutes. Claiming 100 there is what made a healthy
+       * render read as a hang.
+       */
+      job.progress = 10 + Math.round((done / total) * 80);
       return;
     }
   }
   /*
-   * The fallback, for the phases that report no frames — bundling, stitching.
+   * The fallback, for the phase that reports no frames — bundling.
    *
    * It is deliberately NOT allowed to overwrite a frame-derived number, and
-   * never to reach 100: "Bundling 100%" arrives before a single frame exists,
-   * and the dialog was showing a full green bar beside "0 / 600 frames". A
-   * progress bar that claims to be finished while nothing has been written is
-   * worse than one that moves slowly.
+   * never to leave its own band: "Bundling 100%" arrives before a single frame
+   * exists, and the dialog was showing a full green bar beside "0 / 600
+   * frames". A progress bar that claims to be finished while nothing has been
+   * written is worse than one that moves slowly.
    */
   if (job.renderedFrames !== undefined) return;
-  const pct = line.match(/(\d+)%/);
+  if (/Bundling/.test(chunk)) job.phase = "bundling";
+  // Bounded: `(\d+)%` walks every digit of a long digit run looking for a `%`
+  // that is not there, which on a 64KB chunk is ~1.4s of blocking event loop.
+  // No percentage has four digits.
+  const pct = chunk.match(/(\d{1,3})%/);
   if (pct) {
     const value = parseInt(pct[1], 10);
-    if (Number.isFinite(value)) job.progress = Math.min(95, value);
+    if (Number.isFinite(value)) job.progress = Math.min(10, Math.round(value / 10));
   }
 }
 
@@ -422,6 +517,10 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       // lut3d, re-encoding the temp master to the final .mp4 (CRF 18 to match
       // Remotion's h264), preserving any audio track.
       if (applyLut && lut) {
+        // Converting: the renderer has exited and ffmpeg is re-encoding the file.
+        // Nothing here reports frames, so the dialog says what is happening instead
+        // of freezing on the encode's last count.
+        job.phase = "converting";
         await new Promise<void>((resolve, reject) => {
           const ff = spawn(
             "ffmpeg",
@@ -447,6 +546,10 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       }
 
       if (codec === "qtrle") {
+        // Converting: the renderer has exited and ffmpeg is re-encoding the file.
+        // Nothing here reports frames, so the dialog says what is happening instead
+        // of freezing on the encode's last count.
+        job.phase = "converting";
         await new Promise<void>((resolve, reject) => {
           const ff = spawn(
             "ffmpeg",
@@ -471,6 +574,10 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       // is stored as a sidecar HEVC layer inside the hvc1 track; ffprobe
       // reports the main pix_fmt as yuv420p but decoded output is RGBA.
       if (codec === "hevc-alpha") {
+        // Converting: the renderer has exited and ffmpeg is re-encoding the file.
+        // Nothing here reports frames, so the dialog says what is happening instead
+        // of freezing on the encode's last count.
+        job.phase = "converting";
         await new Promise<void>((resolve, reject) => {
           const ff = spawn(
             "ffmpeg",
@@ -508,6 +615,10 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       // and causes per-frame YUV→RGB rounding flicker. Re-tag in place via
       // the prores_metadata bitstream filter — no re-encode, ~200ms.
       if (codec === "prores" || codec === "prores-xq" || codec === "uncompressed") {
+        // Converting: the renderer has exited and ffmpeg is re-encoding the file.
+        // Nothing here reports frames, so the dialog says what is happening instead
+        // of freezing on the encode's last count.
+        job.phase = "converting";
         const tagged = outputPath.replace(/\.mov$/, ".tagged.mov");
         await new Promise<void>((resolve, reject) => {
           const ff = spawn(

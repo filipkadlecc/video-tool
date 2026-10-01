@@ -9,12 +9,13 @@
     "lint": "eslint",
     "studio": "npx remotion studio remotion/index.tsx",
     "vo": "tsx scripts/vo.ts",
-    "test": "npm run test:doc && npm run test:agent && npm run test:versions",
+    "test": "npm run test:doc && npm run test:agent && npm run test:versions && npm run test:progress",
     "test:versions": "tsx scripts/test-versions.ts",
     "test:doc": "tsx scripts/test-editor-doc.ts",
     "test:agent": "tsx scripts/test-editor-agent.ts",
     "test:render": "tsx scripts/test-editor-render.ts",
-    "test:figma": "tsx scripts/figma-diff.ts"
+    "test:figma": "tsx scripts/figma-diff.ts",
+    "test:progress": "tsx scripts/test-render-progress.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
