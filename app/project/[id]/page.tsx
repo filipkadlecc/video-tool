@@ -591,7 +591,12 @@ export default function ProjectEditor() {
       // while you were typing in the chat box — Cmd+E in particular opened the
       // export dialog mid-sentence.
       const el = document.activeElement as HTMLElement | null;
-      const typing = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      const field = el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      // Monaco takes keys on a plain <div> (Chrome's EditContext), not a
+      // textarea, so it isn't a field above — and I / O / Shift+X were eating
+      // those letters out of the code. Bare letters there are text; Cmd+S and
+      // Cmd+E still save and export from it (the editor has neither itself).
+      const typing = field || !!el?.closest(".monaco-editor");
 
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "/") {
@@ -601,7 +606,7 @@ export default function ProjectEditor() {
         // Code is a toolbar toggle, and this is its shortcut.
         e.preventDefault();
         if (doc) setShowCodeEditor((v) => !v);
-      } else if (typing && mod && (e.key === "s" || e.key === "e")) {
+      } else if (field && mod && (e.key === "s" || e.key === "e")) {
         // Let the field have it.
       } else if (mod && e.key === "s") {
         e.preventDefault();
