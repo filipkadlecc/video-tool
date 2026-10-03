@@ -54,6 +54,15 @@ export interface RenderJob {
   encodedTotalFrames?: number;
   /** When the encode began, so its own "about N left" is not the render's. */
   encodeStartedAt?: number;
+  /**
+   * How many frames were already written when the encode began.
+   *
+   * Not zero. For h264 the renderer writes the file WHILE it renders, and only
+   * starts printing "Encoded X/Y" once every frame is rendered — so the first
+   * count can arrive at 30,000 of 45,664. Timing the remaining frames against
+   * all 30,000 would say "1s left" with twenty minutes to go.
+   */
+  encodeStartedFrames?: number;
   /** When the render actually started, for an honest "about N left". */
   startedAt?: number;
   finishedAt?: number;
@@ -106,9 +115,9 @@ export function readProgress(job: RenderJob, chunk: string): void {
    *   Encoded 25/25
    *
    * so the muxer reports "Encoded X/Y" — past tense, no media type. The padded
-   * "Encoded video <bar> X/Y" form is what a TTY gets; both are accepted. The
-   * media word is restricted to `video` because an "Encoded audio N/M" pass
-   * would otherwise write audio counts into these fields and complete twice.
+   * "Encoded video <bar> X/Y" form is what a TTY gets; both are accepted. An
+   * "Encoded audio N/M" pass still matches the pattern; it is the `ours` check
+   * below, a total that must equal the frame total, that keeps its counts out.
    *
    * The gap and the digit runs are both bounded. Scene `console.log` output is
    * forwarded verbatim into this stream, so a huge digit-heavy chunk is
@@ -131,6 +140,7 @@ export function readProgress(job: RenderJob, chunk: string): void {
       if (job.phase !== "encoding") {
         job.phase = "encoding";
         job.encodeStartedAt = Date.now();
+        job.encodeStartedFrames = done;
       }
       job.encodedFrames = done;
       job.encodedTotalFrames = total;

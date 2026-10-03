@@ -50,6 +50,17 @@ head("phases map into bands, and the bar only moves forward");
   a(mid.progress === 90, "all frames rendered reads 90, not 100, because the encode still has to run");
 }
 
+head("the encode remembers where it started, because h264 writes while it renders");
+{
+  // The real transcript's first count is 17, not 0: those 17 were written
+  // during the render, and an estimate that counts them would run fast.
+  const j = feed(job(), ...REAL);
+  a(j.encodeStartedFrames === 17, `the starting count is the first one seen (was ${j.encodeStartedFrames})`);
+  const stamped = j.encodeStartedAt;
+  readProgress(j, "Encoded 25/25");
+  a(j.encodeStartedFrames === 17 && j.encodeStartedAt === stamped, "and later counts do not move it");
+}
+
 head("the encode is never dragged back to counting frames");
 {
   // Both phases in one chunk: the later one wins.

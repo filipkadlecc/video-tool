@@ -130,7 +130,8 @@ export default function ExportFlow({
   // Mirrors RenderJob["phase"]. A bare string would let a typo typecheck.
   const [phase, setPhase] = useState<"bundling" | "frames" | "encoding" | "converting" | null>(null);
   const [encoded, setEncoded] = useState<{ done: number; total: number } | null>(null);
-  const [encodeStartedAt, setEncodeStartedAt] = useState<number | null>(null);
+  // When the encode began, and how far the file already was by then.
+  const [encodeStart, setEncodeStart] = useState<{ at: number; frames: number } | null>(null);
   const [frames, setFrames] = useState<{ done: number; total: number } | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [result, setResult] = useState<{ url: string; bytes?: number; ms?: number } | null>(null);
@@ -269,7 +270,7 @@ export default function ExportFlow({
     setFrames(null);
     setPhase(null);
     setEncoded(null);
-    setEncodeStartedAt(null);
+    setEncodeStart(null);
     try {
       const res = await fetch("/api/render", {
         method: "POST",
@@ -303,7 +304,9 @@ export default function ExportFlow({
           if (typeof j.encodedFrames === "number" && typeof j.encodedTotalFrames === "number") {
             setEncoded({ done: j.encodedFrames, total: j.encodedTotalFrames });
           }
-          if (typeof j.encodeStartedAt === "number") setEncodeStartedAt(j.encodeStartedAt);
+          if (typeof j.encodeStartedAt === "number") {
+            setEncodeStart({ at: j.encodeStartedAt, frames: typeof j.encodeStartedFrames === "number" ? j.encodeStartedFrames : 0 });
+          }
           if (typeof j.startedAt === "number") setStartedAt(j.startedAt);
           if (j.status === "done") {
             if (poll.current) window.clearInterval(poll.current);
@@ -330,7 +333,7 @@ export default function ExportFlow({
 
   const reset = () => {
     setStatus("idle"); setResult(null); setFailure(null); setProgress(0);
-    setFrames(null); setPhase(null); setEncoded(null); setEncodeStartedAt(null); setLeaving(false);
+    setFrames(null); setPhase(null); setEncoded(null); setEncodeStart(null); setLeaving(false);
   };
   const close = () => { onClose(); };
 
@@ -361,16 +364,21 @@ export default function ExportFlow({
    * about one of them. "about 2m left" at frame 45000 was followed by 22 more
    * minutes of encoding, and a countdown that reaches zero and keeps going is
    * most of why a healthy render got reported as stuck.
+   *
+   * `from` is where the count stood when `since` was stamped. The encode's is
+   * not zero: h264 writes the file while it renders, so the first count can be
+   * 30,000 of 45,664, and dividing the time by all 30,000 says "1s left" with
+   * twenty minutes to go. Only frames counted since the stamp tell the speed.
    */
-  const eta = (done: number, total: number, since: number | null) => {
-    if (!since || done < 10) return null;
-    const per = (Date.now() - since) / done;
+  const eta = (done: number, total: number, since: number | null, from = 0) => {
+    if (!since || done - from < 10) return null;
+    const per = (Date.now() - since) / (done - from);
     const secs = Math.round((per * (total - done)) / 1000);
     if (!Number.isFinite(secs) || secs <= 0) return null;
     return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
   };
   const remaining = phase === "encoding" && encoded
-    ? eta(encoded.done, encoded.total, encodeStartedAt)
+    ? eta(encoded.done, encoded.total, encodeStart?.at ?? null, encodeStart?.frames)
     : frames ? eta(frames.done, frames.total, startedAt) : null;
 
   /*
@@ -381,6 +389,7 @@ export default function ExportFlow({
    */
   const phaseLabel =
     phase === "bundling" ? "Preparing" :
+    phase === "frames" ? "Step 1 of 2 · Rendering frames" :
     phase === "encoding" ? "Step 2 of 2 · Writing the video file" :
     phase === "converting" ? "Converting to the chosen format" :
     null;
