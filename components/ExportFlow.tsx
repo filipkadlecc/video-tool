@@ -127,6 +127,10 @@ export default function ExportFlow({
   const [useRange, setUseRange] = useState(false);
   const [fileName, setFileName] = useState("");
   const [progress, setProgress] = useState(0);
+  // Mirrors RenderJob["phase"]. A bare string would let a typo typecheck.
+  const [phase, setPhase] = useState<"bundling" | "frames" | "encoding" | "converting" | null>(null);
+  const [encoded, setEncoded] = useState<{ done: number; total: number } | null>(null);
+  const [encodeStartedAt, setEncodeStartedAt] = useState<number | null>(null);
   const [frames, setFrames] = useState<{ done: number; total: number } | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [result, setResult] = useState<{ url: string; bytes?: number; ms?: number } | null>(null);
@@ -263,6 +267,9 @@ export default function ExportFlow({
     setFailure(null);
     setResult(null);
     setFrames(null);
+    setPhase(null);
+    setEncoded(null);
+    setEncodeStartedAt(null);
     try {
       const res = await fetch("/api/render", {
         method: "POST",
@@ -289,6 +296,14 @@ export default function ExportFlow({
           if (typeof j.renderedFrames === "number" && typeof j.totalFrames === "number") {
             setFrames({ done: j.renderedFrames, total: j.totalFrames });
           }
+          // The encode has its own count. Showing it is the whole point:
+          // without it the dialog reads "45664 / 45664 frames, 100%" for the
+          // ~20 minutes it spends writing a 30-minute 4K file.
+          if (j.phase) setPhase(j.phase);
+          if (typeof j.encodedFrames === "number" && typeof j.encodedTotalFrames === "number") {
+            setEncoded({ done: j.encodedFrames, total: j.encodedTotalFrames });
+          }
+          if (typeof j.encodeStartedAt === "number") setEncodeStartedAt(j.encodeStartedAt);
           if (typeof j.startedAt === "number") setStartedAt(j.startedAt);
           if (j.status === "done") {
             if (poll.current) window.clearInterval(poll.current);
@@ -313,7 +328,10 @@ export default function ExportFlow({
     }
   }, [fileName, code, durationInFrames, fps, width, height, format, projectId, quality, useRange, hasRange, rangeIn, rangeOut, exportDoc]);
 
-  const reset = () => { setStatus("idle"); setResult(null); setFailure(null); setProgress(0); setFrames(null); setLeaving(false); };
+  const reset = () => {
+    setStatus("idle"); setResult(null); setFailure(null); setProgress(0);
+    setFrames(null); setPhase(null); setEncoded(null); setEncodeStartedAt(null); setLeaving(false);
+  };
   const close = () => { onClose(); };
 
   /**
@@ -338,13 +356,41 @@ export default function ExportFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, onClose]);
 
-  const remaining = (() => {
-    if (!frames || !startedAt || frames.done < 10) return null;
-    const perFrame = (Date.now() - startedAt) / frames.done;
-    const secs = Math.round((perFrame * (frames.total - frames.done)) / 1000);
+  /*
+   * An estimate names the phase it is counting down, because it only ever knew
+   * about one of them. "about 2m left" at frame 45000 was followed by 22 more
+   * minutes of encoding, and a countdown that reaches zero and keeps going is
+   * most of why a healthy render got reported as stuck.
+   */
+  const eta = (done: number, total: number, since: number | null) => {
+    if (!since || done < 10) return null;
+    const per = (Date.now() - since) / done;
+    const secs = Math.round((per * (total - done)) / 1000);
     if (!Number.isFinite(secs) || secs <= 0) return null;
     return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)}m`;
-  })();
+  };
+  const remaining = phase === "encoding" && encoded
+    ? eta(encoded.done, encoded.total, encodeStartedAt)
+    : frames ? eta(frames.done, frames.total, startedAt) : null;
+
+  /*
+   * What the dialog says it is doing. A render has three visible stages and
+   * only one of them used to be named, so the two long silent ones read as a
+   * hang. Plain verbs, not codec words: "writing" is a thing the person owns,
+   * "muxing" is not.
+   */
+  const phaseLabel =
+    phase === "bundling" ? "Preparing" :
+    phase === "encoding" ? "Step 2 of 2 · Writing the video file" :
+    phase === "converting" ? "Converting to the chosen format" :
+    null;
+
+  const n = (v: number) => v.toLocaleString();
+  const countLine =
+    phase === "converting" ? "All frames written — finishing the file"
+    : phase === "encoding" && encoded ? `Written ${n(encoded.done)} / ${n(encoded.total)} frames`
+    : frames ? `Rendered ${n(frames.done)} / ${n(frames.total)} frames`
+    : `Rendered 0 / ${n(exportFrames)} frames`;
 
   /* ── 5g — missing sources ───────────────────────────────────────── */
   if (open && showMissing && missing.length > 0) {
@@ -498,10 +544,29 @@ export default function ExportFlow({
         }
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Tag tone="live">{status === "queued" ? "Queued" : "Live"}</Tag>
+            {/*
+              The sentence that answers "is this stuck?" is prose, so it takes
+              the prose ramp and the prose ink — `t-data-*` is monospace with
+              tabular numerals, which made it read as debug output, and
+              --ink-tertiary made the one reassuring string the dimmest thing on
+              a surface whose brightest elements were causing the worry.
+            */}
+            {phaseLabel && (
+              <span className="t-caption" style={{ color: "var(--ink-secondary)" }} aria-live="polite">
+                {phaseLabel}
+              </span>
+            )}
           </div>
-          <div style={{ height: 4, background: "var(--surface-void)", borderRadius: 2, overflow: "hidden" }}>
+          <div
+            style={{ height: 4, background: "var(--surface-void)", borderRadius: 2, overflow: "hidden" }}
+            role="progressbar"
+            aria-valuenow={Math.min(100, Math.round(progress))}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={countLine}
+          >
             <div
               style={{
                 width: `${Math.min(100, progress)}%`, height: "100%",
@@ -510,9 +575,17 @@ export default function ExportFlow({
             />
           </div>
           <div style={{ display: "flex", alignItems: "baseline" }}>
-            {/* Frames lead. They are the number that tells you it isn't stuck. */}
+            {/*
+              Frames are still the number that tells you it isn't stuck — but
+              the verb now leads them. The count RESTARTS when the encode
+              begins, and "45,664 / 45,664 frames" becoming "1,200 / 45,664"
+              with the only distinguishing word trailing the digits reads as
+              "it threw the render away and started over", which is a worse
+              conclusion than the one this fixes. Separators too: reading five
+              unseparated digits is exactly where liveness-by-number fails.
+            */}
             <span className="t-data-m" style={{ color: "var(--ink-primary)" }}>
-              {frames ? `${frames.done} / ${frames.total} frames` : `0 / ${exportFrames} frames`}
+              {countLine}
             </span>
             <div style={{ flex: 1 }} />
             <span className="t-data-m" style={{ color: "var(--live)" }}>
@@ -648,7 +721,11 @@ export default function ExportFlow({
         width={560}
         tone="danger"
         onClose={close}
-        title={frames ? `Render stopped at frame ${frames.done}` : "The render stopped"}
+        title={
+          phase === "encoding" || phase === "converting"
+            ? "The video file couldn't be written"
+            : frames ? `Render stopped at frame ${frames.done}` : "The render stopped"
+        }
         subtitle={failure.message}
         footer={
           <>

@@ -1,6 +1,6 @@
 {
   "name": "video-tool",
-  "version": "0.1.172",
+  "version": "0.1.173",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,13 +9,14 @@
     "lint": "eslint",
     "studio": "npx remotion studio remotion/index.tsx",
     "vo": "tsx scripts/vo.ts",
-    "test": "npm run test:doc && npm run test:agent && npm run test:versions && npm run test:elements",
+    "test": "npm run test:doc && npm run test:agent && npm run test:versions && npm run test:elements && npm run test:progress",
     "test:versions": "tsx scripts/test-versions.ts",
     "test:elements": "tsx scripts/test-scene-elements.ts",
     "test:doc": "tsx scripts/test-editor-doc.ts",
     "test:agent": "tsx scripts/test-editor-agent.ts",
     "test:render": "tsx scripts/test-editor-render.ts",
-    "test:figma": "tsx scripts/figma-diff.ts"
+    "test:figma": "tsx scripts/figma-diff.ts",
+    "test:progress": "tsx scripts/test-render-progress.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
