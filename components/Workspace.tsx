@@ -66,6 +66,16 @@ export default function Workspace({
   const [aboutOpen, setAboutOpen] = useState(false);
   const [query, setQuery] = useState("");
 
+  async function fetchProjects() {
+    try {
+      const res = await fetch("/api/projects");
+      const data = await res.json();
+      setProjects(data);
+    } catch (err) {
+      console.error("Failed to load projects:", err);
+    }
+  }
+
   useEffect(() => {
     fetchProjects();
     fetch("/api/collections")
@@ -88,16 +98,6 @@ export default function Workspace({
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [selectedType, modalOpen]);
-
-  async function fetchProjects() {
-    try {
-      const res = await fetch("/api/projects");
-      const data = await res.json();
-      setProjects(data);
-    } catch (err) {
-      console.error("Failed to load projects:", err);
-    }
-  }
 
   // Prompts for a name and creates a collection; returns it (or null if cancelled).
   async function createCollection(): Promise<Collection | null> {

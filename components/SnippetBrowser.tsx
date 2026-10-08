@@ -98,9 +98,11 @@ export default function SnippetBrowser({
   }, [open, inline, orientation]);
 
   // Reset the two-step flow whenever the modal closes. A tab never closes, so
-  // it keeps whatever step it was on.
+  // it keeps whatever step it was on. The modal stays mounted to animate out,
+  // which rules out resetting through a key.
   useEffect(() => {
     if (!open && !inline) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
       setSelectedId(null);
       setPendingCode(null);
       setConfirmId(null);

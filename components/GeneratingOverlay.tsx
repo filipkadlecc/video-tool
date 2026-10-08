@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Icon from "@/components/ui/Icon";
 
 const FILM_FACTS = [
@@ -126,17 +126,15 @@ const FILM_FACTS = [
 const FACT_MS = 6000;
 
 export default function GeneratingOverlay({ visible }: { visible: boolean }) {
-  const [factIndex, setFactIndex] = useState(0);
-  const initialFact = useMemo(() => Math.floor(Math.random() * FILM_FACTS.length), []);
+  const [factIndex, setFactIndex] = useState(() => Math.floor(Math.random() * FILM_FACTS.length));
 
   useEffect(() => {
     if (!visible) return;
-    setFactIndex(initialFact);
     const interval = setInterval(() => {
       setFactIndex((prev) => (prev + 1) % FILM_FACTS.length);
     }, FACT_MS);
     return () => clearInterval(interval);
-  }, [visible, initialFact]);
+  }, [visible]);
 
   if (!visible) return null;
 
