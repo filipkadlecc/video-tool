@@ -16,9 +16,9 @@ Do NOT add topic labels or chips. Just cut between the answers (keep the speaker
   return `### Structure: full-screen topic cards between answers (default)
 
 Between interview answers, put a short **full-screen branded title card** (NOT a small corner chip):
-- A \`<Sequence>\` filling the frame on the brand background (\`COLORS.bg\` / the brand background image), with the topic as a large centered headline (e.g. "The impact"), animated in with \`springIn\`. Optionally a small Apify mark. **Hold it ~4–5s (≈100–125 frames at 25fps)** — a real beat that reads as an intentional title card, not a flash. Never under ~3s.
+- A \`<Sequence>\` filling the frame on the brand background (\`backgroundColor: COLORS.bg\`), with the topic as a large centered headline (e.g. "The impact"), animated in with \`springIn\`. Optionally a small Apify mark. **Hold it ~4–5s (≈100–125 frames at 25fps)** — a real beat that reads as an intentional title card, not a flash. Never under ~3s.
 - Then cut to the answer clip.
-- Transition the card into the footage (a quick crossfade or wipe) so it feels produced, not a hard slam.
+- Transition the card into the footage with a quick \`crossDissolve()\` (never a wipe or slide) so it feels produced, not a hard slam.
 - Keep the speaker **lower-third** on the FIRST answer only.
 This gives structure and hides the jump-cuts between passages of the same source.`;
 }
@@ -252,13 +252,15 @@ const EditedVideo: React.FC = () => {
   {/* Lower third overlay */}
   <AbsoluteFill style={{ justifyContent: "flex-end", padding: 60 }}>
     <div style={{
-      background: "rgba(0,0,0,0.7)",
+      backgroundColor: COLORS.card,               // opaque — never a see-through fill over footage
+      border: \`1px solid \${COLORS.border}\`,
       padding: "20px 40px",
-      borderRadius: 12,
+      borderRadius: 14,
       opacity: titleProgress,
+      transform: \`translateY(\${(1 - titleProgress) * 24}px)\`,
     }}>
-      <div style={{ fontSize: 48, fontWeight: 500, color: "#fff" }}>Speaker Name</div>
-      <div style={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }}>Title / Role</div>
+      <div style={{ fontFamily: BRAND.fonts.marketing, fontSize: 48, fontWeight: 500, color: COLORS.text }}>Speaker Name</div>
+      <div style={{ fontFamily: BRAND.fonts.primary, fontSize: 28, color: COLORS.textMuted }}>Title / Role</div>
     </div>
   </AbsoluteFill>
 </AbsoluteFill>
@@ -268,7 +270,7 @@ const EditedVideo: React.FC = () => {
 \`\`\`tsx
 <AbsoluteFill>
   <OffthreadVideo src="/api/media/${projectId}/main.mp4" style={{ width: "100%", height: "100%" }} />
-  <div style={{ position: "absolute", bottom: 40, right: 40, width: 400, height: 225, borderRadius: 12, overflow: "hidden", border: "3px solid white" }}>
+  <div style={{ position: "absolute", bottom: 40, right: 40, width: 400, height: 225, borderRadius: 14, overflow: "hidden", border: \`2px solid \${COLORS.border}\` }}>
     <OffthreadVideo src="/api/media/${projectId}/webcam.mp4" style={{ width: "100%", height: "100%" }} />
   </div>
 </AbsoluteFill>
@@ -281,7 +283,7 @@ const EditedVideo: React.FC = () => {
     <OffthreadVideo src="/api/media/${projectId}/clip1.mp4" />
   </TransitionSeries.Sequence>
   <TransitionSeries.Transition
-    presentation={fade()}
+    presentation={crossDissolve()}
     timing={linearTiming({ durationInFrames: 15 })}
   />
   <TransitionSeries.Sequence durationInFrames={300}>

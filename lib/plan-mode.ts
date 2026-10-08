@@ -10,7 +10,7 @@ import type Anthropic from "@anthropic-ai/sdk";
  */
 export const PLAN_INSTRUCTION = `=== PLAN MODE — do not build or change anything yet ===
 Reply with a short plan the user can approve or adjust. Nothing is written or edited this turn.
-- For a new video: the beat grid (time ranges in seconds) and a shot list — what is on screen in each beat, how it moves, and how each beat hands off to the next.
+- For a new video: the beat grid (tempo, and time ranges in seconds) and a shot list — what is on screen in each shot, how it moves, and what carries into the next shot (the same shot list the scene file will open with). Use only facts the brief gives.
 - For an edit: exactly what will change, and what stays as it is.
 - Finish with the questions you need answered, if anything is unclear (at most 3).
 No code blocks. Plain, scannable lines, under ~200 words.`;

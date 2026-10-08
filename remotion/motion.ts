@@ -99,7 +99,7 @@ export const TIMING = {
   staggerItem: 12,    // per-bullet/card delay for list reveals
   staggerLong: 18,    // for big chunky reveals (cards, panels)
   holdBeat: 30,       // minimum hold before the next beat starts
-  exitTail: 14,       // frames reserved at the end for a fade-out
+  exitTail: 14,       // library snippets' end fade (inOutEnvelope default) — generated videos pass exitFrames: 0
 };
 
 // =============================================================================
@@ -275,6 +275,10 @@ export function compoundReveal(
  * that ramps in from `frame=0` (spring `inPreset`), holds at 1, and ramps out
  * over the last `exitFrames` frames. Multiply this by your opacity / use to
  * fade entire scenes cleanly.
+ *
+ * The fade-out is for library snippets dropped standalone onto a timeline.
+ * Inside a generated video pass `{ exitFrames: 0 }`: scenes hold to their
+ * boundary and the transition does the handoff (no fade from/to black).
  */
 export function inOutEnvelope(
   frame: number,

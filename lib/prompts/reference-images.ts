@@ -138,4 +138,4 @@ export function contactSheetToContentBlocks(
 }
 
 export const APIFY_REFERENCE_INTRO =
-  "The image(s) attached are Apify marketing design references. Treat them as STYLE references only — match the dark canvas, the small top-left wordmark, the bold headline with one orange-highlighted phrase, the checkmark bullet rows, and the orange pill CTAs. Ignore any small '+' / crosshair corner marks you see in the references — those have been removed from the design system. DO NOT copy the literal text, layout coordinates, or specific frames pixel-for-pixel. Apply the visual grammar to whatever the user has actually asked for.";
+  "The image(s) attached are Apify marketing design references. Treat them as STYLE references only — match the dark canvas, the bold headline with one orange-highlighted phrase, the checkmark bullet rows, and the orange pill CTAs. Ignore the small top-left wordmark and any small '+' / crosshair corner marks you see in the references — both have been removed from the design system. DO NOT copy the literal text, layout coordinates, or specific frames pixel-for-pixel. Apply the visual grammar to whatever the user has actually asked for.";

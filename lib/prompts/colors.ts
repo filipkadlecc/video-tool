@@ -29,10 +29,10 @@ USAGE RULES
 - Orange is for emphasis — use it sparingly and on purpose:
   - One highlighted phrase per headline (wrap in an inline pill with an OPAQUE \`card\` bg + 1px \`orange\` bottom border, ~8px h-padding, 6px radius — \`orangeTint\` only if the pill sits over an opaque surface)
   - Checkmark/bullet glyphs
-  - CTA button outline (1.5px \`orange\` border, transparent fill, \`orange\` text)
+  - CTA button outline (1.5px \`orange\` border, OPAQUE \`card\` fill, \`orange\` text)
   - Thin accent rules / divider lines
   - Decorative line-art (contour rings, registration crop marks, isometric wireframe, dotted halftone) — \`orange\` strokes/dots at LOW opacity. Texture, not the subject.
-- Cards: \`card\` surface + 1px \`border\` hairline + 14px radius.
+- Cards: \`card\` surface + 1px \`border\` hairline + 14px radius (up to 24 for one big hero panel).
 
 FORBIDDEN
 - Pure black (#000) or pure white (#FFF) — use \`bg\` and \`text\` tokens.

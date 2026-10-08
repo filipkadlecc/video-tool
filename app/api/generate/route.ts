@@ -118,7 +118,7 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
   {
     name: "render_frames",
     description:
-      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. When you don't ask for specific frames, a contact sheet of 24 frames across the whole video comes first, so you can judge pacing and variety at a glance: something new should happen every 3–5 seconds, never one idea stretched over the runtime. Inspect the frames for: text overflow / clipping past the canvas edges, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, and pacing (content revealing too early or too late). Then score what you see with submit_review; if anything is below the bar, return the COMPLETE corrected file in one ```tsx block and render again. Skip it for a tiny edit.",
+      "Render a few still frames of the scene you just wrote so you can SEE how it actually looks, then fix any problems before finalizing. Write the COMPLETE scene as a ```tsx code block in the SAME message (or pass it as `code`), then call this tool. Frames come back as images. When you don't ask for specific frames, a contact sheet of 24 frames across the whole video comes first, so you can judge pacing, variety and flow at a glance: in a promo something new should happen every 1–3 seconds (up to 4–5 s only where the viewer is reading), never one idea stretched over the runtime, and each scene should visibly come out of the one before. Compare it with your SHOT LIST. Inspect the frames for: text overflow / clipping past the canvas edges, overlapping text, empty or frozen/dead frames, off-brand colour (background must read as the brand black #020202 with a single orange accent — no other accent colours, no pure white), poor contrast or illegible text, everything-centred or broken layout, invented facts or numbers, and pacing (content revealing too early or too late, a final frame that isn't held long enough to read). Then score what you see with submit_review; if anything is below the bar, return the COMPLETE corrected file in one ```tsx block and render again. Skip it for a tiny edit.",
     input_schema: {
       type: "object",
       properties: {
@@ -150,11 +150,12 @@ const AGENTIC_TOOLS: Anthropic.Tool[] = [
             hook: { type: "integer", description: "Do the first 2 seconds grab attention and make you want to keep watching?" },
             readability: { type: "integer", description: "Is every word legible, on screen long enough to read, with nothing clipped or overlapping?" },
             motion: { type: "integer", description: "Does motion feel deliberate and weighted — springs with mass, compound moves — rather than linear or floaty?" },
-            variety: { type: "integer", description: "From the contact sheet: does something new happen every 3–5 s, or is it one idea stretched out?" },
-            composition: { type: "integer", description: "Balanced, intentional layout; not everything dead centre; good use of the canvas." },
-            brand: { type: "integer", description: "Brand black background, a single orange accent, right fonts and weights, no banned effects." },
+            variety: { type: "integer", description: "From the contact sheet: does something new happen every 1–3 s (4–5 s only where the viewer reads), as the shot list planned — or is it one idea stretched out?" },
+            flow: { type: "integer", description: "Does each scene come out of the one before — a shared element, a match cut, a carried object, a shape that becomes the next container — or does it read as slides replacing slides? Does anything look like a template?" },
+            composition: { type: "integer", description: "Balanced, intentional layout; not everything dead centre; good use of the canvas. Would each key frame work as a still ad?" },
+            brand: { type: "integer", description: "Brand black background, a single orange accent, right fonts and weights, no banned effects — and nothing on screen the brief didn't give (no invented stats, names or claims)." },
           },
-          required: ["hook", "readability", "motion", "variety", "composition", "brand"],
+          required: ["hook", "readability", "motion", "variety", "flow", "composition", "brand"],
         },
         problems: {
           type: "array",
@@ -199,7 +200,7 @@ function otherDeclaredShapes(code: string, width: number, height: number): { lab
   return shapes.map((shape) => ({ label: shape, ...shapeSize(width, height, shape) }));
 }
 
-const REVIEW_AXES = ["hook", "readability", "motion", "variety", "composition", "brand"] as const;
+const REVIEW_AXES = ["hook", "readability", "motion", "variety", "flow", "composition", "brand"] as const;
 
 /**
  * Check a `submit_review` call against the pass bar. Scores are clamped to
@@ -215,7 +216,7 @@ function judgeReview(
   const scores: Record<string, number> = {};
   for (const axis of REVIEW_AXES) {
     const v = Number(raw.scores?.[axis]);
-    if (!Number.isFinite(v)) return { error: `Missing score for "${axis}". Score all six: ${REVIEW_AXES.join(", ")}.` };
+    if (!Number.isFinite(v)) return { error: `Missing score for "${axis}". Score all ${REVIEW_AXES.length}: ${REVIEW_AXES.join(", ")}.` };
     scores[axis] = Math.max(1, Math.min(10, Math.round(v)));
   }
   const problems = Array.isArray(raw.problems) ? raw.problems.map(String).filter(Boolean) : [];
@@ -234,7 +235,7 @@ function judgeReview(
 // knows it can (and should) look at its own work.
 const AGENTIC_GUIDANCE =
   "\n\n=== SELF-REVIEW (you can SEE your own output) ===\n" +
-  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene, call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches). After each render, call `submit_review` to score it honestly on hook, readability, motion, variety, composition and brand. The bar is 8 on every score: if anything is below it, fix the problems you listed, render again and re-score, until it passes or you run out of renders. Iteration is the method, not a failure. For a trivial edit you can skip rendering and reviewing. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
+  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene (opening with its SHOT LIST), call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, overlapping text, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches, scenes that swap like slides instead of handing off, anything the brief didn't give). Check the render delivers the shot list. After each render, call `submit_review` to score it honestly on hook, readability, motion, variety, flow, composition and brand. The bar is 8 on every score: if anything is below it, fix the problems you listed, render again and re-score, until it passes or you run out of renders. Iteration is the method, not a failure. For a trivial edit you can skip rendering and reviewing. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
 
 // The scene being edited, as the text editor tool sees it. It only ever
 // exists in memory here — nothing is written to disk.

@@ -20,6 +20,7 @@ const { width, height, u, safe, pick, orientation } = useLayout(); // from "../m
 const direction = pick({ horizontal: "row", vertical: "column" });
 \`\`\`
 - Sizes, gaps, radii, strokes and travel distances: \`N * u\`. Positions: fractions of \`width\`/\`height\`, the \`safe\` margins, or flex/grid — not fixed pixel coordinates.
+- Wherever this prompt or a style gives a size as a "% of canvas height", read it as a % of the canvas's SHORT edge, so it holds in every shape: 10% = \`108 * u\`. Pixel sizes quoted anywhere (e.g. "96px") are at a 1080px short edge — write them as \`96 * u\`.
 - Keep text and key elements inside \`safe\` (vertical reserves the right and bottom for the TikTok/Shorts UI).
 - Use \`pick\` sparingly: stack a row into a column on vertical, break a long headline onto two lines. Same beats, same timing, same motion in every shape.
 - Declare it at the top of the file: \`export const orientation = ["horizontal", "vertical", "square"];\`. Only a scene that truly cannot work in a shape (e.g. a wide data table) leaves that shape out.
@@ -31,6 +32,33 @@ import { BRAND } from "@/lib/brand";
 \`\`\`
 Use \`BRAND.colors.*\` and \`BRAND.fonts.*\` instead of hardcoded hex / font names. The COLOR SYSTEM and APIFY LAYOUT sections below define which tokens to use where.
 
+=== PLAN THE FILM BEFORE YOU WRITE IT ===
+A video is a sequence of shots, not one idea stretched over the runtime. For a NEW video, or a redesign, decide the shots first and write them at the very top of the file as a comment:
+
+\`\`\`tsx
+/* SHOT LIST — 120 BPM (beat 0.5 s, bar 2 s) · 15 s
+ * 0.0–2.0   hook: a text field types the question, orange cursor        → handoff: the field grows into the first card
+ * 2.0–4.0   three cards stack in, one per beat                           → handoff: the top card's number becomes the headline figure
+ * ...
+ * 13.0–15.0 tagline + lockup, held still enough to read
+ */
+\`\`\`
+
+- One line per shot: the time range, what is on screen and how it moves, and the HANDOFF — what carries into the next shot (see "Handoffs" in the Transitions section).
+- Put it on a beat grid. Pick a tempo even when there is no music (default 120 BPM: a beat every 0.5 s, a bar every 2 s), land reveals on beats and scene changes on bar lines, so a track can be dropped in later and everything already hits. Work in seconds, then round to frames: \`const BEAT = (60 / BPM) * fps; const at = (beats: number) => Math.round(beats * BEAT);\`
+- If the brief already gives timings, those ARE the shot list — copy them in, don't re-plan them.
+- Then build exactly what the list says, and check the render against it. For a small edit, keep the list and update only the lines you change.
+
+=== PACING ===
+- Promos, launches, social cuts and bumpers: a new visual idea every 1–3 s (2–6 beats at 120 BPM). A scene can carry two or three ideas, so a scene is usually 2–6 s; it runs longer only if something new keeps happening inside it.
+- Explainers and anything the viewer has to read: give the words time — roughly 0.3 s per word plus 1 s — and up to 4–5 s per idea.
+- The first meaningful moment lands within ~2 s. No slow intro, no logo warm-up.
+- The final composition holds, fully present, for at least 1.5–2 s so it registers (ambient micro-motion only — never a fade).
+
+=== FACTS AND COPY ===
+- Use only the facts, numbers, names, features and quotes given in the brief, the reference content, the script, or the attached images. Never invent stats, user counts, ratings, prices, customer names, testimonials or features. Keep numbers exactly as given ("20,000+" stays "20,000+").
+- An interface mockup may need filler (chart bars, table rows, a decorative counter): keep it obviously illustrative and never put it in headline copy or present it as a real result.
+- Keep on-screen copy short — a headline is a few words, never a paragraph — and don't add slogans the brief didn't ask for.
 
 ---
 
@@ -96,7 +124,7 @@ import {
   useLayout,      // useLayout() → { width, height, u, safe, pick, orientation, cx, cy } — one scene, every shape
   ambientDrift,   // ambientDrift(frame, amplitude, period, seed) — noise-based
   compoundReveal, // returns { opacity, transform, filter } for fade+slide+scale (no reveal blur)
-  inOutEnvelope,  // returns 0→1→0 envelope across the sequence
+  inOutEnvelope,  // entrance envelope — in a generated video ALWAYS pass { exitFrames: 0 } (scenes never fade out; see "Scene Exits")
 } from "../motion";
 \`\`\`
 
@@ -128,7 +156,7 @@ import { makeTransform, translateY, scale, rotate } from "@remotion/animation-ut
 
 ## Theme & Constants
 
-Define a \`COLORS\` object at the top of the file with the project's color palette. Define a \`TRANSITION\` constant for the default transition duration in frames.
+Define a \`COLORS\` object at the top of the file with the project's color palette. Define a \`TRANSITION\` constant for the transition duration in frames, with exactly the value the Transitions section gives for this project's style.
 
 \`\`\`tsx
 // Pull canonical brand tokens from BRAND — never hardcode hex strings.
@@ -144,10 +172,10 @@ const COLORS = {
   textSubtle: BRAND.colors.textSubtle, // #8c93a8 — captions, metadata
   orange: BRAND.colors.orange,         // #F86606 — THE accent
   orangeDeep: BRAND.colors.orangeDeep, // #FF4800 — pressed/active state
-  orangeTint: BRAND.colors.orangeTint, // rgba(248,102,6,0.16) — highlight fills
+  orangeTint: BRAND.colors.orangeTint, // rgba(248,102,6,0.16) — highlight fills, ONLY over an opaque surface
 };
 
-const TRANSITION = ${Math.round(15 * fps / 25)};
+const TRANSITION = /* the value from the Transitions section for this project's style */;
 \`\`\`
 
 Always define COLORS like this — orange is the ONLY accent. Never reintroduce pink, green, blue, purple, mint, cyan, or magenta in scene code.
@@ -158,18 +186,15 @@ CRITICAL — transparent export + opacity rule: The root scene background MUST a
 
 ## Background Component
 
-Create a reusable \`Background\` component that renders a full-bleed image using \`AbsoluteFill\` and \`Img\` with \`staticFile\`. Render it EXACTLY ONCE, at the composition root behind the \`TransitionSeries\` (see "Main Composition") — NOT inside each scene. It is the persistent world the scenes play over. (It must stay a component named \`Background\` so transparent exports can strip it.)
+Create a reusable \`Background\` component: a flat fill of the brand black, \`COLORS.bg\` (#020202). Render it EXACTLY ONCE, at the composition root behind the \`TransitionSeries\` (see "Main Composition") — NOT inside each scene. It is the persistent world the scenes play over. (It must stay a component named \`Background\` so transparent exports can strip it, and it uses \`backgroundColor\`, never the \`background\` shorthand.)
 
 \`\`\`tsx
 const Background: React.FC = () => (
-  <AbsoluteFill>
-    <Img
-      src={staticFile("assets/backgrounds/Back_Dark.png")}
-      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-    />
-  </AbsoluteFill>
+  <AbsoluteFill style={{ backgroundColor: COLORS.bg }} />
 );
 \`\`\`
+
+The flat black is deliberate — it is the Apify canvas. Depth comes from the FOREGROUND: layering, scale, parallax between elements, and the decor primitives (see APIFY LAYOUT). Never add depth by giving a scene its own background, a gradient wash or a dark vignette (a vignette also breaks transparent exports).
 
 ---
 
@@ -182,10 +207,12 @@ DO NOT redefine these in your file. Import them from \`"../motion"\` (see Requir
 | Preset | Feel | Use for |
 |---|---|---|
 | \`SNAPPY\`     | Punchy, minimal bounce       | Hero titles, big numbers, primary reveals |
-| \`ELASTIC\`    | Playful overshoot            | Badges, icons, logo pops, list bullets |
+| \`ELASTIC\`    | Playful overshoot            | Small things only: badges, icons, list bullets — never headlines, cards or big type |
 | \`LIQUID\`     | Slow, smooth, premium        | Full-bleed cards, count-ups, cinematic moves |
 | \`GENTLE\`     | Lazy, settling               | Secondary labels, subtitles, easing-in tails |
 | \`OVERDAMPED\` | Zero bounce, fastest path    | Utility/body text — avoid on hero elements |
+
+**Overshoot, everywhere in this prompt:** at most ~2%, once — a settle, never a bounce. No repeated wobble, no rubber-band elastic on anything large.
 
 Use them via \`springIn\` (cleaner) or pass directly via \`SPRINGS[name]\`:
 
@@ -212,6 +239,8 @@ When ONE value changes target several times — a cursor moving A→B→C, a bar
 const cursorX = track(frame, fps, 200, [{ at: 30, to: 900 }, { at: 75, to: 540, preset: "SNAPPY" }]);
 \`\`\`
 
+A moving pill, tab indicator, selection highlight or toggle knob: drive its LEFT and RIGHT edges with two separate \`track\` calls — the leading edge on a quicker preset (\`UI\` / \`SNAPPY\`), the trailing edge on a slower one (\`DEFAULT\` / \`LIQUID\`) or 2–3 frames later — so it stretches in the direction of travel and settles back to its size. It reads as liquid instead of a box sliding.
+
 Stagger sibling elements with tight delays (\`TIMING.staggerLetter\` ≈ 2 frames for letter-by-letter, \`TIMING.staggerItem\` ≈ 12 for cards, \`TIMING.staggerLong\` ≈ 18 for major phases).
 
 ### Interpolation — compound everything
@@ -221,8 +250,9 @@ Single-axis motion reads as cheap. Every entrance should combine **two or three*
 - opacity (0 → 1)
 - translateY or translateX (small distance, 20–60px — too far reads as throwaway)
 - scale (0.92 → 1, or 1.08 → 1 for "settling in")
-- rotate (subtle: -3deg → 0, or -90deg → 0 for kinetic flair)
-- filter: drop-shadow with chromatic color (fades in alongside scale)
+- rotate (subtle only: -3deg → 0 — no spins)
+
+Opacity + translate is the minimum; add scale (or a subtle rotate) where the style allows it.
 
 NEVER add an animated \`filter: blur()\` to a reveal — elements arrive SHARP (see the ABSOLUTE RULE in the DO-NOT list).
 
@@ -251,14 +281,14 @@ const heroStyle = compoundReveal(frame, fps, {
 
 ### Motion Vocabulary — depth & atmosphere
 
-These techniques are MANDATORY where they fit; not optional decorations:
+Use these where they serve the shot — restraint beats decoration, and no effect exists just because it looks cool:
 
-- **Perspective** for 3D depth: \`transform: perspective(1200px) rotateX(\${...}deg) rotateY(\${...}deg)\` on cards.
+- **Perspective** for 3D depth: \`transform: perspective(1200px) rotateX(\${...}deg) rotateY(\${...}deg)\` on cards. Never put \`opacity\` or \`filter\` on an element with \`transformStyle: "preserve-3d"\` — it flattens and both faces show; fade/filter its wrapper instead.
 - **mix-blend-mode**: \`overlay\` for grain/noise.
-- **filter: blur** on background elements to create depth-of-field. Foreground sharp, background 8–24px blur.
-- **backdrop-filter: blur** on glass panels.
-- **Layered motion**: a foreground element moves at full speed, while a background gradient or shape drifts at 0.2–0.4× speed — parallax.
-- **Continuous ambient motion** during hold phases: a 1–4px translate breathing or 0.3° rotation drift. ALWAYS prefer \`ambientDrift(frame, amplitude, period, "unique-seed")\` (perlin noise — feels organic) over \`Math.sin(frame / N)\` (obviously periodic). Pass a unique seed string per element so they drift out of phase. NEVER let visible elements freeze.
+- **Depth of field**: a STATIC \`filter: blur\` (8–24px) on decorative shapes BEHIND the content. Content stays sharp; the blur never animates (rule 15). No glass panels — \`backdrop-filter\` needs a see-through surface, and surfaces here are opaque.
+- **Layered motion**: a foreground element moves at full speed, while a decorative shape behind it drifts at 0.2–0.4× speed — parallax.
+- **Continuous ambient motion** during hold phases: a 1–4px translate breathing or 0.3° rotation drift. ALWAYS use \`ambientDrift(frame, amplitude, period, "unique-seed")\` (perlin noise — feels organic), not \`Math.sin(frame / N)\` (obviously periodic). Pass a unique seed string per element so they drift out of phase. Holds are calm, not frozen: keep the drift small enough that the frame still reads as still.
+- Never set \`will-change\` on anything that scales — Chrome rasterises it at the start size and the text renders blurry.
 
 \`\`\`tsx
 // Good — every element has its own drift seed.
@@ -289,7 +319,11 @@ const phase2Opacity = interpolate(frame, [145, 170], [0, 1], {
 
 ### Scene Exits — the transition owns the handoff (do NOT recede)
 
-Do **NOT** add a per-scene exit animation, and do **NOT** use \`sceneExit\`. A scene that shrinks + drifts away before the next one appears is the cheap "shrink-and-fade" slideshow move — that is exactly what we are eliminating. Each scene holds its composition fully present until the boundary; the transition presentation (see the "Transitions" section — \`hardCut\` / \`crossDissolve\` / \`cameraPush\`) performs the handoff, and the persistent root background keeps the world continuous across it.
+Do **NOT** add a per-scene exit animation, and do **NOT** use \`sceneExit\`. A scene that shrinks + drifts away or fades itself out before the next one appears is the cheap "shrink-and-fade" slideshow move — that is exactly what we are eliminating. Each scene holds its composition fully present until the boundary; the transition presentation (see the "Transitions" section — \`hardCut\` / \`crossDissolve\` / \`cameraPush\`) performs the swap, the persistent root background keeps the world continuous, and a planned HANDOFF (see "Handoffs" in the Transitions section) makes the next scene come out of this one.
+
+The library snippets fade themselves out over their last frames (\`inOutEnvelope\`'s default), because they are also dropped standalone onto timelines. Inside a generated video, don't: call \`inOutEnvelope(frame, fps, durationInFrames, { exitFrames: 0 })\`, or just \`springIn\`, so the scene holds to its boundary.
+
+Text never overlaps text. Outgoing copy is gone (or has moved clear) before incoming copy takes the same spot — in phase changes inside a scene, and across a blend.
 
 So: every scene animates IN (springs/translates/scales its elements into place) and then HOLDS with ambient micro-motion — it never animates itself out. Just drop each scene straight into its \`<TransitionSeries.Sequence>\`:
 
@@ -311,7 +345,7 @@ const counterValue = Math.round(interpolate(counterProgress, [0, 1], [0, 47]));
 
 ### Continuous Animations (spin, pulse)
 
-For non-spring continuous animations, interpolate directly on \`frame\` with clamping:
+Only for things that really spin or pulse — a loader, a status dot, a small icon. Never spin a card, a logo or a headline. For these non-spring continuous animations, interpolate directly on \`frame\` with clamping:
 
 \`\`\`tsx
 const spinRotation = interpolate(frame, [145, 200], [0, 720], {
@@ -328,13 +362,13 @@ Every scene wraps content in a TRANSPARENT \`<AbsoluteFill>\` — **NO \`backgro
 \`\`\`tsx
 // Off-center anchored (most common for hero scenes)
 <AbsoluteFill style={{ padding: "12% 14%" }}>
-  <div style={{ position: "absolute", left: "10%", top: "22%", maxWidth: "60%" }}>
+  <div style={{ position: "absolute", left: safe.left, top: "22%", maxWidth: "60%" }}>
     {/* hero content */}
   </div>
 </AbsoluteFill>
 
 // Rule-of-thirds grid (asymmetric)
-<AbsoluteFill style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", padding: 80 }}>
+<AbsoluteFill style={{ display: "grid", gridTemplateColumns: pick({ horizontal: "1fr 1fr 1fr", vertical: "1fr" }), padding: 80 * u }}>
   <div style={{ gridColumn: "1 / 3" }}>{/* hero spans 2/3 */}</div>
   <div>{/* supporting in last col */}</div>
 </AbsoluteFill>
@@ -346,7 +380,7 @@ Every scene wraps content in a TRANSPARENT \`<AbsoluteFill>\` — **NO \`backgro
 </AbsoluteFill>
 \`\`\`
 
-Centered-flex is permitted ONLY for end-card style scenes (logo + tagline) — never for content reveals.
+Centered-flex is permitted ONLY for title cards, end cards (logo + tagline) and a single big-number moment — never for content reveals.
 
 Key rules:
 - **MANDATORY: every text-bearing element must have an explicit \`fontFamily\`.** The renderer runs in a clean Chromium where the default is serif/Times — without an explicit font, exports look NOTHING like the preview. **Default to \`"'GT Walsheim', Inter, sans-serif"\` (BRAND.fonts.marketing) for almost everything — titles, eyebrows, list items, CTAs, numbers, badges.** Use \`"Inter, sans-serif"\` (BRAND.fonts.primary) only for subtitles directly below a hero and for paragraph-length body copy. Setting it once on the outermost \`AbsoluteFill\` is NOT enough — if a child overrides any style, it must respecify \`fontFamily\`.
@@ -362,21 +396,21 @@ Key rules:
 DO NOT do any of the following. If you catch yourself starting any of these, switch approach.
 
 1. **Do NOT redefine SPRINGS in your file.** Always \`import { springIn, SPRINGS } from "../motion"\`. Inlining \`{ damping: 200 }\` configs is a code smell — use a preset.
-2. **Do NOT center every scene.** Off-center is the default; centered is the exception (logo bumpers, end cards).
+2. **Do NOT center every scene.** Off-center is the default; centered is the exception (title cards, logo bumpers, end cards, one big number).
 3. **Do NOT use the same preset for every element.** A scene that uses SNAPPY everywhere looks templated. Mix at least two presets per scene — typically a SNAPPY/LIQUID lead with GENTLE/ELASTIC for secondary motion.
 4. **Do NOT animate opacity alone.** Always combine with translate/scale (never an animated blur) — use \`compoundReveal\` if unsure.
 5. **Do NOT slide-only either.** Combine 2–3 transforms per reveal.
-6. **Do NOT let the scene freeze during holds.** Every visible element needs \`ambientDrift\` (or a slow GENTLE spring). Use \`Math.sin\` only as a last resort — perlin noise from \`ambientDrift\` is the default.
+6. **Do NOT let the scene freeze during holds.** Every visible element needs \`ambientDrift\` (or a slow GENTLE spring) — perlin noise, not \`Math.sin\`. Calm, not frozen.
 7. **Do NOT use translucent fills for cards/panels/pills/badges/chips that sit on the backdrop.** Use an OPAQUE \`COLORS.card\` surface (never \`COLORS.bg\`, never a low-alpha \`rgba\`) so elements stay solid when overlaid on video. Low-alpha rgba is fine only for children nested inside an opaque card.
-8. **Do NOT use a flat solid background at the ROOT.** The single root \`<Background />\` already provides a gradient/depth — do not replace it with a flat fill. (Scenes themselves are transparent and add NO background; a blurred radial accent blob as a foreground element is fine.)
+8. **Do NOT give scenes their own background.** The single root \`<Background />\` is the flat brand black and stays that way — no gradient wash, no vignette, no per-scene fill. Depth comes from the foreground (a statically blurred decorative shape behind the content is fine).
 9. **Do NOT use long staggers (>20 frames) for letter/word reveals.** Use \`TIMING.staggerLetter\` (≈2 frames) per character.
-10. **Do NOT make hero text smaller than 6% of canvas height.** Bold scale is the difference between TV-ad and template.
+10. **Do NOT make hero text smaller than 6% of the canvas short edge (\`64 * u\`).** Bold scale is the difference between TV-ad and template.
 11. **Do NOT use \`<Trail>\` from \`@remotion/motion-blur\` casually.** It's render-expensive — reserve for short high-velocity moments (a number snapping into place, a card flying across the frame). Never on holds.
 12. **Do NOT reinvent IntroCard / LowerThird / EndCard / StatCallout etc. from scratch** when the brief calls for one. Adapt the snippet — see "Reusable Snippets" below.
 13. **Do NOT omit \`fontFamily\` on any text element.** The renderer's default is serif/Times. If a single text node forgets \`fontFamily\`, the exported MP4 will show it in serif while the preview looks correct — invisible-until-export bug. Every \`<div>\`, \`<span>\`, or styled element with text content needs \`fontFamily: "'GT Walsheim', Inter, sans-serif"\` (the default for ~90% of text) or \`fontFamily: "Inter, sans-serif"\` (only for subtitles and long body copy).
 14. **ABSOLUTE RULE — NEVER fade in from black at the start, NEVER fade to black at the end.** This applies to every animation, every style (including cinematic), every scene type. Content must be visible from frame 0 — the very first frame should show your hero element either fully present, or arriving via a spring/translate/scale reveal, but NEVER as opacity 0 against a black/dark canvas. The very last frame must show content fully present, NEVER as opacity 0 fading out. This overrides any style-specific guidance about "dramatic timing", "anticipation holds", "long entrance ramps", or "patient pacing". If you need dramatic pacing, let already-visible content breathe with ambient micro-motion and staged sub-element reveals — NOT a black hold (and not a zoom — see rule 17). If you need a close-out beat, hold the final composition stable, let an ambient micro-motion continue, then end on that — NEVER ramp the whole scene to opacity 0. Opacity reveals of individual sub-elements (a label arriving 30 frames after the hero) are fine; opacity reveals of the whole scene against black are forbidden.
 15. **ABSOLUTE RULE — NEVER animate a Gaussian / focus-pull blur on a reveal.** Elements must arrive SHARP. Do NOT ramp \`filter: blur()\` (or \`backdrop-filter: blur()\`) from a positive value down to 0 as anything enters, and NEVER put an animated blur on text or on a hero as it appears — that split-second fuzziness is explicitly banned and keeps regressing. Reveals combine opacity + translate + scale (+ rotate) ONLY. This OVERRIDES every style file (default, kinetic, editorial, cinematic) and every few-shot example: if any guidance or snippet shows \`blur(Npx → 0)\` on an entrance, drop the blur term. The ONLY permitted blur is a STATIC (non-animated) \`filter: blur\` on a purely decorative BACKGROUND layer for depth-of-field — it must never touch foreground text and must never animate in.
-16. **ABSOLUTE RULE — GT Walsheim has exactly THREE weights here: 300 (Light), 400 (Regular), 500 (Medium).** Never set \`fontWeight\` above 500, and never use the keyword \`bold\` as a weight. 600, 700, 800 and 900 are not shipped; asking for one resolves to Medium anyway, so a heavier number achieves nothing except a lie in the source. Weight is NOT how you make something dominant — size, colour and space are. A hero headline is Medium at 8-12% of canvas height, not Bold at 5%. Body copy and long text are Regular; Light is for a secondary clause set against a Medium one (as in "**Watch the full video** on our channel"). This overrides every style file and every example: if a snippet anywhere shows a weight above 500, use 500.
+16. **ABSOLUTE RULE — GT Walsheim has exactly THREE weights here: 300 (Light), 400 (Regular), 500 (Medium).** Never set \`fontWeight\` above 500, and never use the keyword \`bold\` as a weight. 600, 700, 800 and 900 are not shipped; asking for one resolves to Medium anyway, so a heavier number achieves nothing except a lie in the source. Weight is NOT how you make something dominant — size, colour and space are. A hero headline is Medium at 8-12% of the short edge, not Bold at 5%. Body copy and long text are Regular; Light is for a secondary clause set against a Medium one (as in "**Watch the full video** on our channel"). This overrides every style file and every example: if a snippet anywhere shows a weight above 500, use 500.
 17. **ABSOLUTE RULE — NO zoom unless the user asks for it.** Do NOT add a camera zoom, push-in, dolly, Ken Burns, slow scale-up of the frame, or \`cameraDrift\` on your own initiative — not for "cinematic feel", not for pacing, not in any style. Only when the user's message explicitly asks for a zoom / push-in / camera move (or the project's transition style is CAMERA, which the user chose) may the frame move. And when it does: **the background NEVER zooms.** The camera transform goes on the CONTENT layer only; the root \`<Background />\` stays still behind it (see "Main Composition"). Individual elements may still scale as part of their own reveal — that is not a zoom. This overrides every style file and every example.
 
 ---
@@ -403,28 +437,29 @@ The signature is character-by-character reveal with 2-frame stagger, hero huggin
 const KineticIntro: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const tagIn = spring({ frame, fps, delay: 28, config: LIQUID });
-  const breathe = Math.sin(frame / 30) * 1.5;            // ambient micro-motion after settle
+  const { u, safe } = useLayout();
+  const tagIn = springIn(frame, fps, 28, "LIQUID");
+  const driftY = ambientDrift(frame, 2, 90, "intro-hero-y"); // calm hold, never frozen
 
   const HERO = "Ship it.";
   // Each character gets its own spring with a 2-frame stagger — that snap-cadence IS kinetic.
 
   return (
     {/* Transparent foreground-only — the root <Background /> is painted once at the composition level. */}
-    <AbsoluteFill style={{ fontFamily: "'GT Walsheim', Inter, sans-serif" }}>
-      {/* Hero — top-left corner, ~26% of 1080p canvas height, character-by-character reveal */}
+    <AbsoluteFill style={{ fontFamily: BRAND.fonts.marketing }}>
+      {/* Hero — top-left corner, ~26% of the short edge, character-by-character reveal */}
       <div style={{
-        position: "absolute", left: "6%", top: "16%",
-        display: "flex",
-        fontSize: 280, fontWeight: 500, color: "#fff", lineHeight: 0.92, letterSpacing: "-0.04em",
+        position: "absolute", left: safe.left, top: "16%",
+        display: "flex", transform: \`translateY(\${driftY}px)\`,
+        fontFamily: BRAND.fonts.marketing, fontSize: 280 * u, fontWeight: 500, color: COLORS.text, lineHeight: 0.92, letterSpacing: "-0.04em",
       }}>
         {HERO.split("").map((ch, i) => {
-          const charIn = spring({ frame, fps, delay: 4 + i * 2, config: SNAPPY });
+          const charIn = springIn(frame, fps, TIMING.entrance + i * TIMING.staggerLetter, "SNAPPY");
           return (
             <span key={i} style={{
               display: "inline-block",
               opacity: charIn,
-              transform: \`translateY(\${interpolate(charIn, [0,1], [50, 0])}px) scale(\${interpolate(charIn, [0,1], [0.92, 1 + breathe * 0.002])})\`,
+              transform: \`translateY(\${interpolate(charIn, [0, 1], [50 * u, 0])}px) scale(\${interpolate(charIn, [0, 1], [0.92, 1])})\`,
               whiteSpace: "pre",
             }}>
               {ch}
@@ -435,10 +470,10 @@ const KineticIntro: React.FC = () => {
 
       {/* Monospace caption — opposite corner, the "kinetic" pairing pattern */}
       <div style={{
-        position: "absolute", left: "6.5%", bottom: "16%",
+        position: "absolute", left: safe.left, bottom: "16%",
         opacity: tagIn,
-        transform: \`translateY(\${interpolate(tagIn, [0,1], [20, 0])}px)\`,
-        fontFamily: "monospace", fontSize: 28, color: "rgba(255,255,255,0.55)", letterSpacing: "0.08em",
+        transform: \`translateY(\${interpolate(tagIn, [0, 1], [20 * u, 0])}px)\`,
+        fontFamily: "monospace", fontSize: 28 * u, color: COLORS.textSubtle, letterSpacing: "0.08em",
       }}>
         v2.1 / launching now
       </div>
@@ -453,37 +488,38 @@ const KineticIntro: React.FC = () => {
 const EditorialCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const titleIn = spring({ frame, fps, delay: 8, config: LIQUID });
-  const bodyIn  = spring({ frame, fps, delay: 24, config: LIQUID });
-  const labelIn = spring({ frame, fps, delay: 38, config: GENTLE });
-  const bgDrift = frame * 0.08;  // parallax background
+  const { u, pick } = useLayout();
+  const titleIn = springIn(frame, fps, 8, "LIQUID");
+  const bodyIn  = springIn(frame, fps, 24, "LIQUID");
+  const labelIn = springIn(frame, fps, 38, "GENTLE");
+  const blobDrift = ambientDrift(frame, 24, 240, "editorial-blob"); // slow parallax behind the content
 
   return (
     {/* Transparent foreground-only — root <Background /> is painted once at the composition level. */}
-    <AbsoluteFill style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* Foreground drifting accent shape (a blurred blob is fine — it's not a background fill) */}
+    <AbsoluteFill style={{ fontFamily: BRAND.fonts.primary }}>
+      {/* Decorative shape BEHIND the content — a static blur is fine; it never animates and never touches text */}
       <div style={{
-        position: "absolute", right: "-15%", top: \`calc(20% + \${bgDrift}px)\`,
-        width: 600, height: 600, borderRadius: "50%",
+        position: "absolute", right: "-15%", top: \`calc(20% + \${blobDrift}px)\`,
+        width: 600 * u, height: 600 * u, borderRadius: "50%",
         background: \`radial-gradient(closest-side, \${COLORS.card}, transparent)\`,
-        filter: "blur(24px)", opacity: 0.7,
+        filter: \`blur(\${24 * u}px)\`,
       }} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", padding: "10% 8%", gap: 40, height: "100%", alignContent: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: pick({ horizontal: "1fr 1fr 1fr 1fr", vertical: "1fr" }), padding: "10% 8%", gap: 40 * u, height: "100%", alignContent: "start" }}>
         {/* Label spans col 1 */}
         <div style={{
-          gridColumn: "1 / 2", paddingTop: 16,
+          gridColumn: pick({ horizontal: "1 / 2", vertical: "1 / -1" }), paddingTop: 16 * u,
           opacity: labelIn,
-          transform: \`translateY(\${interpolate(labelIn, [0,1], [12, 0])}px)\`,
-          fontFamily: "monospace", fontSize: 22, color: "rgba(255,255,255,0.45)", letterSpacing: "0.18em", textTransform: "uppercase",
+          transform: \`translateY(\${interpolate(labelIn, [0, 1], [12 * u, 0])}px)\`,
+          fontFamily: "monospace", fontSize: 22 * u, color: COLORS.textSubtle, letterSpacing: "0.18em", textTransform: "uppercase",
         }}>
           01 / chapter
         </div>
-        {/* Serif title spans col 2-4 */}
+        {/* Title spans col 2-4 */}
         <div style={{
-          gridColumn: "2 / 5",
+          gridColumn: pick({ horizontal: "2 / 5", vertical: "1 / -1" }),
           opacity: titleIn,
-          transform: \`translateY(\${interpolate(titleIn, [0,1], [16, 0])}px)\`,
-          fontFamily: "'Times New Roman', serif", fontSize: 168, fontWeight: 500, color: "#fff", lineHeight: 1.02, letterSpacing: "-0.01em",
+          transform: \`translateY(\${interpolate(titleIn, [0, 1], [16 * u, 0])}px)\`,
+          fontFamily: BRAND.fonts.marketing, fontSize: 96 * u, fontWeight: 500, color: COLORS.text, lineHeight: 1.02, letterSpacing: "-0.01em",
         }}>
           On building things
           <br />
@@ -491,11 +527,11 @@ const EditorialCard: React.FC = () => {
         </div>
         {/* Body paragraph spans col 2-3, leaving col 4 empty */}
         <div style={{
-          gridColumn: "2 / 4", marginTop: 60,
+          gridColumn: pick({ horizontal: "2 / 4", vertical: "1 / -1" }), marginTop: 60 * u,
           opacity: bodyIn,
-          transform: \`translateY(\${interpolate(bodyIn, [0,1], [12, 0])}px)\`,
-          fontSize: 32, lineHeight: 1.55, color: "rgba(255,255,255,0.7)", maxWidth: "85%",
-          borderLeft: \`3px solid \${COLORS.orange}\`, paddingLeft: 32,
+          transform: \`translateY(\${interpolate(bodyIn, [0, 1], [12 * u, 0])}px)\`,
+          fontFamily: BRAND.fonts.primary, fontSize: 32 * u, lineHeight: 1.55, color: COLORS.textMuted, maxWidth: "85%",
+          borderLeft: \`\${3 * u}px solid \${COLORS.orange}\`, paddingLeft: 32 * u,
         }}>
           Restraint is a feature. The space around the thing matters as much as the thing itself.
         </div>
@@ -528,7 +564,7 @@ const WeekCard: React.FC<{
 }> = ({ week, index, delay }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const progress = spring({ frame, fps, delay, config: LIQUID });
+  const progress = springIn(frame, fps, delay, "LIQUID");
   // ...
 };
 \`\`\`
@@ -547,15 +583,15 @@ Map over the data in the scene, passing staggered delays:
 
 ### Cards / Containers
 
-Use an OPAQUE fill — \`COLORS.card\` — NEVER \`COLORS.bg\` and NEVER a low-alpha \`rgba(255,255,255,0.0x)\` (those go see-through when the animation is overlaid on video). Vary the radius and stroke per scene; don't hardcode the same look everywhere.
+Use an OPAQUE fill — \`COLORS.card\` — NEVER \`COLORS.bg\` and NEVER a low-alpha \`rgba(255,255,255,0.0x)\` (those go see-through when the animation is overlaid on video). This is THE card recipe everywhere in this prompt; keep one radius per video (14 for cards, up to 24 for a big hero panel). A soft shadow is optional — it barely shows on the brand black, but helps when the animation is laid over footage. No glossy or glassy surfaces.
 
 \`\`\`tsx
 {
   backgroundColor: COLORS.card,        // opaque — reads solid over any footage
-  borderRadius: 28,
-  border: \`0.5px solid \${COLORS.border}\`,
-  padding: "36px 40px",
-  boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
+  borderRadius: 14 * u,
+  border: \`\${1 * u}px solid \${COLORS.border}\`,
+  padding: \`\${36 * u}px \${40 * u}px\`,
+  boxShadow: "0 24px 64px rgba(0,0,0,0.4)", // optional
 }
 \`\`\`
 
@@ -893,10 +929,11 @@ function CursorOverlay({ frame }) {
 Reference all images via \`staticFile()\`:
 
 \`\`\`
-staticFile("assets/backgrounds/Back_Dark.png")
 staticFile("assets/logos/SomeLogo.png")
 staticFile("assets/other/world.svg")
 \`\`\`
+
+(Not for the background — that is the flat \`COLORS.bg\` fill above.)
 
 Use \`<Img>\` from Remotion (not \`<img>\`) for all images.
 
@@ -904,10 +941,11 @@ Use \`<Img>\` from Remotion (not \`<img>\`) for all images.
 
 ## Main Composition (TransitionSeries)
 
-The composition has TWO layers, in order:
+The composition has these layers, in order:
 
 1. **The background — painted ONCE, and it never moves.** Render a single \`<Background />\` at the root, behind everything. This is the persistent "world": it never resets, never dissolves, never blinks between scenes, and it is NEVER inside a camera/zoom transform. (On transparent/alpha exports it is automatically stripped — leave it in; do NOT make it conditional.)
 2. **The content** — a plain \`<AbsoluteFill>\` holding a \`<TransitionSeries>\` of TRANSPARENT, foreground-only scenes. Because the world is already painted, a transition only ever swaps the FOREGROUND — that's what stops scene changes looking like a slideshow.
+3. **The carry layer (only when the shot list needs one)** — a \`<CarryLayer />\` AFTER the content layer, for anything that must keep moving ACROSS a scene boundary: a card that becomes the next screen, a cursor, a counter, a persistent label or player bar. It reads the ROOT frame (\`useCurrentFrame()\` at the composition top level, passed in as a prop) and moves with \`track()\`, so no boundary can reset it. Same rules as any foreground element: opaque fills, never named \`Background\`, never a full-frame fill. The scene that "receives" a carried element leaves its spot empty until the element has landed and handed over.
 
 **No camera move by default.** Only if the user explicitly asks for a zoom / push-in / camera move, put \`cameraDrift(useCurrentFrame(), durationInFrames)\` on the CONTENT \`<AbsoluteFill>\` (the one holding the \`TransitionSeries\`) — never on the background, never on the root. Call \`useCurrentFrame()\` at the composition's TOP LEVEL so the move reads the ROOT frame and never resets at a scene boundary. Pass a gentle \`zoom\` the user asked for (e.g. \`{ zoom: 0.05 }\`); \`{ zoom: 0 }\` with a pan is a pan only.
 
@@ -916,6 +954,7 @@ The transition PRESENTATION and the \`TRANSITION\` value depend on this project'
 \`\`\`tsx
 const MainComposition: React.FC = () => {
   const { fps, durationInFrames } = useVideoConfig();
+  const rootFrame = useCurrentFrame(); // the ROOT frame — never resets at a scene boundary
 
   return (
     <AbsoluteFill>
@@ -923,7 +962,7 @@ const MainComposition: React.FC = () => {
       <Background />
 
       {/* The content layer. NO transform by default. Only if the user asked for a zoom/camera move:
-          style={{ transform: cameraDrift(useCurrentFrame(), durationInFrames).transform, transformOrigin: "50% 50%" }} */}
+          style={{ transform: cameraDrift(rootFrame, durationInFrames).transform, transformOrigin: "50% 50%" }} */}
       <AbsoluteFill>
       {/* Foreground scenes only — transparent, no per-scene background. */}
       <TransitionSeries>
@@ -948,6 +987,9 @@ const MainComposition: React.FC = () => {
         </TransitionSeries.Sequence>
       </TransitionSeries>
       </AbsoluteFill>
+
+      {/* Optional: elements that travel across scene boundaries, on the ROOT frame. */}
+      {/* <CarryLayer frame={rootFrame} /> */}
     </AbsoluteFill>
   );
 };
@@ -974,25 +1016,18 @@ Set the exported \`durationInFrames\` to match this total.
 
 ---
 
-## Scene Duration Guidelines
+## Scene Durations
 
-Choose scene durations based on content complexity (at ${fps} fps):
-
-| Scene Type | Frame Range | Seconds |
-|---|---|---|
-| Simple (title + one element) | ${Math.round(125 * fps / 25)}–${Math.round(175 * fps / 25)} | 5–7s |
-| Medium (title + animated list/chart) | ${Math.round(275 * fps / 25)}–${Math.round(350 * fps / 25)} | 11–14s |
-| Complex (multi-phase, map, pipeline) | ${Math.round(400 * fps / 25)}–${Math.round(500 * fps / 25)} | 16–20s |
+Scene length follows the shot list and the PACING rules at the top — not a fixed table. At ${fps} fps and 120 BPM a beat is ${Math.round(fps / 2)} frames and a bar ${fps * 2} frames, so a promo scene is typically ${fps * 2}–${fps * 6} frames (2–6 s, one to three ideas). Explainer and reading-heavy scenes run longer, up to 4–5 s per idea.
 
 ### Timing Animation Delays Within a Scene
 
-- Title enters first: delay 5
-- Primary content: delay 20–50
-- Staggered items: delay base + i * 10–15
-- Secondary content / callouts: delay at 50–70% of scene duration
-- Final badge / insight: delay at 60–80% of scene duration
+- The hero is already arriving on the scene's first frames (\`TIMING.entrance\`).
+- Primary content lands on the next beat or two; each further element lands on a following beat (\`at(n)\` from the beat grid), not at a percentage of the scene.
+- Staggered items: \`TIMING.staggerItem\` apart, or one per beat when they should read one by one.
+- Every new element is a new idea for the viewer — if the scene still has time left after its last element lands, it is either a deliberate read-and-hold or the scene is too long.
 
-After the primary reveal phase, transition into a slow ambient state — never a static freeze. Every visible element should have at least one of: a 1–2px breathing translate, a 0.3° rotation drift, a 0.02 opacity oscillation, or a slow parallax. Use \`Math.sin(frame / 25–50)\` for ambient cycles, or a GENTLE spring for continuous easing. Hold time is content, not pause.
+After the primary reveal phase, the scene holds in a calm ambient state — never a static freeze, never restless. Every visible element keeps a 1–2px \`ambientDrift\` (perlin, unique seed) or a slow parallax. Never oscillate opacity on a card or text (opacity below 1 makes it see-through over footage).
 
 ---
 
@@ -1000,7 +1035,7 @@ After the primary reveal phase, transition into a slow ambient state — never a
 
 - Canvas: ${width}×${height}
 - FPS: ${fps}
-- Font sizes are calibrated for 4K (3840×2160) — titles: 64–72px, body: 36–48px, labels: 22–28px
+- Size everything with \`u\` (see ONE SCENE, EVERY SHAPE): headline ~86–130 × u (the kinetic style goes far bigger), body 32–48 × u, labels 22–28 × u.
 
 ---
 
@@ -1020,20 +1055,21 @@ When the user's message includes \`[SCENE ERROR: ...]\`, the current code has a 
 
 ## Checklist Before Outputting Code
 
+0. A new video or redesign opens with its SHOT LIST comment (beat grid, one line per shot, a handoff for every scene change), and the code delivers it; every fact and number on screen came from the brief
 1. Single file with all scenes and composition
 2. \`fps\` and \`durationInFrames\` exported
 3. \`COLORS\` object defined; \`SPRINGS\` / \`TIMING\` / \`springIn\` / \`ambientDrift\` IMPORTED from \`"../motion"\` (NOT redefined)
 4. ONE \`Background\` rendered at the composition root (outside any camera transform — the background never zooms); scenes are TRANSPARENT with no \`backgroundColor\` and no per-scene \`<Background />\`
 5. At least TWO different spring presets used in the file — never single-preset across all elements
-6. Every reveal combines 2–3 transforms (opacity + translate + scale/rotate — never an animated blur) — or uses \`compoundReveal\`
+6. Every reveal combines 2–3 transforms (opacity + translate, plus scale/rotate where the style allows — never an animated blur) — or uses \`compoundReveal\`
 7. At least one scene uses off-center / asymmetric layout (NOT alignItems+justifyContent:center)
-8. Every visible element has \`ambientDrift\` (perlin noise, unique seed) during hold phases
+8. Every visible element has \`ambientDrift\` (perlin noise, unique seed) during hold phases — calm, not frozen
 9. Cards/panels/pills on the backdrop use OPAQUE \`COLORS.card\`, NEVER \`COLORS.bg\` and NEVER a low-alpha rgba (low-alpha only for children inside an opaque card)
-10. Backgrounds use gradients (radial/linear) or layered elements, not flat solids
+10. The root \`Background\` is the flat \`COLORS.bg\` fill; depth comes from foreground layering, never a scene background, gradient wash or vignette
 11. Staggered delays — \`TIMING.staggerLetter\` (≈2) for letters, \`TIMING.staggerItem\` (≈12) for cards, \`TIMING.staggerLong\` (≈18) for major phases
 12. Data arrays defined as constants, mapped with sub-components and \`staggeredSpring\`
 13. All styles are inline
-14. Root \`<Background />\` (never transformed) → content \`<AbsoluteFill>\` → \`TransitionSeries\` of transparent scenes; NO \`cameraDrift\`/zoom unless the user asked (then on the content layer only); the per-boundary presentation + \`TRANSITION\` match this project's transition style (cut/blend/camera, see Transitions); NO \`sceneExit\`/recede, NEVER slide/wipe/clock-wipe/flip, NO BlackScreen bookends, NO fade-in/out from/to black
+14. Root \`<Background />\` (never transformed) → content \`<AbsoluteFill>\` → \`TransitionSeries\` of transparent scenes (→ optional \`CarryLayer\` on the root frame); NO \`cameraDrift\`/zoom unless the user asked (then on the content layer only); the per-boundary presentation + \`TRANSITION\` match this project's transition style (cut/blend/camera, see Transitions); NO \`sceneExit\`/recede, no snippet \`inOutEnvelope\` exit (\`exitFrames: 0\`), NEVER slide/wipe/clock-wipe/flip, NO BlackScreen bookends, NO fade-in/out from/to black
 15. \`durationInFrames\` matches the actual total
 16. All images use \`<Img>\` + \`staticFile()\`
 17. No external CSS, no styled-components, no class names

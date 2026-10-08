@@ -32,6 +32,7 @@ canvas but turns washed-out / see-through over real footage. So:
 Opaque card recipe:
 
 \`\`\`tsx
-{ backgroundColor: COLORS.card, border: \`1px solid \${COLORS.border}\`, borderRadius: 24, boxShadow: "0 24px 64px rgba(0,0,0,0.4)" }
+{ backgroundColor: COLORS.card, border: \`1px solid \${COLORS.border}\`, borderRadius: 14 * u, boxShadow: "0 24px 64px rgba(0,0,0,0.4)" /* optional */ }
 \`\`\`
+(The same card recipe as everywhere else: radius 14, up to 24 for one big hero panel.)
 `;
