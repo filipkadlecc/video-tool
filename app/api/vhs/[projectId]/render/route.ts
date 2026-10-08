@@ -8,11 +8,8 @@ import { normalizeTapeQuotes } from "@/lib/tape-parser";
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
 // `||` and not `??`: copying .env.example leaves VHS_BIN an empty string, which
-// spawn rejects synchronously. Prefer the pinned 0.11.0 that postinstall puts in
-// .tools over whatever is on PATH, since Homebrew's 0.12.0 never encodes.
-const PINNED_VHS = path.join(process.cwd(), ".tools", process.platform === "win32" ? "vhs.exe" : "vhs");
-const VHS_BIN =
-  process.env.VHS_BIN || (fs.existsSync(PINNED_VHS) ? PINNED_VHS : "vhs");
+// spawn rejects synchronously.
+const VHS_BIN = process.env.VHS_BIN || "vhs";
 
 export async function POST(
   request: NextRequest,
@@ -76,7 +73,7 @@ export async function POST(
         // ordinary progress output as the "error".
         const error =
           code === 0
-            ? `vhs finished without writing out.mp4. Known VHS 0.12.0 regression (charmbracelet/vhs#787): the encode step never runs. Install vhs 0.11.0 and point VHS_BIN at it.\n\n${stdout}${stderr}`
+            ? `vhs finished without writing out.mp4. Known VHS 0.12.0 regression (charmbracelet/vhs#787): the encode step never runs. 0.12.1 fixes it (brew upgrade vhs).\n\n${stdout}${stderr}`
             : stderr || stdout || `vhs exited with code ${code}`;
         resolve(NextResponse.json({ ok: false, error }, { status: 500 }));
         return;

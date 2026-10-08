@@ -14,9 +14,9 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
-Needs `ffmpeg` and `ffprobe` on PATH, plus `ttyd` for terminal projects. Transcription
-and auto-reframe additionally want a local Whisper install and OpenCV; both degrade
-gracefully when missing.
+Needs `ffmpeg` and `ffprobe` on PATH, plus `vhs` and `ttyd` for terminal projects.
+Transcription and auto-reframe additionally want a local Whisper install and OpenCV;
+both degrade gracefully when missing.
 
 API keys go in `.env.local` (not committed).
 
@@ -33,24 +33,14 @@ carries, so treat a tape as code rather than as a script prop. `next dev` also b
 every interface by default, which puts that endpoint in reach of the local network;
 bind it to `127.0.0.1` on a network you do not trust.
 
-### VHS is pinned to 0.11.0
+### VHS version
 
-Terminal renders shell out to [VHS](https://github.com/charmbracelet/vhs). Homebrew
-ships 0.12.0, which runs the whole tape, prints `Creating out.mp4...`, then skips the
-ffmpeg encode and exits 0 without writing a file
-([charmbracelet/vhs#787](https://github.com/charmbracelet/vhs/issues/787)).
-
-So `npm install` runs `scripts/install-vhs.mjs`, which downloads the 0.11.0 build for
-your platform into `.tools/` (gitignored, 22 MB, platform specific). Any Homebrew `vhs`
-on PATH is left alone. The render route picks `VHS_BIN`, then `.tools/vhs`, then PATH.
-
-```bash
-node scripts/install-vhs.mjs --force   # re-download
-SKIP_VHS_INSTALL=1 npm install         # skip it
-```
-
-A failed download only warns, it never fails the install. Once upstream fixes the
-regression, drop the postinstall hook and the `.tools` lookup in the route.
+Terminal renders shell out to [VHS](https://github.com/charmbracelet/vhs). Avoid
+0.12.0: it runs the whole tape, prints `Creating out.mp4...`, then skips the ffmpeg
+encode and exits 0 without writing a file
+([charmbracelet/vhs#787](https://github.com/charmbracelet/vhs/issues/787)). 0.11.0 and
+0.12.1+ both work, so `brew upgrade vhs` is enough. To run a specific build, point
+`VHS_BIN` in `.env.local` at it.
 
 ## Tests
 

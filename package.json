@@ -1,6 +1,6 @@
 {
   "name": "video-tool",
-  "version": "0.1.176",
+  "version": "0.1.177",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -16,8 +16,7 @@
     "test:agent": "tsx scripts/test-editor-agent.ts",
     "test:render": "tsx scripts/test-editor-render.ts",
     "test:figma": "tsx scripts/figma-diff.ts",
-    "test:progress": "tsx scripts/test-render-progress.ts",
-    "postinstall": "node scripts/install-vhs.mjs"
+    "test:progress": "tsx scripts/test-render-progress.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
