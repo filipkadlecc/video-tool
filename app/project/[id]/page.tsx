@@ -158,6 +158,13 @@ export default function ProjectEditor() {
   const [docMedia, setDocMedia] = useState<{ name: string; path: string; type: string }[]>([]);
   const [docMediaDurations, setDocMediaDurations] = useState<Record<string, number>>({});
   const lastSavedDocRef = useRef<string>("");
+
+  /**
+   * When the timeline last refreshed the project card's thumbnail. Each refresh
+   * spawns a headless Remotion still, so it cannot ride the autosave directly —
+   * this throttles it to one render a minute.
+   */
+  const lastThumbRef = useRef<number>(0);
   // Which editor is on screen for a project that HAS a document. Purely a view
   // toggle — switching back to code destroys nothing, so trying the editor is
   // never a one-way door.
@@ -496,6 +503,16 @@ export default function ProjectEditor() {
         lastSavedDocRef.current = docKey;
         setSaveState("saved");
         setSavedCount((n) => n + 1);
+
+        // A timeline project never runs AI generation, so the only other
+        // thumbnail trigger (handleGenerationComplete) never fires for it and
+        // its card sits on "No preview" forever. Refresh from here instead.
+        // Throttled, because each one spawns a headless Remotion still, and
+        // fire-and-forget: a card picture is never worth blocking a save on.
+        if (doc && Date.now() - lastThumbRef.current > 60_000) {
+          lastThumbRef.current = Date.now();
+          fetch(`/api/projects/${projectId}/thumbnail`, { method: "POST" }).catch(() => {});
+        }
       } catch {
         // Left visible rather than silent: a save that failed used to still
         // read as "SAVED", which is the worst possible thing for this badge.

@@ -749,6 +749,12 @@ export async function renderThumbnail(
           outputPath,
           "--frame",
           String(frame),
+          // This still is only ever shown as a project card — a 16:9 tile a few
+          // hundred pixels wide. Rendered at full project size a 4K timeline
+          // produced a 5.5MB PNG per card, so the workspace pulled megabytes per
+          // project just to draw thumbnails. 640px long edge is ~345KB.
+          "--scale",
+          String(Math.min(1, 640 / Math.max(1, width))),
           "--public-dir",
           leanPublicDir(),
         ],
