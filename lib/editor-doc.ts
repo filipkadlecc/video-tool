@@ -1378,6 +1378,28 @@ export function trackWithRoomAt(
 }
 
 /**
+ * A track for something that has to be SEEN over everything else, like
+ * subtitles: the lowest one above every track busy in the range, adding a track
+ * on top if there is none.
+ *
+ * `trackWithRoomAt` takes the first free track from the bottom, and later tracks
+ * render in front, so a free track under the footage would hide what lands on
+ * it. Tracks holding only audio are skipped; they draw nothing to sit on.
+ */
+export function trackAboveAt(
+  doc: EditorDoc,
+  from: number,
+  duration: number,
+): { doc: EditorDoc; trackId: string } {
+  const top = doc.tracks.reduce((hi, t, i) => (hasRoomAt(t, from, duration) ? hi : i), -1);
+  const audioOnly = (t: Track) => t.items.length > 0 && t.items.every((i) => i.type === "audio");
+  const above = doc.tracks.slice(top + 1).find((t) => !audioOnly(t));
+  if (above) return { doc, trackId: above.id };
+  const grown = addTrack(doc);
+  return { doc: grown, trackId: grown.tracks[grown.tracks.length - 1].id };
+}
+
+/**
  * Nearest target within a threshold, or the frame unchanged.
  *
  * Moved here from the retired code timeline, which is where it used to live —

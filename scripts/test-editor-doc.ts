@@ -24,13 +24,13 @@ import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
 import { sceneMeta } from "../lib/scene-eval";
 import { getProjectSize, type ProjectSettings } from "../lib/types";
-import { captionItem } from "../lib/captions-preset";
+import { captionItem, placeCaptions } from "../lib/captions-preset";
 import {
   addAsset, addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, isValidDoc,
   relinkAsset, resizeDoc, retimeDoc,
   makeId, moveItem, removeItem, reorderTrack, rippleRemoveItem, setLayout,
   captionPageAt, cloneItem, duplicateItem, moveItemToTrack, paginateCaptions,
-  hasRoomAt, resizeLayout, snapBox, splitItem, trackWithRoomAt, trimItem, updateItem,
+  hasRoomAt, resizeLayout, snapBox, splitItem, trackAboveAt, trackWithRoomAt, trimItem, updateItem,
   fitSceneItem, retimeSceneCode, sceneFit,
   type Asset, type CaptionToken, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
   migrateDoc, EDITOR_DOC_VERSION, setItemKey, evenSpacing, evenSpacingGap, sameDuration, pasteEffects, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
@@ -1353,10 +1353,130 @@ head("captions land inside the platform safe area on a vertical canvas");
   a(k4.layout.y === v.layout.y * 2 && k4.style.fontSize === v.style.fontSize * 2,
     "and it scales with the canvas rather than being pinned to 1080");
 
-  // Landscape is untouched.
+  // Landscape takes the same kit, scaled off the SHORT edge: a 1080p landscape
+  // subtitle is the same physical size as a vertical one, centred near the bottom.
   const h = captionItem({ width: 1920, height: 1080 }, 0, 25, tokens, 1.1);
-  a(h.style.fontFamily.includes("Inter"), "a landscape document keeps the caption style it always had");
-  a(h.maxWordsPerPage === 6, "including its paging");
+  a(h.style.fontFamily.includes("GT Walsheim"), "landscape captions use the brand face too");
+  a(h.style.fontSize === v.style.fontSize && h.layout.width === v.layout.width,
+    "at the same size as vertical, not the same fraction of a wider frame");
+  a(h.layout.x * 2 + h.layout.width === 1920, "centred");
+  a(h.layout.y > 1080 / 2 && h.layout.y + h.layout.height <= 1080, "in the lower half, inside the frame");
+  a(h.maxWordsPerPage === v.maxWordsPerPage, "paged the same way");
+}
+
+head("captions line up with the clips cut from their file");
+{
+  // 20 words, the first after 1.7s of room tone, one every half second.
+  const tokens: CaptionToken[] = Array.from({ length: 20 }, (_, i) => ({
+    text: `w${i}`, startSec: 1.7 + i * 0.5, endSec: 1.7 + i * 0.5 + 0.4,
+  }));
+  const footage = (): EditorDoc => {
+    const doc = base();
+    return addItem(doc, t0(doc), clip("c", 0, 360, { sourceIn: 0, sourceOut: 12 }));
+  };
+  const land = (doc: EditorDoc, src = asset.src, playhead = 999) => {
+    const p = placeCaptions(doc, src, tokens, FPS, playhead);
+    if (!p) return null;
+    const item = captionItem(doc.size, p.from, FPS, p.tokens, p.spanSec) as EditorItem;
+    const out = addItem(p.doc, p.trackId, item);
+    const at = out.tracks.findIndex((t) => t.items.some((i) => i.id === item.id));
+    return { p, out, at, placedFrom: findItem(out, item.id)!.item.from };
+  };
+
+  // The usual footage project: one track, nothing else on it.
+  {
+    const r = land(footage())!;
+    a(r.p.from === 0, `the layer starts with the clip, not at the playhead (got ${r.p.from})`);
+    a(r.placedFrom === 0,
+      `and stays there: it is not pushed past the footage on its own track (landed at ${r.placedFrom})`);
+    a(r.at === 1 && r.out.tracks.length === 2, "it gets a new track above the footage");
+    a(Math.abs(r.p.tokens[0].startSec - 1.7) <= 1 / FPS,
+      `room tone is kept: the first word lands 1.7s in, not at 0 (got ${r.p.tokens[0].startSec.toFixed(3)})`);
+    a(r.p.tokens.length === 20, "every word");
+  }
+
+  // Split six times, with a word straddling every cut: still exactly the transcript.
+  {
+    let doc = footage();
+    for (const at of [40, 81, 152, 200, 231, 300]) {
+      const holder = doc.tracks[0].items.find((i) => i.from < at && i.from + i.durationInFrames > at)!;
+      doc = splitItem(doc, holder.id, at, FPS);
+    }
+    a(doc.tracks[0].items.length === 7, "seven clips");
+    const r = land(doc)!;
+    const texts = r.p.tokens.map((t) => t.text).join(" ");
+    a(texts === tokens.map((t) => t.text).join(" "),
+      `all 20 words, in order, none doubled at a cut (got ${r.p.tokens.length})`);
+    // The clips are back to back with no trim, so timeline time IS source time:
+    // every word has to land on the frame its audio plays.
+    const drift = Math.max(...r.p.tokens.map((t, i) =>
+      Math.abs((r.placedFrom + t.startSec * FPS) - tokens[i].startSec * FPS)));
+    a(drift <= 1, `every word on the frame its audio plays (worst drift ${drift.toFixed(2)} frames)`);
+    a(r.placedFrom === 40 && r.at === 1,
+      `the layer starts at the first clip with speech, on the new track (from ${r.placedFrom}, track ${r.at})`);
+  }
+
+  // A real stutter that Whisper butts together with no gap is two words, not one.
+  {
+    const stutter: CaptionToken[] = [
+      { text: "I", startSec: 1.0, endSec: 1.5 },
+      { text: "I", startSec: 1.5, endSec: 1.9 },
+      { text: "run", startSec: 2.0, endSec: 2.4 },
+    ];
+    const p = placeCaptions(footage(), asset.src, stutter, FPS, 0)!;
+    a(p.tokens.map((t) => t.text).join(" ") === "I I run", `a gapless repeat stays two words (got "${p.tokens.map((t) => t.text).join(" ")}")`);
+
+    // Whisper can start two different words at the same instant ("the@55.9
+    // second@55.9" in a real Grok-Bot transcript). Both stay.
+    const sameStart: CaptionToken[] = [
+      { text: "the", startSec: 1.0, endSec: 1.04 },
+      { text: "second", startSec: 1.0, endSec: 1.4 },
+    ];
+    const q = placeCaptions(footage(), asset.src, sameStart, FPS, 0)!;
+    a(q.tokens.length === 2, "two words that share a start time are both kept");
+  }
+
+  // A free track UNDER the footage would hide the words behind it.
+  {
+    let doc = base();
+    doc = addTrack(doc);
+    doc = addItem(doc, doc.tracks[1].id, clip("c", 0, 360, { sourceIn: 0, sourceOut: 12 }));
+    const r = land(doc)!;
+    a(r.at === 2, `captions go above the footage, not on the empty track below it (track ${r.at})`);
+  }
+
+  // A graded clip plays a graded copy of the file and still gets its words.
+  {
+    let doc = addAsset(base(), { ...asset, id: "asset2", src: "/api/media/p/graded/a.mp4" });
+    doc = addItem(doc, t0(doc), clip("g", 0, 360, { assetId: "asset2", baseAssetId: "asset1", sourceIn: 0, sourceOut: 12 }));
+    const r = land(doc)!;
+    a(r.p.from === 0 && r.p.tokens.length === 20, "a graded clip is matched through the file it was graded from");
+  }
+
+  // The AI editor stores the URL percent-encoded; the timeline asks with the raw name.
+  {
+    let doc = emptyDoc(SIZE);
+    doc = addAsset(doc, { ...asset, src: "/api/media/p/My%20clip.mp4" });
+    doc = addItem(doc, t0(doc), clip("c", 0, 360, { sourceIn: 0, sourceOut: 12 }));
+    const r = land(doc, "/api/media/p/My clip.mp4")!;
+    a(r.p.from === 0, "a name with a space is found under either spelling");
+  }
+
+  // Not on the timeline yet: at the playhead, from the first word.
+  {
+    const r = land(base(), asset.src, 90)!;
+    a(r.p.from === 90 && r.p.tokens[0].startSec === 0, "a file with no clip lands at the playhead");
+  }
+
+  // Tracks that only hold audio draw nothing to sit on.
+  {
+    let doc = footage();
+    doc = addTrack(doc);
+    doc = addItem(doc, doc.tracks[1].id, { ...clip("m", 600, 90), type: "audio" } as unknown as EditorItem);
+    const host = trackAboveAt(doc, 0, 360);
+    a(host.doc.tracks.length === 3 && host.trackId === host.doc.tracks[2].id,
+      "an audio-only track is skipped for a fresh one on top");
+  }
 }
 
 head("nothing the app renders asks for a weight above Medium");
