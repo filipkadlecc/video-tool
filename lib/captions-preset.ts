@@ -11,8 +11,12 @@ import type { CaptionToken, CaptionsItem } from "./editor-doc";
  * below TikTok's safe edge at ~1280 and squarely behind its own caption bar.
  * Figma places them at y=1021, and that is what this uses.
  *
+ * Landscape now takes the same kit. It was the last thing still rendering in
+ * Inter at 5.8% of frame height, which is why a 16:9 cut looked nothing like
+ * the design while a 9:16 cut matched it.
+ *
  * Everything is expressed against the kit's 1080x1920 design frame and scaled,
- * so a 4K vertical document gets the same layout rather than the same pixels.
+ * so a 4K document gets the same layout rather than the same pixels.
  */
 export function captionItem(
   size: { width: number; height: number },
@@ -56,32 +60,43 @@ export function captionItem(
     };
   }
 
-  const height = Math.round(size.height * 0.22);
+  // Landscape gets the same kit, scaled off the SHORT edge.
+  //
+  // The kit is drawn on a 1080x1920 frame, so its short edge is 1080 — the same
+  // as a 1080p landscape frame's height. Scaling off height therefore gives a
+  // landscape subtitle the same physical size as a vertical one, rather than
+  // the same fraction of a much wider frame.
+  //
+  // What does NOT carry over is the y position. 1021 is where it sits to clear
+  // TikTok's UI; a landscape frame has no such bands, so these stay anchored
+  // near the bottom where a viewer expects subtitles.
+  const k = size.height / 1080;
+  const width = Math.round(624 * k);
+  const height = Math.round(138 * k);
   return {
     type: "captions" as const,
     id: makeId("captions"),
     from,
     durationInFrames,
     layout: {
-      x: Math.round(size.width * 0.08),
+      x: Math.round((size.width - width) / 2),
       y: Math.round(size.height - height - size.height * 0.08),
-      width: Math.round(size.width * 0.84),
+      width,
       height,
     },
     tokens,
     style: {
-      fontFamily: "Inter, sans-serif",
-      fontSize: Math.round(size.height * 0.058),
-      // Was 700. Nothing this app renders goes above 500 now, and captions sit
-      // over footage, so the legibility that came from Bold comes from the
-      // shadow instead — the same way the vertical treatment gets it.
-      fontWeight: 500,
-      color: "#F4F4F5",
+      fontFamily: "'GT Walsheim', Inter, sans-serif",
+      fontSize: Math.round(68.751 * k),
+      fontWeight: 400,
+      color: "#FFFFFF",
       align: "center" as const,
-      textShadow: `0px ${Math.round(size.height * 0.004)}px ${Math.round(size.height * 0.003)}px rgba(0,0,0,0.35)`,
+      lineHeight: 1,
+      textShadow: `0px ${Math.round(4 * k)}px ${Math.round(3 * k)}px rgba(0,0,0,0.25)`,
     },
     highlightColor: "#F86606",
     pageDurationMs: 1200,
-    maxWordsPerPage: 6,
+    // Same column width as vertical, so the same words fit on a line.
+    maxWordsPerPage: 5,
   };
 }

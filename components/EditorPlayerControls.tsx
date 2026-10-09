@@ -94,7 +94,13 @@ export default function EditorPlayerControls({
         style={{
           // WebKit has no ::-moz-range-progress equivalent, so the filled part
           // is painted as a gradient stop at the current position.
-          background: `linear-gradient(to right, var(--live) 0 ${progress}%, var(--border-hairline) ${progress}% 100%)`,
+          //
+          // `backgroundImage`, not the `background` shorthand: this value changes
+          // on every frame, and React warns when a shorthand is updated during
+          // rerender while conflicting longhands (the three below) are also set.
+          // That logged three console errors per playing frame. All-longhand
+          // keeps the paint identical and the console clean.
+          backgroundImage: `linear-gradient(to right, var(--live) 0 ${progress}%, var(--border-hairline) ${progress}% 100%)`,
           backgroundSize: "100% 3px",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
