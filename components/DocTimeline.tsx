@@ -15,9 +15,10 @@ import {
   addItem, addTrack, cloneItem, docDuration, duplicateItem, findItem, getAsset, hasRoomAt,
   makeId, moveItem, moveItemToTrack, removeItem, removeTrack, rippleRemoveItem,
   itemLabel, renameItem, sceneNumbers, snapTargets, splitItem, trackWithRoomAt, trimItem, updateItem,
-  type Asset, type EditorDoc, type EditorItem, type Track,
+  type Asset, type AudioItem, type EditorDoc, type EditorItem, type Track, type VideoItem,
 } from "@/lib/editor-doc";
 import { captionItem } from "@/lib/captions-preset";
+import { wordsForItem } from "@/lib/editor-transcript";
 
 /**
  * Timeline for a document-based project.
@@ -480,11 +481,84 @@ export default function DocTimeline({
       const { tokens } = (await res.json()) as { tokens: { text: string; startSec: number; endSec: number }[] };
       if (!tokens?.length) throw new Error("No speech found");
 
-      const base = tokens[0].startSec;
-      const rebased = tokens.map((t) => ({ ...t, startSec: t.startSec - base, endSec: t.endSec - base }));
-      const spanSec = rebased[rebased.length - 1].endSec;
-      const trackId = doc.tracks[doc.tracks.length - 1].id;
-      const item = captionItem(doc.size, currentFrame, fps, rebased, spanSec);
+      // Line the words up with the footage they came from.
+      //
+      // Transcript times are relative to the MEDIA FILE; a captions item stores
+      // times relative to ITSELF. Bridging those by subtracting the first word's
+      // start desyncs every caption by however long the speaker takes to begin —
+      // 1.6s of room tone at the top of a clip drags the whole layer 1.6s ahead
+      // of the audio. Anchoring to the clip instead makes a word at source time
+      // `ts` land on exactly the frame the footage plays it.
+      //
+      // Every clip cut from the file counts, not just the first. One source
+      // becomes many clips the moment anything is split or trimmed, and taking
+      // the first match alone captioned that clip's range and silently dropped
+      // every word after it: one split left the back half with no subtitles.
+      const src = `/api/media/${projectId}/${file.path}`;
+      const assetId = doc.assets.find((a) => a.src === src)?.id;
+      const clips = assetId
+        ? doc.tracks.flatMap((track) =>
+            track.items
+              .filter((i) => (i.type === "video" || i.type === "audio") && i.assetId === assetId)
+              .map((i) => ({ item: i as VideoItem | AudioItem, trackId: track.id })),
+          )
+        : [];
+
+      const words = tokens.map((t) => ({ text: t.text, start: t.startSec, end: t.endSec }));
+      const heard = clips
+        .map((c) => ({ ...c, timed: wordsForItem(c.item, words, fps) }))
+        .filter((c) => c.timed.length > 0);
+
+      let placed: { text: string; startSec: number; endSec: number }[];
+      let from: number;
+      let spanSec: number;
+      let trackId: string;
+
+      if (heard.length > 0) {
+        from = Math.min(...heard.map((c) => c.item.from));
+        const end = Math.max(...heard.map((c) => c.item.from + c.item.durationInFrames));
+        spanSec = Math.max(1 / fps, (end - from) / fps);
+
+        const spans = heard
+          .flatMap((c) => c.timed)
+          .map((w) => ({
+            text: w.text,
+            startSec: (w.fromFrame - from) / fps,
+            endSec: (w.toFrame - from) / fps,
+          }))
+          .sort((a, b) => a.startSec - b.startSec);
+
+        // Stitch a word back together across a cut. wordsForItem keeps a word
+        // that straddles an edge on BOTH sides and clamps it, which is right for
+        // finding silence but would caption the same word twice at every split.
+        // Only touching halves of one word merge: a genuine repeat has a gap.
+        const touching = 1 / fps + 1e-6;
+        placed = spans.reduce<typeof spans>((acc, w) => {
+          const prev = acc[acc.length - 1];
+          if (prev && prev.text === w.text && w.startSec - prev.endSec <= touching) {
+            prev.endSec = Math.max(prev.endSec, w.endSec);
+            return acc;
+          }
+          acc.push({ ...w });
+          return acc;
+        }, []);
+
+        // Keep the words off the track holding the footage.
+        const busy = new Set(heard.map((c) => c.trackId));
+        trackId = doc.tracks.find((t) => !busy.has(t.id))?.id ?? doc.tracks[doc.tracks.length - 1].id;
+      } else {
+        // Nothing from this file is on the timeline yet, so there is no clip to
+        // anchor to: fall back to the playhead, rebased off the first word.
+        const base = tokens[0].startSec;
+        placed = tokens.map((t) => ({ ...t, startSec: t.startSec - base, endSec: t.endSec - base }));
+        from = currentFrame;
+        spanSec = placed[placed.length - 1].endSec;
+        trackId = doc.tracks[doc.tracks.length - 1].id;
+      }
+
+      if (placed.length === 0) throw new Error("No speech inside this clip's trimmed range");
+
+      const item = captionItem(doc.size, from, fps, placed, spanSec);
       commit(addItem(doc, trackId, item as EditorItem));
       onSelectionChange(new Set([item.id]));
       setPickerOpen(false);
