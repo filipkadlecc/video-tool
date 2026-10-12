@@ -8,6 +8,7 @@ import Input from "@/components/ui/Input";
 import Select from "@/components/ui/Select";
 import Segmented from "@/components/ui/Segmented";
 import Tag from "@/components/ui/Tag";
+import Toggle from "@/components/ui/Toggle";
 import { timecode, needsHours } from "@/lib/timecode";
 import { formatBytes } from "@/lib/format";
 import { relinkAsset, resizeDoc, shapeOf, shapeSize, FRAME_SHAPES, type EditorDoc, type FrameShape } from "@/lib/editor-doc";
@@ -31,6 +32,32 @@ import { relinkAsset, resizeDoc, shapeOf, shapeSize, FRAME_SHAPES, type EditorDo
  */
 
 type Quality = "draft" | "standard" | "master";
+
+/** What the render job says it did to the sound (RenderJob["loudness"]). */
+type LoudnessResult =
+  | { before: number; after: number | null; truePeak: number | null; gainDb: number; heldBack: boolean; limited: boolean }
+  | { skipped: "no-audio" | "silent" | "off" | "unmeasured" };
+
+/** The export checks (/api/preflight), as the dialog shows them. */
+type Checks =
+  | { status: "running" }
+  | { status: "done"; lines: { kind: string; frame: number; text: string }[]; checked: { text: boolean; frames: boolean; sound: boolean; soundEffects: number }; notes: string[] }
+  | { status: "error" };
+
+/** One line about the sound, for the finished dialog — or null to say nothing. */
+function loudnessLine(l: LoudnessResult | undefined): string | null {
+  if (!l) return null;
+  if ("skipped" in l) {
+    if (l.skipped === "no-audio" || l.skipped === "silent") return "No sound in this video";
+    return null;
+  }
+  // A real minus sign, as the switch's "−14 LUFS" has; toFixed gives a hyphen.
+  const db = (v: number) => v.toFixed(1).replace("-", "−");
+  const after = l.after ?? l.before + l.gainDb;
+  const was = Math.abs(l.gainDb) >= 0.1 ? ` (was ${db(l.before)})` : "";
+  if (l.heldBack) return `Sound levelled to ${db(after)} LUFS${was} — held back so the loudest moments stay clean`;
+  return `Sound levelled to ${db(after)} LUFS${was}`;
+}
 type Status = "idle" | "queued" | "rendering" | "done" | "error";
 
 /** Lower is better. h264 only; the ProRes profiles carry their own quality. */
@@ -129,12 +156,18 @@ export default function ExportFlow({
   const [progress, setProgress] = useState(0);
   // Mirrors RenderJob["phase"]. A bare string would let a typo typecheck.
   const [phase, setPhase] = useState<"bundling" | "frames" | "encoding" | "converting" | null>(null);
+  /** What the finishing pass is doing ("Levelling the sound"), when it says. */
+  const [phaseNote, setPhaseNote] = useState<string | null>(null);
   const [encoded, setEncoded] = useState<{ done: number; total: number } | null>(null);
   // When the encode began, and how far the file already was by then.
   const [encodeStart, setEncodeStart] = useState<{ at: number; frames: number } | null>(null);
   const [frames, setFrames] = useState<{ done: number; total: number } | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [result, setResult] = useState<{ url: string; bytes?: number; ms?: number } | null>(null);
+  const [result, setResult] = useState<{ url: string; bytes?: number; ms?: number; loudness?: LoudnessResult } | null>(null);
+  // On by default: an mp4 is what gets posted, and the feeds play at −14 LUFS.
+  const [levelSound, setLevelSound] = useState(true);
+  const [checks, setChecks] = useState<Checks | null>(null);
+  const checksAbort = useRef<AbortController | null>(null);
   const [failure, setFailure] = useState<{ message: string; log?: string } | null>(null);
   const [showMissing, setShowMissing] = useState(false);
   const [missing, setMissing] = useState<MissingSource[]>([]);
@@ -206,6 +239,38 @@ export default function ExportFlow({
     return () => { cancelledCheck = true; };
   }, [open, doc, projectId]);
 
+  /*
+   * The checks, run as soon as the dialog opens, against exactly what would
+   * be exported (the shape picked included). They take seconds for a short
+   * piece and never block the Export button: a finding is a reason to look,
+   * not a gate. Starting the export, or closing the dialog, stops them — the
+   * render needs the CPU more than a report nobody is reading.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    checksAbort.current = controller;
+    setChecks({ status: "running" });
+    (async () => {
+      try {
+        const res = await fetch("/api/preflight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify(exportDoc ? { doc: exportDoc, projectId } : { code, durationInFrames, fps, width, height, projectId }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const j = await res.json();
+        if (!controller.signal.aborted) setChecks({ status: "done", lines: j.lines ?? [], checked: j.checked, notes: j.notes ?? [] });
+      } catch {
+        if (!controller.signal.aborted) setChecks({ status: "error" });
+      }
+    })();
+    return () => controller.abort();
+    // `code` is the legacy field; a document project re-checks when its document does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, exportDoc, projectId, width, height]);
+
   /** Whether anything in this composition is real footage — see BITS_PER_PIXEL. */
   const hasFootage = Boolean(doc?.tracks.some((t) => t.items.some((i) => i.type === "video")));
 
@@ -264,11 +329,13 @@ export default function ExportFlow({
   }, [missing, relink]);
 
   const start = useCallback(async () => {
+    checksAbort.current?.abort();
     setStatus("queued");
     setFailure(null);
     setResult(null);
     setFrames(null);
     setPhase(null);
+    setPhaseNote(null);
     setEncoded(null);
     setEncodeStart(null);
     try {
@@ -279,6 +346,7 @@ export default function ExportFlow({
           sceneId: fileName, code, durationInFrames, fps, width, height,
           codec: format, projectId,
           crf: format === "h264" ? CRF[quality] : undefined,
+          levelLoudness: format === "h264" ? levelSound : undefined,
           frameRange: useRange && hasRange ? [rangeIn, rangeOut - 1] : undefined,
           ...(exportDoc ? { doc: exportDoc } : {}),
         }),
@@ -301,6 +369,7 @@ export default function ExportFlow({
           // without it the dialog reads "45664 / 45664 frames, 100%" for the
           // ~20 minutes it spends writing a 30-minute 4K file.
           if (j.phase) setPhase(j.phase);
+          setPhaseNote(typeof j.phaseNote === "string" ? j.phaseNote : null);
           if (typeof j.encodedFrames === "number" && typeof j.encodedTotalFrames === "number") {
             setEncoded({ done: j.encodedFrames, total: j.encodedTotalFrames });
           }
@@ -310,7 +379,7 @@ export default function ExportFlow({
           if (typeof j.startedAt === "number") setStartedAt(j.startedAt);
           if (j.status === "done") {
             if (poll.current) window.clearInterval(poll.current);
-            setResult({ url: j.outputPath, bytes: j.bytes, ms: j.finishedAt && j.startedAt ? j.finishedAt - j.startedAt : undefined });
+            setResult({ url: j.outputPath, bytes: j.bytes, ms: j.finishedAt && j.startedAt ? j.finishedAt - j.startedAt : undefined, loudness: j.loudness });
             setStatus("done");
           } else if (j.status === "error") {
             if (poll.current) window.clearInterval(poll.current);
@@ -329,7 +398,7 @@ export default function ExportFlow({
       setFailure({ message: e instanceof Error ? e.message : "The render couldn't be started." });
       setStatus("error");
     }
-  }, [fileName, code, durationInFrames, fps, width, height, format, projectId, quality, useRange, hasRange, rangeIn, rangeOut, exportDoc]);
+  }, [fileName, code, durationInFrames, fps, width, height, format, projectId, quality, useRange, hasRange, rangeIn, rangeOut, exportDoc, levelSound]);
 
   const reset = () => {
     setStatus("idle"); setResult(null); setFailure(null); setProgress(0);
@@ -391,7 +460,7 @@ export default function ExportFlow({
     phase === "bundling" ? "Preparing" :
     phase === "frames" ? "Step 1 of 2 · Rendering frames" :
     phase === "encoding" ? "Step 2 of 2 · Writing the video file" :
-    phase === "converting" ? "Converting to the chosen format" :
+    phase === "converting" ? (phaseNote ?? "Converting to the chosen format") :
     null;
 
   const n = (v: number) => v.toLocaleString();
@@ -715,6 +784,11 @@ export default function ExportFlow({
               {timecode(exportFrames, fps, hours)}
               {result.ms ? ` · rendered in ${result.ms < 60000 ? `${Math.round(result.ms / 1000)}s` : `${Math.round(result.ms / 60000)}m`}` : ""}
             </div>
+            {loudnessLine(result.loudness) && (
+              <div className="t-caption" style={{ color: "var(--ink-secondary)", marginTop: 8 }}>
+                {loudnessLine(result.loudness)}
+              </div>
+            )}
           </div>
         </div>
       </Modal>
@@ -851,6 +925,20 @@ export default function ExportFlow({
           </div>
         </Field>
 
+        {format === "h264" && (
+          <Field label="Sound">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Toggle checked={levelSound} onChange={setLevelSound} label="Level the sound to −14 LUFS" />
+              <span className="t-control" style={{ color: levelSound ? "var(--ink-primary)" : "var(--ink-tertiary)" }}>
+                Level to −14 LUFS
+              </span>
+              <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                The loudness YouTube, Instagram and TikTok play at
+              </span>
+            </div>
+          </Field>
+        )}
+
         <Field label="Save to">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Input value={fileName} onChange={setFileName} suffix={`.${ext}`} />
@@ -860,6 +948,8 @@ export default function ExportFlow({
             {" "}downloads when it finishes
           </div>
         </Field>
+
+        <ChecksPanel checks={checks} />
 
         {missing.length > 0 && (
           <div
@@ -893,6 +983,75 @@ export default function ExportFlow({
         )}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * What the checks found, in the dialog's own words.
+ *
+ * Stated plainly and with the time of each problem, so it can be found on the
+ * timeline; never a blocker. "Nothing found" names what was looked for, and a
+ * check that didn't run (a long video's flash and sound checks) is said to
+ * have been skipped rather than counted as clean.
+ */
+function ChecksPanel({ checks }: { checks: Checks | null }) {
+  if (!checks) return null;
+  if (checks.status === "running") {
+    return (
+      <div className="t-caption" style={{ color: "var(--ink-tertiary)", display: "flex", alignItems: "center", gap: 8 }} aria-live="polite">
+        <Icon name="search" size={14} />
+        Checking every frame for cut-off text, flashes and sounds nobody will hear…
+      </div>
+    );
+  }
+  if (checks.status === "error") {
+    return (
+      <div className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+        The checks couldn&apos;t run this time. The export itself isn&apos;t affected.
+      </div>
+    );
+  }
+  const looked = [
+    checks.checked.text ? "cut-off or overlapping text" : null,
+    checks.checked.frames ? "flashes" : null,
+    checks.checked.sound ? (checks.checked.soundEffects ? "buried sound effects" : null) : null,
+  ].filter(Boolean).join(", ");
+  if (checks.lines.length === 0) {
+    return (
+      <div className="t-caption" style={{ color: "var(--ink-secondary)", display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <Icon name="check" size={14} style={{ color: "var(--ink-secondary)", flexShrink: 0, marginTop: 1 }} />
+        <span>
+          Checked every frame: no {looked || "problems"}.
+          {checks.notes.map((n) => <span key={n} style={{ color: "var(--ink-tertiary)" }}> {n}</span>)}
+        </span>
+      </div>
+    );
+  }
+  const shown = checks.lines.slice(0, 6);
+  return (
+    <div
+      style={{
+        display: "flex", gap: 10, padding: 12,
+        background: "var(--surface-raised)",
+        border: "1px solid var(--warning-tint-line)",
+        borderRadius: "var(--r-panel)",
+      }}
+    >
+      <Icon name="warn" size={16} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 1 }} />
+      <div style={{ minWidth: 0 }}>
+        <div className="t-body" style={{ color: "var(--ink-primary)" }}>
+          {checks.lines.length === 1 ? "One thing to look at before you export" : `${checks.lines.length} things to look at before you export`}
+        </div>
+        <ul className="t-caption" style={{ color: "var(--ink-secondary)", margin: "6px 0 0", paddingLeft: 16, lineHeight: 1.6 }}>
+          {shown.map((l, i) => <li key={`${l.frame}-${i}`}>{l.text}</li>)}
+          {checks.lines.length > shown.length && <li style={{ color: "var(--ink-tertiary)" }}>…and {checks.lines.length - shown.length} more</li>}
+        </ul>
+        <div className="t-caption" style={{ color: "var(--ink-tertiary)", marginTop: 6 }}>
+          Measured on every frame. Ignore any that are deliberate, or export anyway.
+          {checks.notes.map((n) => <span key={n}> {n}</span>)}
+        </div>
+      </div>
+    </div>
   );
 }
 

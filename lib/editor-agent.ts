@@ -83,6 +83,7 @@ import type { TranscriptWord } from "./transcribe";
 import { describeParams, settableKeys, type SnippetEntry } from "./snippet-catalog";
 import { renderSnippet } from "./snippet-template";
 import { sceneFramesAtFps, sceneMeta } from "./scene-eval";
+import { musicOutline, type BeatAnalysis } from "./beats-grid";
 
 /** Everything a tool may need that does not live in the document. */
 export interface AgentContext {
@@ -112,6 +113,11 @@ export interface AgentContext {
   snippets?: SnippetEntry[];
   playheadFrame?: number;
   selectedIds?: string[];
+  /**
+   * Measured beat of each music track, keyed by ASSET id (lib/beats.ts).
+   * Measured by the route; this module only reads it.
+   */
+  beats?: Record<string, BeatAnalysis>;
 }
 
 export interface ToolOutcome {
@@ -147,7 +153,7 @@ function animBit(item: EditorItem): string {
   return bits.length ? ` · ${bits.join(" ")}` : "";
 }
 
-function describeItem(doc: EditorDoc, item: EditorItem, fps: number, numbers: Map<string, number>): string {
+function describeItem(doc: EditorDoc, item: EditorItem, fps: number, numbers: Map<string, number>, ctx?: AgentContext): string {
   // The label is what the person sees on the timeline — "Scene 3", or a name
   // they gave it — so it is how they will refer to the block.
   const called = item.type === "text" && !item.name ? "" : ` "${short(itemLabel(doc, item, numbers), 40)}"`;
@@ -165,6 +171,11 @@ function describeItem(doc: EditorDoc, item: EditorItem, fps: number, numbers: Ma
       if (item.playbackRate && item.playbackRate !== 1) bits.push(`speed ${item.playbackRate}x`);
       if (item.fadeInFrames) bits.push(`fadeIn ${item.fadeInFrames}f`);
       if (item.fadeOutFrames) bits.push(`fadeOut ${item.fadeOutFrames}f`);
+      const beat = item.type === "audio" ? ctx?.beats?.[item.assetId] : undefined;
+      const music = beat
+        ? musicOutline(beat, { startFrame: item.from, durationInFrames: item.durationInFrames, sourceInSec: win.start, rate: item.playbackRate ?? 1 }, fps)
+        : null;
+      if (music) bits.push(music);
       break;
     }
     case "image":
@@ -250,7 +261,7 @@ export function describeDoc(doc: EditorDoc, ctx: AgentContext): string {
     );
     if (!track.items.length) lines.push("  (empty)");
     for (const item of [...track.items].sort((a, b) => a.from - b.from)) {
-      lines.push(describeItem(doc, item, fps, numbers));
+      lines.push(describeItem(doc, item, fps, numbers, ctx));
     }
   });
 

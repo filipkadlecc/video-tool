@@ -4,10 +4,13 @@ import os from "os";
 import path from "path";
 import PQueue from "p-queue";
 import { bundle } from "@remotion/bundler";
-import { selectComposition, renderStill, openBrowser } from "@remotion/renderer";
+import { selectComposition, renderStill, renderFrames, openBrowser, makeCancelSignal } from "@remotion/renderer";
 import sharp from "sharp";
 import { stripBackgroundsForTransparency } from "./transparent-bg";
 import { leanPublicDir, sweepStaleBundles } from "./remotion-bundle";
+import { analyzeFlashes, analyzeLayout, analyzeSounds, parseProbeLogs, placeSounds, probeComponentSource, SIG_H, SIG_W, type CheckReport } from "./scene-checks";
+import { loadPeakReader, soundFileFor } from "./sound-levels";
+import { gainFilter, hasAudioStream, measureLoudness, planGain, refinePlan, type GainPlan, type LoudnessMeasure } from "./loudness";
 
 const PROJECTS_DIR = path.join(process.cwd(), "data", "projects");
 
@@ -43,6 +46,8 @@ export interface RenderJob {
    * real progress; `lib/scene-detect.ts` already has that helper.
    */
   phase?: "bundling" | "frames" | "encoding" | "converting";
+  /** What the "converting" phase is doing right now, in words — it reports no frames. */
+  phaseNote?: string;
   /**
    * Frames written into the file so far, from the renderer's own "Encoded X/Y".
    *
@@ -78,6 +83,15 @@ export interface RenderJob {
    * possible, and pasting it into a bug report beats describing it.
    */
   log?: string;
+  /**
+   * What happened to the sound, measured on the finished file (mp4 only).
+   *
+   * `skipped` says why nothing was changed, so the dialog never implies a
+   * levelling pass ran on a file that has no sound to level.
+   */
+  loudness?:
+    | { before: number; after: number | null; truePeak: number | null; gainDb: number; heldBack: boolean; limited: boolean }
+    | { skipped: "no-audio" | "silent" | "off" | "unmeasured" };
 }
 
 export interface RenderOptions {
@@ -85,6 +99,8 @@ export interface RenderOptions {
   crf?: number;
   /** Inclusive frame range, for exporting in-to-out rather than the whole thing. */
   frameRange?: [number, number];
+  /** mp4 only: bring the soundtrack to −14 LUFS (lib/loudness.ts). */
+  levelLoudness?: boolean;
 }
 
 /**
@@ -272,7 +288,7 @@ function cancelled(job: RenderJob): boolean {
   return job.status === "cancelled";
 }
 
-function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number, svgContents?: { filename: string; content: string }[], motionStyle?: "classic" | "new"): string {
+function createEntryFile(scenePath: string, durationInFrames: number, fps: number, width: number, height: number, svgContents?: { filename: string; content: string }[], motionStyle?: "classic" | "new", probeEvery?: number): string {
   const entryPath = scenePath.replace(".tsx", ".entry.tsx");
   const relativeScene = `./${path.basename(scenePath).replace(".tsx", "")}`;
   // SVG frames inline as JSON so the renderer doesn't need a side-channel
@@ -290,9 +306,10 @@ import SceneInner from "${relativeScene}";
 setMotionStyle(${JSON.stringify(motionStyle ?? "classic")});
 
 const __SVG_FRAMES__ = ${svgFramesJson};
+${probeEvery ? probeComponentSource(probeEvery) : ""}
 const SceneComponent: React.FC = () => (
   <SvgFramesProvider value={__SVG_FRAMES__}>
-    <SceneInner />
+    <SceneInner />${probeEvery ? "\n    <LayoutProbe />" : ""}
   </SvgFramesProvider>
 );
 
@@ -423,16 +440,20 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         `${jobId}.${ext}`
       );
 
-      // Apply a color-grade LUT (ffmpeg lut3d) only on the opaque h264 path in v1.
-      const applyLut = codec === "h264" && !!lut;
-
       // qtrle and hevc-alpha aren't supported natively by Remotion: render
       // ProRes 4444 (with alpha) to a temp file, then transcode via ffmpeg.
-      // When grading h264, likewise render to a temp .mp4, then run the LUT pass.
+      //
+      // h264 always goes through a temp file too, with LOSSLESS sound. Letting
+      // Remotion write AAC straight into the mp4 kept the encoder's 2048-sample
+      // priming as real silence at the start of the track, so every sound in
+      // every mp4 export played ~43 ms late. The finishing pass encodes the AAC
+      // itself, where ffmpeg records the priming in an edit list that players
+      // skip — and it is the one place the sound can be levelled and the LUT
+      // baked in the same pass.
       const remotionOutputPath = (codec === "qtrle" || codec === "hevc-alpha")
         ? path.join(process.cwd(), "public", "renders", `${jobId}.prores.mov`)
-        : applyLut
-          ? path.join(process.cwd(), "public", "renders", `${jobId}.src.mp4`)
+        : codec === "h264"
+          ? path.join(process.cwd(), "public", "renders", `${jobId}.src.mov`)
           : outputPath;
 
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -460,6 +481,8 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
       if (codec === "h264" && typeof opts.crf === "number") {
         renderArgs.push("--crf", String(opts.crf));
       }
+      // Lossless sound for the finishing pass to encode (see above).
+      if (codec === "h264") renderArgs.push("--audio-codec", "pcm-16");
       // Export in-to-out rather than the whole composition.
       if (opts.frameRange) {
         const [a, b] = opts.frameRange;
@@ -528,35 +551,8 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
         proc.on("error", reject);
       });
 
-      // Color-grade pass: bake the selected .cube LUT into the h264 export via
-      // lut3d, re-encoding the temp master to the final .mp4 (CRF 18 to match
-      // Remotion's h264), preserving any audio track.
-      if (applyLut && lut) {
-        // Converting: the renderer has exited and ffmpeg is re-encoding the file.
-        // Nothing here reports frames, so the dialog says what is happening instead
-        // of freezing on the encode's last count.
-        job.phase = "converting";
-        await new Promise<void>((resolve, reject) => {
-          const ff = spawn(
-            "ffmpeg",
-            [
-              "-y", "-i", remotionOutputPath,
-              "-vf", `lut3d=${escapeForFiltergraph(lut)}`,
-              "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
-              "-c:a", "copy",
-              "-movflags", "+faststart",
-              outputPath,
-            ],
-            { cwd: process.cwd(), env: { ...process.env } }
-          );
-          let ffErr = "";
-          ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); });
-          ff.on("close", (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`ffmpeg LUT pass failed: ${ffErr.slice(-500).trim()}`));
-          });
-          ff.on("error", reject);
-        });
+      if (codec === "h264" && !cancelled(job)) {
+        await finishH264(job, remotionOutputPath, outputPath, lut, opts.levelLoudness === true);
         try { fs.unlinkSync(remotionOutputPath); } catch {}
       }
 
@@ -692,6 +688,11 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
     } finally {
       try { fs.unlinkSync(scenePath); } catch {}
       try { if (entryPath) fs.unlinkSync(entryPath); } catch {}
+      // The intermediate files, whether the job finished, failed or was stopped.
+      for (const temp of [`${jobId}.src.mov`, `${jobId}.prores.mov`]) {
+        try { fs.unlinkSync(path.join(process.cwd(), "public", "renders", temp)); } catch {}
+      }
+      procs.delete(jobId);
       // The CLI leaves its own bundle behind. Clear up the ones old enough to
       // be certain no render is still reading from them.
       try { sweepStaleBundles(); } catch {}
@@ -699,6 +700,79 @@ export function enqueueRender(sceneId: string, code: string, durationInFrames = 
   });
 
   return job;
+}
+
+/**
+ * Run one ffmpeg pass for a job, registered so "Stop render" can kill it.
+ */
+function runFfmpeg(jobId: string, args: string[], label: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const ff = spawn("ffmpeg", args, { cwd: process.cwd(), env: { ...process.env } });
+    procs.set(jobId, ff);
+    let ffErr = "";
+    ff.stderr.on("data", (d: Buffer) => { ffErr += d.toString(); if (ffErr.length > 64_000) ffErr = ffErr.slice(-16_000); });
+    ff.on("close", (code) => {
+      if (procs.get(jobId) === ff) procs.delete(jobId);
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg ${label} failed: ${ffErr.slice(-500).trim()}`));
+    });
+    ff.on("error", reject);
+  });
+}
+
+/**
+ * The last pass of every mp4 export: the colour grade, the sound level and the
+ * AAC encode, in one ffmpeg run over Remotion's lossless-audio master.
+ *
+ * Video is copied untouched unless a LUT has to be baked in (then it is
+ * re-encoded at CRF 18, as the grade pass always did). Sound is encoded here,
+ * which is what fixes the 43 ms lag, and levelled first when asked. The
+ * result's loudness is measured on the delivered file, not inferred.
+ */
+async function finishH264(job: RenderJob, src: string, out: string, lut: string | undefined, level: boolean): Promise<void> {
+  job.phase = "converting";
+  const audio = await hasAudioStream(src);
+  let before: LoudnessMeasure | null = null;
+  let plan: GainPlan | null = null;
+  let filter: string | null = null;
+  if (audio && level) {
+    job.phaseNote = "Measuring the sound";
+    before = await measureLoudness(src);
+    if (before) {
+      plan = await refinePlan(src, before, planGain(before));
+      filter = gainFilter(plan);
+    }
+  }
+  if (cancelled(job)) return;
+
+  job.phaseNote = lut ? "Applying the colour grade" : filter ? "Levelling the sound" : "Finishing the file";
+  const args = ["-y", "-nostdin", "-i", src, "-map", "0:v:0"];
+  if (audio) args.push("-map", "0:a:0");
+  if (lut) args.push("-vf", `lut3d=${escapeForFiltergraph(lut)}`, "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p");
+  else args.push("-c:v", "copy");
+  if (audio) {
+    if (filter) args.push("-af", filter);
+    args.push("-c:a", "aac", "-b:a", "320k");
+  }
+  // A browser plays this file in the dialog's preview; without faststart the
+  // index sits at the end and the player stalls until it has the whole file.
+  args.push("-movflags", "+faststart", out);
+  await runFfmpeg(job.id, args, lut ? "grade and sound pass" : "sound pass");
+
+  if (!audio) { job.loudness = { skipped: "no-audio" }; return; }
+  if (!level) { job.loudness = { skipped: "off" }; return; }
+  if (!before || !plan) { job.loudness = { skipped: "unmeasured" }; return; }
+  if (plan.skip && before.integrated < -60) { job.loudness = { skipped: "silent" }; return; }
+  job.phaseNote = "Checking the level";
+  const after = await measureLoudness(out);
+  job.loudness = {
+    before: before.integrated,
+    after: after && Number.isFinite(after.integrated) ? after.integrated : null,
+    truePeak: after && Number.isFinite(after.truePeak) ? after.truePeak : null,
+    gainDb: plan.gainDb,
+    heldBack: plan.heldBack,
+    limited: plan.limit,
+  };
 }
 
 function fixImportPaths(code: string): string {
@@ -811,6 +885,8 @@ export interface ReviewRender {
   contactSheet: string | null;
   /** The same scene rendered at each other requested shape, one strip each. */
   shapeStrips: { label: string; png: string }[];
+  /** The measured checks, when asked for. A failed check pass is null, never fatal. */
+  checks?: CheckReport | null;
 }
 
 /** Frames per strip when a scene is checked at its other shapes. */
@@ -845,6 +921,8 @@ export async function renderReviewFrames(
     shapes?: { label: string; width: number; height: number }[];
     /** The spring set the scene will play with. */
     motionStyle?: "classic" | "new";
+    /** Also run the measured checks over every frame (lib/scene-checks.ts). */
+    checks?: boolean;
   } = {},
 ): Promise<ReviewRender> {
   const scenesDir = path.join(process.cwd(), "remotion", "scenes");
@@ -853,7 +931,8 @@ export async function renderReviewFrames(
   const tag = `_frames_${projectId.slice(0, 8)}_${Date.now().toString(36)}`;
   const scenePath = path.join(scenesDir, `${tag}.tsx`);
   fs.writeFileSync(scenePath, fixImportPaths(code), "utf-8");
-  const entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents, opts.motionStyle);
+  const plan = opts.checks ? checkPlan(durationInFrames, fps) : null;
+  const entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents, opts.motionStyle, plan?.every);
 
   // Downscale the long edge to ~1280px to cap image-token cost.
   const longEdge = Math.max(width, height);
@@ -921,12 +1000,153 @@ export async function renderReviewFrames(
       }
       shapeStrips.push({ label: shape.label, png: await tileContactSheet(tiles, tileW, tileH, fps, STRIP_FRAMES, 1) });
     }
-    return { frames: out, contactSheet, shapeStrips };
+    let checks: CheckReport | null | undefined;
+    if (plan) {
+      try {
+        checks = await probeComposition({ serveUrl, composition, browser: puppeteerInstance, fps, durationInFrames, width, height, plan });
+      } catch (e) {
+        console.error("[checks] probe pass failed:", e instanceof Error ? e.message : e);
+        checks = null;
+      }
+    }
+    return { frames: out, contactSheet, shapeStrips, checks };
   } finally {
     if (browser) { try { await browser.close({ silent: true }); } catch {} }
     try { fs.unlinkSync(scenePath); } catch {}
     try { fs.unlinkSync(entryPath); } catch {}
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(bundleDir, { recursive: true, force: true }); } catch {}
+  }
+}
+
+/**
+ * How thoroughly a composition of this length can be checked in reasonable time.
+ *
+ * Up to two minutes every frame is rendered (tiny) and measured: flashes are
+ * one frame long by definition and a sound's placement needs every frame. Past
+ * that, text is measured on a spread of about 1,200 frames and the frame and
+ * sound checks are skipped — and the report says so, rather than calling a
+ * video clean that was never looked at.
+ */
+export function checkPlan(durationInFrames: number, fps: number): { every: number; pixels: boolean; sound: boolean } {
+  const full = durationInFrames <= Math.max(1, fps) * 120;
+  return full ? { every: 1, pixels: true, sound: true } : { every: Math.ceil(durationInFrames / 1200), pixels: false, sound: false };
+}
+
+/**
+ * The measured-checks pass over an already-bundled composition.
+ *
+ * One `renderFrames` run does all three jobs: the probe component logs text
+ * geometry from inside the page, the tiny frame buffers become grey
+ * thumbnails for the flash check, and the renderer's own asset list says where
+ * every sound plays and how loud.
+ */
+async function probeComposition(args: {
+  serveUrl: string;
+  composition: Awaited<ReturnType<typeof selectComposition>>;
+  browser: Awaited<ReturnType<typeof openBrowser>>;
+  fps: number;
+  durationInFrames: number;
+  width: number;
+  height: number;
+  plan: { every: number; pixels: boolean; sound: boolean };
+  signal?: AbortSignal;
+}): Promise<CheckReport> {
+  const { serveUrl, composition, browser, fps, durationInFrames, width, height, plan } = args;
+  const logs: string[] = [];
+  const sigs: (Uint8Array | null)[] = new Array(durationInFrames).fill(null);
+  const pending: Promise<void>[] = [];
+  const { cancelSignal, cancel } = makeCancelSignal();
+  const onAbort = () => cancel();
+  args.signal?.addEventListener("abort", onAbort);
+  try {
+    const { assetsInfo } = await renderFrames({
+      serveUrl,
+      composition,
+      puppeteerInstance: browser,
+      inputProps: {},
+      outputDir: null,
+      imageFormat: plan.pixels ? "jpeg" : "none",
+      ...(plan.pixels ? { jpegQuality: 70 } : {}),
+      // Tiny: the flash check reads a 32×18 thumbnail, so anything bigger is waste.
+      scale: plan.pixels ? Math.min(1, 96 / Math.max(width, height)) : 1,
+      everyNthFrame: plan.every,
+      concurrency: Math.max(1, Math.min(6, Math.floor(os.cpus().length / 2))),
+      cancelSignal,
+      logLevel: "error",
+      onStart: () => {},
+      onFrameUpdate: () => {},
+      onBrowserLog: (log) => { if (log.text.includes("__VT_PROBE__")) logs.push(log.text); },
+      onFrameBuffer: plan.pixels
+        ? (buffer, frame) => {
+            pending.push(
+              sharp(buffer).greyscale().resize(SIG_W, SIG_H, { fit: "fill" }).raw().toBuffer()
+                .then((raw) => { if (frame >= 0 && frame < sigs.length) sigs[frame] = new Uint8Array(raw); })
+                .catch(() => {}),
+            );
+          }
+        : undefined,
+    });
+    await Promise.all(pending);
+
+    const findings = [...analyzeLayout(parseProbeLogs(logs), fps)];
+    if (plan.pixels) findings.push(...analyzeFlashes(sigs));
+    let soundEffects = 0;
+    const notes: string[] = [];
+    if (plan.sound) {
+      const sounds = placeSounds(assetsInfo.assets as never);
+      const files = sounds.map((s) => soundFileFor(s.src)).filter((f): f is string => !!f);
+      const peak = await loadPeakReader(files);
+      const result = analyzeSounds(sounds, fps, soundFileFor, peak);
+      soundEffects = result.effects;
+      findings.push(...result.findings);
+    } else {
+      notes.push(`Flash and sound checks only run on videos up to 2 minutes; text was checked on every ${plan.every}th frame.`);
+    }
+    findings.sort((a, b) => a.frame - b.frame);
+    return {
+      findings,
+      checked: { text: true, frames: plan.pixels, sound: plan.sound, soundEffects, every: plan.every },
+      notes,
+    };
+  } finally {
+    args.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+/**
+ * The measured checks on their own, for the export dialog: bundle, check,
+ * done — no stills, no contact sheet.
+ */
+export async function runPreflight(
+  projectId: string,
+  code: string,
+  durationInFrames: number,
+  fps: number,
+  width: number,
+  height: number,
+  svgContents?: { filename: string; content: string }[],
+  opts: { motionStyle?: "classic" | "new"; signal?: AbortSignal } = {},
+): Promise<CheckReport> {
+  const scenesDir = path.join(process.cwd(), "remotion", "scenes");
+  fs.mkdirSync(scenesDir, { recursive: true });
+  const tag = `_check_${projectId.slice(0, 8)}_${Date.now().toString(36)}`;
+  const scenePath = path.join(scenesDir, `${tag}.tsx`);
+  fs.writeFileSync(scenePath, fixImportPaths(code), "utf-8");
+  const plan = checkPlan(durationInFrames, fps);
+  const entryPath = createEntryFile(scenePath, durationInFrames, fps, width, height, svgContents, opts.motionStyle, plan.every);
+  const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), "vt-check-bundle-"));
+  let browser: Awaited<ReturnType<typeof openBrowser>> | null = null;
+  try {
+    const serveUrl = await bundle({ entryPoint: entryPath, outDir: bundleDir, publicDir: leanPublicDir() });
+    if (opts.signal?.aborted) throw new Error("cancelled");
+    browser = await openBrowser("chrome");
+    const composition = await selectComposition({ serveUrl, id: "Scene", puppeteerInstance: browser });
+    return await probeComposition({ serveUrl, composition, browser, fps, durationInFrames, width, height, plan, signal: opts.signal });
+  } finally {
+    if (browser) { try { await browser.close({ silent: true }); } catch {} }
+    try { fs.unlinkSync(scenePath); } catch {}
+    try { fs.unlinkSync(entryPath); } catch {}
     try { fs.rmSync(bundleDir, { recursive: true, force: true }); } catch {}
   }
 }

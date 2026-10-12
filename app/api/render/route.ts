@@ -9,6 +9,9 @@ import { docForTransparency } from "@/lib/transparent-bg";
 export async function POST(request: Request) {
   const body = await request.json();
   const { sceneId, codec, projectId, lut, crf, frameRange } = body;
+  // On unless the dialog turned it off: an mp4 is the delivery file, and one
+  // that plays quieter than everything around it in a feed is the common case.
+  const levelLoudness = body.levelLoudness !== false;
   let { durationInFrames, fps, width, height } = body;
   let code: string = body.code;
 
@@ -52,6 +55,6 @@ export async function POST(request: Request) {
   // Resolve the picker id to a safe absolute .cube path (null if none/invalid).
   // The LUT grade is applied only to the opaque h264 export (see render-queue).
   const lutPath = validCodec === "h264" ? (resolveLutPath(lut) ?? undefined) : undefined;
-  const job = enqueueRender(sceneId || "untitled", code, durationInFrames || 250, fps || 25, width || 3840, height || 2160, validCodec, svgContents, lutPath, { crf, frameRange });
+  const job = enqueueRender(sceneId || "untitled", code, durationInFrames || 250, fps || 25, width || 3840, height || 2160, validCodec, svgContents, lutPath, { crf, frameRange, levelLoudness });
   return Response.json(job);
 }

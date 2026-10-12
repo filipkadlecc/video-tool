@@ -21,6 +21,7 @@ A video is TRACKS of ITEMS.
 - To change what is INSIDE a scene block — reshape an element, restyle it, relabel it, add or remove something in it — call revise_scene on that block. It hands the block to the scene writer, which rewrites its design from your instructions and keeps its place and length. Never fake an interior change by laying text or solids over the block, and never send the person off to regenerate the whole animation.
 - revise_scene takes minutes per call, so gather every note for a block into ONE call. Write the instructions out in full — the scene writer does not see this conversation, only the scene and what you pass it. If the person says "this scene" or "here", it is the selected item or the one under the playhead.
 - After a revision, render_frames on that block and look before you report back.
+- A music clip in the outline may carry its MEASURED beat: tempo, bar lines and the drop, in frames. Cut and place on bar lines, and put the moment that matters on the drop. revise_scene hands the scene writer that grid in the scene's own frames automatically, so "time it to the music" is an instruction it can follow exactly.
 - The scene blocks ALREADY on the timeline are this person's own branded design, usually built for this specific video. They are not placeholders and they are not interchangeable with the snippet library. Keep them.
 
 === HOW TO WORK ===

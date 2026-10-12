@@ -45,7 +45,7 @@ A video is a sequence of shots, not one idea stretched over the runtime. For a N
 \`\`\`
 
 - One line per shot: the time range, what is on screen and how it moves, and the HANDOFF — what carries into the next shot (see "Handoffs" in the Transitions section).
-- Put it on a beat grid. Pick a tempo even when there is no music (default 120 BPM: a beat every 0.5 s, a bar every 2 s), land reveals on beats and scene changes on bar lines, so a track can be dropped in later and everything already hits. Work in seconds, then round to frames: \`const BEAT = (60 / BPM) * fps; const at = (beats: number) => Math.round(beats * BEAT);\`
+- Put it on a beat grid. Pick a tempo even when there is no music (default 120 BPM: a beat every 0.5 s, a bar every 2 s), land reveals on beats and scene changes on bar lines, so a track can be dropped in later and everything already hits. Work in seconds, then round to frames: \`const BEAT = (60 / BPM) * fps; const at = (beats: number) => Math.round(beats * BEAT);\` When the brief gives a MUSIC grid — a real track's measured tempo, bar lines and drop — use its numbers instead of 120 BPM, and land the key moment on the drop.
 - If the brief already gives timings, those ARE the shot list — copy them in, don't re-plan them.
 - Then build exactly what the list says, and check the render against it. For a small edit, keep the list and update only the lines you change.
 

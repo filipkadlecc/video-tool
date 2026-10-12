@@ -6,10 +6,12 @@ import fs from "fs";
 import path from "path";
 import { EDITOR_AGENT_PROMPT } from "@/lib/prompts/editor-agent";
 import { framesToContentBlocks, contactSheetToContentBlocks, userReferenceBlocks, USER_REFERENCE_INTRO, MAX_USER_REFERENCES } from "@/lib/prompts/reference-images";
-import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
+import { checkPlan, renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
+import { reportForModel } from "@/lib/scene-checks";
+import { beatsForFile, musicNoteForScene, type BeatAnalysis } from "@/lib/beats";
 import { getProject } from "@/lib/projects";
 import { sceneCodeFromDoc } from "@/lib/editor-render";
-import { docDuration, isValidDoc, sceneFit, type AssetKind, type EditorDoc } from "@/lib/editor-doc";
+import { docDuration, isValidDoc, sceneFit, type AssetKind, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
 import { applyDocTool, describeDoc, DOC_TOOLS, DOC_TOOL_NAMES, reviseSceneItem, toolsWithSnippets, type AgentContext, summariseDocChange } from "@/lib/editor-agent";
 import { catalogForSize } from "@/lib/snippet-catalog";
 import { readCachedTranscript, transcribeWithCache, type TranscriptWord } from "@/lib/transcribe";
@@ -142,6 +144,61 @@ async function mediaTranscripts(files: NonNullable<AgentContext["mediaFiles"]>, 
     if (cached?.words?.length) out[m.file] = cached.words;
   }
   return out;
+}
+
+/**
+ * The measured beat of every music track on the timeline, keyed by asset id.
+ *
+ * Measured here (a few seconds the first time, cached beside the file after)
+ * because a beat grid is only useful if the model has it BEFORE it decides
+ * where things go. A track with no steady beat — a voiceover — is left out.
+ */
+async function measuredBeats(doc: EditorDoc, projectId: string, mediaFolder: string): Promise<Record<string, BeatAnalysis>> {
+  const out: Record<string, BeatAnalysis> = {};
+  const used = new Set(doc.tracks.flatMap((t) => t.items).filter((i) => i.type === "audio").map((i) => (i as { assetId: string }).assetId));
+  for (const asset of doc.assets) {
+    if (asset.kind !== "audio" || !used.has(asset.id)) continue;
+    const file = assetPath(asset.src, projectId, mediaFolder);
+    if (!file) continue;
+    try {
+      const analysis = await beatsForFile(file);
+      if (analysis.bpm) out[asset.id] = analysis;
+    } catch { /* an unreadable track just has no grid */ }
+  }
+  return out;
+}
+
+/**
+ * The music grid for one scene block, in the scene's own frames — what lets
+ * "time it to the music" be followed exactly. Null when no measured track
+ * plays under the block.
+ */
+function musicNoteFor(doc: EditorDoc, scene: EditorItem, beats: Record<string, BeatAnalysis> | undefined): string | null {
+  if (!beats) return null;
+  const fps = doc.size.fps;
+  const sceneStart = scene.from - ((scene as { sourceOffsetFrames?: number }).sourceOffsetFrames ?? 0);
+  const notes: string[] = [];
+  for (const track of doc.tracks) {
+    if (track.muted) continue;
+    for (const item of track.items) {
+      if (item.type !== "audio") continue;
+      const analysis = beats[item.assetId];
+      if (!analysis) continue;
+      const overlaps = item.from < scene.from + scene.durationInFrames && item.from + item.durationInFrames > scene.from;
+      if (!overlaps) continue;
+      const name = doc.assets.find((a) => a.id === item.assetId)?.name ?? "the music";
+      const note = musicNoteForScene(
+        name,
+        analysis,
+        { startFrame: item.from, durationInFrames: item.durationInFrames, sourceInSec: item.sourceIn ?? 0, rate: item.playbackRate ?? 1 },
+        sceneStart,
+        scene.durationInFrames + ((scene as { sourceOffsetFrames?: number }).sourceOffsetFrames ?? 0),
+        fps,
+      );
+      if (note) notes.push(note);
+    }
+  }
+  return notes.length ? notes[0] : null;
 }
 
 const TRANSCRIBE_TOOL: Anthropic.Tool = {
@@ -351,6 +408,7 @@ export async function POST(request: Request) {
   };
   // Needs ctx.mediaFiles, so it runs after the object above is built.
   if (mediaFolder) ctx.mediaTranscripts = await mediaTranscripts(ctx.mediaFiles ?? [], mediaFolder);
+  if (mediaFolder && projectId) ctx.beats = await measuredBeats(incomingDoc, projectId, mediaFolder);
 
   // The bundle server runs on its own port, so a root-relative "/api/media/..."
   // src would 404 against it. Same rewrite /api/render does.
@@ -500,8 +558,15 @@ export async function POST(request: Request) {
                   working.size.height,
                   frames,
                   undefined,
-                  { contactSheet: !wanted?.length },
+                  {
+                    contactSheet: !wanted?.length,
+                    // Measured on every frame — but only where that is quick. A
+                    // long footage edit would spend most of a minute on it per
+                    // look, and the export dialog checks the whole thing anyway.
+                    checks: !wanted?.length && checkPlan(duration, working.size.fps).pixels,
+                  },
                 );
+                const measured = review.checks ? reportForModel(review.checks, working.size.fps) : "";
                 results.push({
                   type: "tool_result",
                   tool_use_id: block.id,
@@ -510,6 +575,7 @@ export async function POST(request: Request) {
                       type: "text",
                       text: "The timeline as it stands. Check legibility, anything clipped or off screen, anything overlapping badly, and whether a frame is unintentionally empty — then fix what you see.",
                     },
+                    ...(measured ? [{ type: "text" as const, text: measured }] : []),
                     ...contactSheetToContentBlocks(review.contactSheet),
                     ...framesToContentBlocks(review.frames, duration),
                   ],
@@ -559,9 +625,11 @@ export async function POST(request: Request) {
               }
               const fps = working.size.fps;
               const offset = found.sourceOffsetFrames ?? 0;
-              const timing = sceneFit(found) === "retime"
+              const baseTiming = sceneFit(found) === "retime"
                 ? `Keep its length and the timing of its beats. It plays for ${found.durationInFrames} frames at ${fps}fps.`
                 : `Keep its total length, fps and the timing of its beats exactly as they are. This block of the video shows only frames ${offset}–${offset + found.durationInFrames} of the composition, so that stretch is what the viewer sees; the rest must stay intact.`;
+              const music = musicNoteFor(working, found, ctx.beats);
+              const timing = music ? `${baseTiming}\n\n${music}` : baseTiming;
               try {
                 // The picked element travels with its own block's revision, so
                 // the writer patches that tag instead of guessing from words.

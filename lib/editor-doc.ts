@@ -1151,9 +1151,11 @@ export function hasSource(item: EditorItem): item is VideoItem | AudioItem {
  */
 export function snapTargets(
   doc: EditorDoc,
-  opts: { excludeItemId?: string; playhead?: number } = {},
+  opts: { excludeItemId?: string; playhead?: number; extra?: number[] } = {},
 ): number[] {
   const targets = new Set<number>([0, docDuration(doc)]);
+  // Anything else worth landing on — the timeline passes the music's beats.
+  for (const f of opts.extra ?? []) if (Number.isFinite(f) && f >= 0) targets.add(Math.round(f));
   for (const track of doc.tracks) {
     for (const item of track.items) {
       if (item.id === opts.excludeItemId) continue;

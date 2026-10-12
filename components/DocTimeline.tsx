@@ -18,6 +18,7 @@ import {
   type Asset, type EditorDoc, type EditorItem, type Track,
 } from "@/lib/editor-doc";
 import { captionItem, placeCaptions } from "@/lib/captions-preset";
+import { beatsOnTimeline, type BeatAnalysis } from "@/lib/beats-grid";
 
 /**
  * Timeline for a document-based project.
@@ -201,6 +202,13 @@ export default function DocTimeline({
   const tracksRef = useRef<HTMLDivElement>(null);
   /** Audio peaks per media path, fetched lazily and cached server-side too. */
   const [peaks, setPeaks] = useState<Record<string, number[]>>({});
+  /**
+   * The measured beat of each music file (lib/beats.ts), per media path. Null
+   * while it is being measured, so a re-render doesn't ask twice.
+   */
+  const [beats, setBeats] = useState<Record<string, BeatAnalysis | null>>({});
+  /** `beatSnaps` below, reachable from the drag handler declared above it. */
+  const beatSnapsRef = useRef<(excludeItemId: string) => number[]>(() => []);
   const [dropping, setDropping] = useState<number | null>(null);
   const [uploading, setUploading] = useState<string | null>(null);
   const deltaRef = useRef(0);
@@ -273,7 +281,7 @@ export default function DocTimeline({
       startX: e.clientX,
       pxPerFrame,
       deltaFrames: 0,
-      targets: snapTargets(doc, { excludeItemId: item.id, playhead: currentFrame }),
+      targets: snapTargets(doc, { excludeItemId: item.id, playhead: currentFrame, extra: beatSnapsRef.current(item.id) }),
       snap: snapOn,
     });
   }, [doc, currentFrame, pxPerFrame, snapOn, selectItem]);
@@ -589,6 +597,67 @@ export default function DocTimeline({
         .catch(() => {});
     }
   }, [doc, projectId, peaks, relPath]);
+
+  // Measure the beat of every music clip, once per file. The first time takes
+  // a few seconds per track; after that it is read from the cache beside it.
+  useEffect(() => {
+    if (!projectId) return;
+    for (const track of doc.tracks) {
+      for (const item of track.items) {
+        if (item.type !== "audio") continue;
+        const asset = getAsset(doc, item.assetId);
+        if (!asset?.src.startsWith(`/api/media/${projectId}/`)) continue;
+        const file = relPath(asset.src);
+        if (file in beats) continue;
+        setBeats((prev) => ({ ...prev, [file]: null }));
+        fetch(`/api/media/${projectId}/beats?file=${encodeURIComponent(file)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => { if (d && Array.isArray(d.beats)) setBeats((prev) => ({ ...prev, [file]: d as BeatAnalysis })); })
+          .catch(() => {});
+      }
+    }
+  }, [doc, projectId, beats, relPath]);
+
+  /**
+   * Where each music clip's beats, bar lines and drop fall on the timeline.
+   * Only clips with a steady beat get one — a voiceover has none to draw.
+   */
+  const beatGrids = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof beatsOnTimeline>>();
+    if (!projectId) return out;
+    for (const track of doc.tracks) {
+      for (const item of track.items) {
+        if (item.type !== "audio") continue;
+        const asset = getAsset(doc, item.assetId);
+        const analysis = asset ? beats[relPath(asset.src)] : null;
+        if (!analysis?.bpm) continue;
+        out.set(item.id, beatsOnTimeline(
+          analysis,
+          { startFrame: item.from, durationInFrames: item.durationInFrames, sourceInSec: item.sourceIn ?? 0, rate: item.playbackRate ?? 1 },
+          fps,
+        ));
+      }
+    }
+    return out;
+  }, [doc, projectId, beats, relPath, fps]);
+
+  /**
+   * The music's beats as snap points, at whatever density the zoom can use:
+   * every beat when they are far enough apart to aim between, bar lines when
+   * only those are, nothing when even bars would make every drag stick.
+   */
+  const beatSnaps = useCallback((excludeItemId: string) => {
+    const out: number[] = [];
+    for (const [itemId, grid] of beatGrids) {
+      if (itemId === excludeItemId) continue;
+      const beatPx = grid.beats.length > 1 ? (grid.beats[1] - grid.beats[0]) * pxPerFrame : 0;
+      if (beatPx >= SNAP_PX * 2) out.push(...grid.beats);
+      else if (beatPx * 4 >= SNAP_PX * 2) out.push(...grid.downbeats);
+      if (grid.drop != null) out.push(grid.drop);
+    }
+    return out;
+  }, [beatGrids, pxPerFrame]);
+  beatSnapsRef.current = beatSnaps;
 
   // ── rendering ─────────────────────────────────────────────────────────────
   /**
@@ -939,6 +1008,33 @@ export default function DocTimeline({
                   ))}
                 </div>
               )}
+              {item.type === "audio" && beatGrids.has(item.id) && (() => {
+                /*
+                 * The music's measured beat, drawn on the clip: bar lines as
+                 * hairlines, beats as short ticks when the zoom leaves room for
+                 * them, and the drop in the accent colour — the one moment a
+                 * cut most wants to land on. They move with the clip while it
+                 * is dragged, because the music does.
+                 */
+                const grid = beatGrids.get(item.id)!;
+                const shift = dragState?.itemId === item.id && dragState.mode === "move" ? g.from - item.from : 0;
+                const x = (f: number) => (f + shift - g.from) * pxPerFrame;
+                const beatPx = grid.beats.length > 1 ? (grid.beats[1] - grid.beats[0]) * pxPerFrame : 0;
+                const inside = (f: number) => x(f) >= 0 && x(f) <= clipW;
+                return (
+                  <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                    {beatPx >= 6 && grid.beats.filter(inside).map((f) => (
+                      <span key={`b${f}`} style={{ position: "absolute", left: x(f), bottom: 0, height: "28%", width: 1, background: "var(--ink-tertiary)", opacity: 0.45 }} />
+                    ))}
+                    {beatPx * 4 >= 4 && grid.downbeats.filter(inside).map((f) => (
+                      <span key={`d${f}`} style={{ position: "absolute", left: x(f), top: 0, bottom: 0, width: 1, background: "var(--ink-secondary)", opacity: 0.4 }} />
+                    ))}
+                    {grid.drop != null && inside(grid.drop) && (
+                      <span title="The drop — where the track arrives" style={{ position: "absolute", left: x(grid.drop) - 1, top: 0, bottom: 0, width: 2, background: "var(--brand)" }} />
+                    )}
+                  </div>
+                );
+              })()}
               {/* Two lines: what the clip is, then when it runs. A timeline is
                   read by name and by range, and one line could only ever carry
                   the first. */}

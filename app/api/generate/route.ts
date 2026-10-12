@@ -7,6 +7,7 @@ import { buildSystemPrompt, buildUserMessage } from "@/lib/prompts";
 import { listSfx } from "@/lib/sfx";
 import { getApifyReferenceImages, APIFY_REFERENCE_INTRO, framesToContentBlocks, contactSheetToContentBlocks, userReferenceBlocks, USER_REFERENCE_INTRO } from "@/lib/prompts/reference-images";
 import { renderReviewFrames, sampleFrameNumbers } from "@/lib/render-queue";
+import { reportForModel } from "@/lib/scene-checks";
 import { shapeOf, shapeSize, type FrameShape } from "@/lib/editor-doc";
 import { motionStyleGuidance } from "@/lib/prompts/motion-style";
 import { listAssetPaths } from "@/lib/assets";
@@ -235,7 +236,7 @@ function judgeReview(
 // knows it can (and should) look at its own work.
 const AGENTIC_GUIDANCE =
   "\n\n=== SELF-REVIEW (you can SEE your own output) ===\n" +
-  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene (opening with its SHOT LIST), call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, overlapping text, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches, scenes that swap like slides instead of handing off, anything the brief didn't give). Check the render delivers the shot list. After each render, call `submit_review` to score it honestly on hook, readability, motion, variety, flow, composition and brand. The bar is 8 on every score: if anything is below it, fix the problems you listed, render again and re-score, until it passes or you run out of renders. Iteration is the method, not a failure. For a trivial edit you can skip rendering and reviewing. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
+  "You have a `render_frames` tool that renders still frames of the scene you write and returns them as images. For any substantial scene, USE IT: write the complete scene (opening with its SHOT LIST), call render_frames, look at the contact sheet and the frames, and fix any problems you see (overflow, overlapping text, empty/dead frames, off-brand colour, weak contrast, broken layout, bad timing, one idea stretched over the whole runtime, dead stretches, scenes that swap like slides instead of handing off, anything the brief didn't give). Check the render delivers the shot list. An overview render also comes with MEASURED CHECKS taken from every frame — text cut off by the frame or its box, text overlapping text, one-frame flashes, blank frames, sound effects buried under other audio. Those are measurements, not opinions: fix each one unless it is clearly deliberate. After each render, call `submit_review` to score it honestly on hook, readability, motion, variety, flow, composition and brand. The bar is 8 on every score: if anything is below it, fix the problems you listed, render again and re-score, until it passes or you run out of renders. Iteration is the method, not a failure. For a trivial edit you can skip rendering and reviewing. You also have `read_snippet_source` to read the real source of any branded example or helper library when you need to see how something is done. Always end with the COMPLETE final scene in a single ```tsx block.";
 
 // The scene being edited, as the text editor tool sees it. It only ever
 // exists in memory here — nothing is written to disk.
@@ -640,8 +641,12 @@ export async function POST(request: Request) {
                     // A scene that says it works in other shapes is checked in them.
                     shapes: framesArg?.length ? [] : otherDeclaredShapes(latestCode, renderWidth, renderHeight),
                     motionStyle,
+                    // The overview pass also measures every frame: clipped and
+                    // overlapping text, one-frame flashes, sounds nobody hears.
+                    checks: !framesArg?.length,
                   },
                 );
+                const measured = review.checks ? reportForModel(review.checks, meta.fps) : "";
                 toolResults.push({
                   type: "tool_result",
                   tool_use_id: block.id,
@@ -650,6 +655,7 @@ export async function POST(request: Request) {
                       type: "text",
                       text: "Rendered frames of your current scene — review them for overflow, empty/dead frames, off-brand colour, weak contrast, broken layout, and pacing, then score them with submit_review.",
                     },
+                    ...(measured ? [{ type: "text" as const, text: measured }] : []),
                     ...contactSheetToContentBlocks(review.contactSheet),
                     ...review.shapeStrips.flatMap((strip) => [
                       {
