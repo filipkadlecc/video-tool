@@ -178,6 +178,9 @@ const SOURCES: { id: Source; label: string }[] = [
   { id: "artwork", label: "From artwork" },
 ];
 
+/** Longest brief the Describe box takes — room for a real brief or a pasted transcript. */
+const MAX_BRIEF_CHARS = 5000;
+
 /** Openers for the blank page. Clicking one fills the box; you then edit it. */
 const STARTERS: { label: string; text: string }[] = [
   { label: "Product launch", text: "A 20-second launch spot. Open on the problem, show the product doing the work, land on the wordmark. Confident, not frantic." },
@@ -961,7 +964,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                   >
                     <textarea
                       value={prompt}
-                      onChange={(e) => setPrompt(e.target.value.slice(0, 2000))}
+                      onChange={(e) => setPrompt(e.target.value.slice(0, MAX_BRIEF_CHARS))}
                       autoFocus
                       placeholder={isTerminal
                         ? "e.g. Type 'apify actors search instagram', press Enter, show the results. 8 seconds, dark theme, large font."
@@ -978,7 +981,7 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                         The more concrete the beats, the less you&apos;ll re-direct later.
                       </span>
                       <span className="t-data-s" style={{ color: "var(--ink-disabled)" }}>
-                        {prompt.length} / 2000
+                        {prompt.length} / {MAX_BRIEF_CHARS}
                       </span>
                     </div>
                   </div>
