@@ -16,6 +16,7 @@ export default function FeedbackButton() {
   const [capturing, setCapturing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Don't show the button on the viewer page itself.
   if (pathname === "/feedback") return null;
@@ -50,6 +51,7 @@ export default function FeedbackButton() {
     setScreenshot(null);
     setSubmitting(false);
     setDone(false);
+    setError(null);
   }
 
   function handleClose() {
@@ -61,8 +63,9 @@ export default function FeedbackButton() {
   async function handleSubmit() {
     if (!message.trim() || submitting) return;
     setSubmitting(true);
+    setError(null);
     try {
-      await fetch("/api/feedback", {
+      const res = await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,6 +75,9 @@ export default function FeedbackButton() {
           url: pathname,
         }),
       });
+      // Only claim "sent" once the server says it saved — the message stays
+      // in the box on failure so nothing is lost.
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setDone(true);
       setTimeout(() => {
         setOpen(false);
@@ -79,6 +85,7 @@ export default function FeedbackButton() {
       }, 1100);
     } catch {
       setSubmitting(false);
+      setError("Couldn't send — your message is still here. Try again.");
     }
   }
 
@@ -185,6 +192,12 @@ export default function FeedbackButton() {
                   />
                   <span style={{ fontSize: 12, color: "var(--ink-secondary)" }}>Include screenshot</span>
                 </label>
+              )}
+
+              {error && (
+                <div role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>
+                  {error}
+                </div>
               )}
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
