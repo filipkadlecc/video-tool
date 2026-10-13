@@ -1413,14 +1413,21 @@ export default function ProjectEditor() {
     {/* Locked to the window, but never smaller than a usable editor — below
         that the page scrolls instead of clipping the panels off-screen. */}
     <div style={{ height: "100vh", minHeight: 600, minWidth: 960, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      {/* Toolbar */}
+      {/* Toolbar. On a narrow screen (a 14" laptop is ~1512px) the full
+          labels do not fit and Export used to be clipped off the right edge,
+          so the bar is a container: below a width the secondary tools drop
+          to icons, then the frame pill and shortcut hints go, and the
+          project name gives way with an ellipsis. See .vt-toolbar in
+          globals.css. */}
       <div
+        className="vt-toolbar"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 12,
           padding: "10px 16px",
           height: 48,
+          minWidth: 0,
           background: "var(--surface-chrome)",
           borderBottom: "1px solid var(--border-hairline)",
           position: "relative",
@@ -1441,12 +1448,19 @@ export default function ProjectEditor() {
           {project ? titleCase(normalizeAnimationType(project.animationType)) : "Projects"}
         </Button>
         <div style={{ width: 1, height: 20, background: "var(--border-hairline)" }} />
-        <span className="t-heading" style={{ color: "var(--ink-primary)", whiteSpace: "nowrap" }}>
+        <span
+          className="t-heading"
+          title={project.name}
+          style={{
+            color: "var(--ink-primary)", whiteSpace: "nowrap",
+            overflow: "hidden", textOverflow: "ellipsis", minWidth: 24, maxWidth: 320,
+          }}
+        >
           {project.name}
         </span>
         {/* Frame pill — state, not an action, so it is a pill and never a button. */}
         <span
-          className="t-data-s"
+          className="t-data-s vt-tb-wide"
           style={{
             display: "inline-flex", alignItems: "center", height: 22, padding: "0 8px",
             background: "var(--surface-raised)", borderRadius: "var(--r-pill)",
@@ -1576,8 +1590,8 @@ export default function ProjectEditor() {
           />
         )}
         {!isTerminalProject && !isVideoProject && (
-          <Button variant="outline" size="sm" icon="layers" onClick={() => setSnippetsOpen(true)}>
-            Snippets
+          <Button variant="outline" size="sm" icon="layers" title="Snippets" aria-label="Snippets" onClick={() => setSnippetsOpen(true)}>
+            <span className="vt-tb-label">Snippets</span>
           </Button>
         )}
         {hasTimeline && !isVideoProject && (
@@ -1586,6 +1600,7 @@ export default function ProjectEditor() {
             size="sm"
             icon="checkerboard"
             title="Remove background (Cmd+Z to undo)"
+            aria-label="Remove background"
             disabled={bgRemovedFlash || (doc ? !doc.tracks.some((t) => t.items.some((i) => i.type === "scene")) : !code.trim())}
             onClick={() => {
               /*
@@ -1622,15 +1637,15 @@ export default function ProjectEditor() {
               setTimeout(() => setBgRemovedFlash(false), 1500);
             }}
           >
-            {bgRemovedFlash ? "Removed" : "Remove background"}
+            <span className="vt-tb-label">{bgRemovedFlash ? "Removed" : "Remove background"}</span>
           </Button>
         )}
         {/* Video: fewer top buttons — analyze / smart trim / snippets / assets
             live under one Tools menu; the chat is the main editing surface. */}
         {isVideoProject ? (
           <div style={{ position: "relative" }} ref={toolsRef}>
-            <Button variant="outline" size="sm" icon="settings" onClick={() => setToolsOpen((v) => !v)}>
-              Tools <Icon name="chevronDown" size={12} />
+            <Button variant="outline" size="sm" icon="settings" title="Tools" aria-label="Tools" onClick={() => setToolsOpen((v) => !v)}>
+              <span className="vt-tb-label">Tools</span> <Icon name="chevronDown" size={12} />
             </Button>
             {toolsOpen && (
               <div
@@ -1674,8 +1689,8 @@ export default function ProjectEditor() {
             )}
           </div>
         ) : (
-          <Button variant="outline" size="sm" icon="folder" onClick={() => setAssetsOpen(true)}>
-            Assets
+          <Button variant="outline" size="sm" icon="folder" title="Assets" aria-label="Assets" onClick={() => setAssetsOpen(true)}>
+            <span className="vt-tb-label">Assets</span>
           </Button>
         )}
         {doc && (
@@ -1691,9 +1706,11 @@ export default function ProjectEditor() {
             variant="outline"
             size="sm"
             icon={showCodeEditor ? "layers" : "code"}
+            title={showCodeEditor ? "Editor" : "Code view"}
+            aria-label={showCodeEditor ? "Editor" : "Code view"}
             onClick={() => setShowCodeEditor((v) => !v)}
           >
-            {showCodeEditor ? "Editor" : "Code view"}
+            <span className="vt-tb-label">{showCodeEditor ? "Editor" : "Code view"}</span>
           </Button>
         )}
 

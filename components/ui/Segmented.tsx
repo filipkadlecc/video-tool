@@ -72,7 +72,7 @@ export default function Segmented({ value, onChange, options, height = 26, stret
             {o.label}
             {o.shortcut && (
               <span
-                className="t-data-s"
+                className="t-data-s vt-seg-shortcut"
                 style={{ color: active ? "var(--ink-tertiary)" : "var(--ink-disabled)" }}
               >
                 {o.shortcut}

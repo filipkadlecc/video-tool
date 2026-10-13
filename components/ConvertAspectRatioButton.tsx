@@ -125,10 +125,12 @@ export default function ConvertAspectRatioButton({ projectId, currentOrientation
         variant="outline"
         size="sm"
         icon="aspect"
+        title="Convert ratio"
+        aria-label="Convert ratio"
         onClick={() => setOpen(!open)}
         disabled={disabled || converting}
       >
-        {converting ? progress : "Convert ratio"}
+        {converting ? progress : <span className="vt-tb-label">Convert ratio</span>}
         {!converting && <Icon name="chevronDown" size={12} />}
       </Button>
 

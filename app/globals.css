@@ -259,6 +259,16 @@ input, textarea { font-family: inherit; color: inherit; }
 /* The chat composer's Enter hint is the first thing to drop in a narrow panel. */
 .vt-composer-row { container-type: inline-size; }
 @container (max-width: 400px) { .vt-hide-narrow { display: none; } }
+/* The editor's top bar on a narrow screen: first the secondary tools drop to
+   icons (their title still names them), then the frame pill and the Cut/Direct
+   shortcut hints go. Export always keeps its word. Measured on a timeline
+   animation in Cut, the fullest bar: labels need 1493px of content width plus
+   the name, icons 1092, without the pill and hints 896. The thresholds leave
+   the name ~160px and ~120px before stepping down. !important beats the
+   inline display the pill sets. */
+.vt-toolbar { container: vt-toolbar / inline-size; }
+@container vt-toolbar (max-width: 1652px) { .vt-tb-label { display: none !important; } }
+@container vt-toolbar (max-width: 1211px) { .vt-tb-wide, .vt-seg-shortcut { display: none !important; } }
 @keyframes vt-fact-timer { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes vt-glitch-in {
   0% { clip-path: inset(50% 0 50% 0); opacity: 0; }

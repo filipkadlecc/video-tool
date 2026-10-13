@@ -140,6 +140,42 @@ try {
       await p.close();
     }
   }
+
+  // The editor's top bar on laptop screens. It was one row that never wrapped
+  // inside an overflow:hidden shell, so on a 14" MacBook (1512px) Export and
+  // Code view were clipped off the right edge with no way to reach them. Every
+  // button in the bar must be on screen and clickable at each width.
+  if (docId) {
+    for (const [w, h] of [[1280, 800], [1440, 900], [1512, 860], [1728, 1117], [1920, 1080]]) {
+      const label = `editor toolbar @ ${w}×${h}`;
+      ROUTES.push({ path: label });
+      const p = await browser.newPage();
+      await p.setViewport({ width: w, height: h });
+      try {
+        await p.goto(`${base}/project/${docId}`, { waitUntil: "networkidle2", timeout: 90000 });
+        await p.waitForSelector(".vt-toolbar", { timeout: 60000 });
+        await new Promise((r) => setTimeout(r, 1500));
+        const lost = await p.evaluate(() => {
+          const out = [];
+          for (const el of document.querySelectorAll(".vt-toolbar button")) {
+            const r = el.getBoundingClientRect();
+            if (r.width < 2 || r.height < 2) continue;
+            const name = (el.getAttribute("aria-label") || el.innerText || el.title || "?").trim().slice(0, 24);
+            if (r.left < 0 || r.right > innerWidth + 0.5) { out.push(name); continue; }
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            if (!hit || !(hit === el || el.contains(hit))) out.push(name);
+          }
+          return out;
+        });
+        if (lost.length) fail(label, `off screen: ${lost.slice(0, 4).join(", ")}`);
+        else console.log(`  ok   ${label}`);
+      } catch (e) {
+        fail(label, e.message.slice(0, 90));
+      } finally {
+        await p.close();
+      }
+    }
+  }
 } finally {
   await browser.close();
 }
