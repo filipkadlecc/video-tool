@@ -8,7 +8,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { name, animationType, engine, settings, initialPrompt, initialCode, notionContent, scriptWithTimestamps, svgContents, styleMode, topicCardStyle, transitionStyle, useSfx, collectionId, doc } = body;
+  const { name, animationType, engine, settings, initialPrompt, initialCode, notionContent, scriptWithTimestamps, svgContents, styleMode, topicCardStyle, transitionStyle, useSfx, collectionId, doc, snippet } = body;
 
   // A project may start from a prompt, from code, OR as a timeline. A doc is a
   // complete starting point on its own — requiring a prompt beside it would mean
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     useSfx,
     collectionId,
     doc,
+    snippet,
   });
   return Response.json(project);
 }

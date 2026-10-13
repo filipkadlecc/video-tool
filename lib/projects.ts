@@ -105,6 +105,8 @@ export interface CreateProjectData {
    * edits the timeline instead of writing TSX (ChatPanel branches on this).
    */
   doc?: EditorDoc;
+  /** Started from a library snippet — see Project.snippet. */
+  snippet?: { id: string; values: Record<string, unknown> };
 }
 
 export function getProjectMediaDir(id: string): string {
@@ -180,6 +182,7 @@ export function createProject(data: CreateProjectData): Project {
     useSfx: data.useSfx ?? data.animationType !== "terminal",
     collectionId: data.collectionId,
     doc: data.doc,
+    snippet: data.snippet,
     createdAt: now,
     updatedAt: now,
   };

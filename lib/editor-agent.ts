@@ -1148,8 +1148,16 @@ export function applyDocTool(
           );
         }
 
-        const code = Object.keys(values).length && sn.schema
-          ? renderSnippet(sn.code, sn.schema, values)
+        // Text the model didn't set starts from the schema's defaults, not the
+        // file's literals — the Prompt box's model name follows lib/models.ts.
+        // Only text: some array defaults (ShortFunkyTitle's word positions) are
+        // not the file's, and swapping those in would move what it lays out.
+        const filled: Record<string, unknown> = { ...values };
+        for (const [key, param] of Object.entries(sn.schema?.params ?? {})) {
+          if (param.kind === "string" && !(key in filled)) filled[key] = param.default;
+        }
+        const code = Object.keys(filled).length && sn.schema
+          ? renderSnippet(sn.code, sn.schema, filled)
           : sn.code;
 
         // Its own length, restated at THIS document's rate — a 25fps scene needs
@@ -1177,7 +1185,7 @@ export function applyDocTool(
           // ONE WAY, so without this the parameter form could never be reopened —
           // which is the difference between a block the person can reword and a
           // block they are stuck with.
-          snippet: { id: sn.id, values },
+          snippet: { id: sn.id, values: filled },
           fit: "retime",
         };
         const set = Object.keys(values);

@@ -10,6 +10,8 @@
 // Param keys MUST match the snippet's constant name exactly — the substituter
 // uses them in line-anchored regex matches.
 
+import { CURRENT_CLAUDE_LABEL } from "./models";
+
 export interface StringParam {
   kind: "string";
   label: string;
@@ -656,7 +658,7 @@ export const SNIPPET_SCHEMAS: Record<string, SnippetSchema> = {
           "Based on these 2 analysis tasks, please prepare four concrete video ideas — each with a working title, format, length, and the data point that supports it.",
         multiline: true,
       },
-      MODEL_LABEL: { kind: "string", label: "Model label", default: "Opus 4.7" },
+      MODEL_LABEL: { kind: "string", label: "Model label", default: CURRENT_CLAUDE_LABEL },
       MODE_LABEL: { kind: "string", label: "Mode label", default: "Extra" },
       TYPING_SECONDS: { kind: "number", label: "Typing duration (s)", default: 2.4, min: 0.2, step: 0.1 },
       HOLD_SECONDS: { kind: "number", label: "Hold after typing (s)", default: 1.2, min: 0, step: 0.1 },

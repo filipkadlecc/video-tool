@@ -11,7 +11,8 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig } from "remotion";
 
 // --- Editable params -----------------------------------------------------
 const PROMPT_TEXT = "Based on these 2 analysis tasks, please prepare four concrete video ideas — each with a working title, format, length, and the data point that supports it.";
-const MODEL_LABEL = "Opus 4.7";
+// Placed copies take CURRENT_CLAUDE_LABEL from lib/models.ts; this is only the fallback.
+const MODEL_LABEL = "Opus 5.5";
 const MODE_LABEL = "Extra";
 // TYPING_SECONDS: time to type the full prompt. HOLD_SECONDS: pause after.
 const TYPING_SECONDS = 2.4;

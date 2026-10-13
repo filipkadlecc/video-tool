@@ -145,6 +145,10 @@ export interface Project {
   // Prompts that don't live in the chat — the timeline's "add animation" box.
   // Kept so "Export my prompts" sees everything that was asked of the AI.
   promptLog?: { ts: number; kind: "generate-scene"; text: string }[];
+  // Started from a library snippet: which one, and the values its form was
+  // filled with. The import hands it to the timeline block (SceneItem.snippet)
+  // so the Text tab can edit it — the rendered code can't be read back.
+  snippet?: { id: string; values: Record<string, unknown> };
   createdAt: string;
   updatedAt: string;
 }

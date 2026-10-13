@@ -21,6 +21,18 @@ const LEVELS: Record<ModelLevel, { model: string; effort: Effort }> = {
   best: { model: "claude-opus-5-5", effort: "max" },
 };
 
+/** "claude-opus-5-5" → "Opus 5.5", "claude-sonnet-5" → "Sonnet 5" — the name as a person would say it. */
+export function claudeLabel(modelId: string): string {
+  const [family = "", ...version] = modelId.replace(/^claude-/, "").split("-");
+  return [family.charAt(0).toUpperCase() + family.slice(1), version.join(".")].filter(Boolean).join(" ");
+}
+
+/**
+ * The Claude this tool writes with, by name. Graphics that show a Claude model
+ * (the Prompt box) default to it, so upgrading LEVELS upgrades them too.
+ */
+export const CURRENT_CLAUDE_LABEL = claudeLabel(LEVELS.balanced.model);
+
 export function isModelLevel(v: unknown): v is ModelLevel {
   return v === "fast" || v === "balanced" || v === "best";
 }

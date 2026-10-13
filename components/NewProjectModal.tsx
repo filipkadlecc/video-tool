@@ -16,6 +16,7 @@ import { SNIPPET_SCHEMAS, buildDefaultValues } from "@/lib/snippet-schemas";
 import { SNIPPET_ICONS } from "@/lib/snippet-icons";
 import { renderSnippet } from "@/lib/snippet-template";
 import StylePreviewModal from "@/components/StylePreviewModal";
+import SnippetParamsForm from "@/components/SnippetParamsForm";
 import IconButton from "@/components/ui/IconButton";
 
 /**
@@ -386,15 +387,14 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   }, [open]);
 
   // Reset the params form whenever the user picks a different snippet — each
-  // snippet has its own schema and defaults.
-  useEffect(() => {
-    if (!selectedSnippetId) {
-      setSnippetValues({});
-      return;
-    }
-    const schema = SNIPPET_SCHEMAS[selectedSnippetId];
-    if (schema) setSnippetValues(buildDefaultValues(schema));
-  }, [selectedSnippetId]);
+  // snippet has its own schema and defaults. Done while rendering, not in an
+  // effect, so the form never draws one frame with the last snippet's values.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (selectedSnippetId !== seededFor) {
+    setSeededFor(selectedSnippetId);
+    const schema = selectedSnippetId ? SNIPPET_SCHEMAS[selectedSnippetId] : undefined;
+    setSnippetValues(schema ? buildDefaultValues(schema) : {});
+  }
 
   useEffect(() => {
     if (open) {
@@ -631,6 +631,10 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
   const selectedSnippet = briefSource === "snippet" && selectedSnippetId
     ? snippets.find((s) => s.id === selectedSnippetId) ?? null
     : null;
+  // Its form, when it has anything to fill in.
+  const selectedSchema = selectedSnippet && Object.keys(SNIPPET_SCHEMAS[selectedSnippet.id]?.params ?? {}).length > 0
+    ? SNIPPET_SCHEMAS[selectedSnippet.id]
+    : undefined;
   const activeNotion = briefSource === "notion" ? notionContent : undefined;
   const activeScript = briefSource === "script" ? scriptWithTimestamps.trim() : "";
   const activeSvgs = briefSource === "artwork" ? svgFiles : [];
@@ -699,12 +703,13 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               briefed || "Edit uploaded footage"
             : withLength,
       initialCode: selectedSnippet
-        ? (() => {
-            const schema = SNIPPET_SCHEMAS[selectedSnippet.id];
-            if (!schema || Object.keys(schema.params).length === 0) return selectedSnippet.code;
-            return renderSnippet(selectedSnippet.code, schema, snippetValues);
-          })()
+        ? selectedSchema
+          ? renderSnippet(selectedSnippet.code, selectedSchema, snippetValues)
+          : selectedSnippet.code
         : undefined,
+      // Which snippet and what was typed into it — the editor hands this to the
+      // block so its Text tab can change the words later.
+      snippet: selectedSnippet && selectedSchema ? { id: selectedSnippet.id, values: snippetValues } : undefined,
       /*
        * Reference content — what the model is told to KNOW rather than to do.
        * A fetched Notion page and the notes box both land here (the page is
@@ -1025,12 +1030,15 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
                 typing" — but the six sat above a screen of empty space, and a
                 list you can only reach by guessing its name is not a list.
               */}
+              {/* The list and the picked snippet side by side, so filling in
+                  its text never pushes the list out of view. */}
+              <div style={{ display: "flex", gap: 12, flex: 1, minHeight: 0 }}>
               <div
                 className="vt-scroll"
                 style={{
                   display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
                   gridAutoRows: "min-content",
-                  flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4,
+                  flex: 1, minWidth: 0, minHeight: 0, overflowY: "auto", paddingRight: 4,
                 }}
               >
                 {filteredSnippets.map((s) => {
@@ -1066,27 +1074,51 @@ export default function NewProjectModal({ open, onClose, initialType, onCreated 
               {selectedSnippet && (
                 <div
                   style={{
-                    display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", flexShrink: 0,
+                    display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0,
+                    alignSelf: selectedSchema ? "stretch" : "flex-start",
                     background: "var(--surface-chrome)", border: "1px solid var(--border-edge)",
                     borderRadius: "var(--r-panel)",
                   }}
                 >
-                  <span
-                    aria-hidden
-                    style={{
-                      width: 88, height: 50, flexShrink: 0, background: "var(--surface-void)",
-                      border: "1px solid var(--border-hairline)", borderRadius: 2,
-                    }}
-                  />
-                  <span style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
-                    <span className="t-control" style={{ color: "var(--ink-primary)" }}>{selectedSnippet.name}</span>
-                    <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
-                      Lands as editable scenes. The assistant can extend it, or you can leave it as-is —
-                      its parameters are editable in the editor.
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px" }}>
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 88, height: 50, flexShrink: 0, background: "var(--surface-void)",
+                        border: "1px solid var(--border-hairline)", borderRadius: 2,
+                      }}
+                    />
+                    <span style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minWidth: 0 }}>
+                      <span className="t-control" style={{ color: "var(--ink-primary)" }}>{selectedSnippet.name}</span>
+                      <span className="t-caption" style={{ color: "var(--ink-tertiary)" }}>
+                        {selectedSchema
+                          ? "Set its text here — you can still change it later in the editor's Text tab."
+                          : "Lands as a block on the timeline. The assistant can extend it, or you can leave it as-is."}
+                      </span>
                     </span>
-                  </span>
+                  </div>
+                  {/* The text goes in before the project is made, not after.
+                      Its own scroll, for a long form (AI chat). */}
+                  {selectedSchema && (
+                    <div
+                      className="vt-scroll"
+                      style={{
+                        flex: 1, minHeight: 0, overflowY: "auto",
+                        padding: "12px 14px 14px", borderTop: "1px solid var(--border-hairline)",
+                      }}
+                    >
+                      <SnippetParamsForm
+                        key={selectedSnippet.id}
+                        schema={selectedSchema}
+                        values={snippetValues}
+                        onValuesChange={setSnippetValues}
+                        hideFooter
+                      />
+                    </div>
+                  )}
                 </div>
               )}
+              </div>
             </div>
           )}
 

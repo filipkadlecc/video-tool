@@ -34,6 +34,7 @@ import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
 import { addItem, addTrack, docDuration, docFromScene, emptyDoc, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, type EditorDoc, type EditorItem, type SceneItem , migrateDoc } from "@/lib/editor-doc";
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, resplitUntouched, suspiciousSegments } from "@/lib/editor-import";
+import { SNIPPET_SCHEMAS } from "@/lib/snippet-schemas";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { PlayerRef } from "@remotion/player";
@@ -910,6 +911,22 @@ export default function ProjectEditor() {
     // of branded scenes, or a few Sequences. Each cut becomes a block
     // windowed onto the original, so the design and motion are exactly
     // as authored and only the arrangement becomes editable.
+    // Started from a library snippet: one block that keeps the snippet's
+    // identity, as a snippet placed from the library does, so the Text tab can
+    // reword it. A snippet is one whole piece, so it isn't cut into blocks.
+    const fromSnippet = project.snippet && SNIPPET_SCHEMAS[project.snippet.id] ? project.snippet : undefined;
+    if (fromSnippet) {
+      const single = docFromScene(size, code, evaluated?.durationInFrames ?? 250, project.name);
+      commitDoc(withProjectFeel({
+        ...single,
+        tracks: single.tracks.map((t) => ({
+          ...t,
+          items: t.items.map((it) => (it.type === "scene" ? { ...it, snippet: fromSnippet, fit: "retime" as const } : it)),
+        })),
+      }, project.settings));
+      return;
+    }
+
     const asBlocks = docFromComposition(code, size, evaluated?.durationInFrames ?? 0);
     if (asBlocks) {
       commitDoc(withProjectFeel(asBlocks, project.settings));
