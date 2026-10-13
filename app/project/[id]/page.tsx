@@ -33,7 +33,7 @@ import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
 import { addItem, addTrack, docDuration, docFromScene, emptyDoc, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, type EditorDoc, type EditorItem, type SceneItem , migrateDoc } from "@/lib/editor-doc";
-import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
+import { docFromComposition, docFromCutPlan, docFromVideoEdit, resplitUntouched, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { PlayerRef } from "@remotion/player";
@@ -992,14 +992,27 @@ export default function ProjectEditor() {
 
     const docIsEmpty = !doc || doc.tracks.every((t) => t.items.length === 0);
     // Already has clips, or is a timeline deliberately started empty (compose,
-    // manual) with nothing written to import into it. Either way, hands off.
+    // manual) with nothing written to import into it. Either way, hands off —
+    // except for an animation that came in as one block only because its cuts
+    // couldn't be read then, and hasn't been touched since (resplitUntouched).
     if (!docIsEmpty || (doc && !code.trim())) {
       docSettledRef.current = true;
+      if (doc && code.trim() && project.animationType !== "video") {
+        const evaluated = evalSceneCode(code);
+        const split = evaluated && !evaluated.error
+          ? resplitUntouched(doc, code, evaluated.durationInFrames)
+          : null;
+        if (split) {
+          commitDoc(split);
+          const n = split.tracks[0].items.length;
+          toast.success(`Split into ${n} scenes`, "This animation opened as one block before. Undo with ⌘Z to keep it whole.");
+        }
+      }
       return;
     }
     docSettledRef.current = true;
     void importToDoc();
-  }, [project, doc, code, loading, importToDoc, isGenerating, willAutoGenerate]);
+  }, [project, doc, code, loading, importToDoc, isGenerating, willAutoGenerate, commitDoc, toast]);
 
   /**
    * Use a snippet. In the code editor that replaces the whole project, which is

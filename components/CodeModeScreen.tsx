@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import Icon from "@/components/ui/Icon";
 import CodeEditor from "@/components/CodeEditor";
 import { sceneJsonText, sceneProblems } from "@/lib/scene-json";
-import { findItem, updateItem, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
+import { findItem, setSceneCode, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
 import { timecode, needsHours } from "@/lib/timecode";
 
 /**
@@ -101,7 +101,7 @@ export default function CodeModeScreen({
               code={selectedScene ? selectedScene.code : text}
               onChange={(next) => {
                 if (!selectedScene) return;
-                onChange(updateItem<SceneItem>(doc, selectedScene.id, { code: next }));
+                onChange(setSceneCode(doc, selectedScene.id, next));
               }}
               language={selectedScene ? "typescript" : "json"}
               filename={selectedScene ? "scene.tsx" : "scene.json"}

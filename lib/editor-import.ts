@@ -2,7 +2,7 @@ import { parseDataTimeline, parseSegments } from "./data-timeline";
 import { normalizeSeriesToSequences, parseSequenceBlocks, parseTransitionSeries } from "./timeline-parser";
 import type { CutPlan } from "./cut-plan";
 import {
-  emptyDoc, fullFrameLayout, makeId,
+  docFromScene, emptyDoc, fullFrameLayout, makeId,
   type Asset, type DocSize, type EditorDoc, type EditorItem, type SceneItem, type VideoItem,
 } from "./editor-doc";
 
@@ -260,8 +260,10 @@ export function compositionSpans(
     // A <Series> lays its children out implicitly; flattening gives them the
     // explicit positions this needs. Only the POSITIONS come from the flattened
     // source — the blocks still embed the original, unflattened composition.
+    // Sound effects are <Sequence from={…}><Audio/></Sequence> too, timed off
+    // the same constants — a cut there would land on a whoosh, not a scene.
     const flat = normalizeSeriesToSequences(code, fps) ?? code;
-    const blocks = parseSequenceBlocks(flat, fps);
+    const blocks = parseSequenceBlocks(flat, fps).filter((b) => b.kind !== "audio");
     if (blocks.length > 0) starts = blocks.map((b) => b.from);
   }
   // Deliberately NOT parseTimeline: it drops a TransitionSeries.Sequence whose
@@ -367,6 +369,49 @@ export function docFromComposition(
       },
     ],
   };
+}
+
+/** Plain-data equality, key order and undefined keys ignored — documents come back through JSON. */
+function sameData(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = (o: object) => Object.keys(o).filter((k) => (o as Record<string, unknown>)[k] !== undefined);
+  const ka = keys(a), kb = keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => sameData((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
+/**
+ * An animation that opened as ONE block only because its cuts couldn't be read,
+ * rebuilt as one block per scene — if nobody has touched it since.
+ *
+ * Until v0.1.186 the parser couldn't read the `Math.round(fps / 25)` transition
+ * length the scene writer is told to use, so most generated animations landed
+ * as a single block. Their saved timelines stay that way until reopened; this is
+ * what reopening does about it.
+ *
+ * "Untouched" is strict: one track, holding exactly the block `docFromScene`
+ * makes of this code — same code, from frame 0, the composition's own length,
+ * no name, effects, keys or layout change — and nothing else. Any edit at all
+ * and the timeline is the user's, so this returns null. So does a composition
+ * that still has no cuts to find.
+ */
+export function resplitUntouched(
+  doc: EditorDoc,
+  code: string,
+  exportedDurationInFrames: number,
+): EditorDoc | null {
+  if (!code.trim() || doc.tracks.length !== 1) return null;
+  const [track] = doc.tracks;
+  if (track.hidden || track.muted || track.items.length !== 1) return null;
+  const item = track.items[0];
+  const expected = docFromScene(doc.size, code, exportedDurationInFrames).tracks[0].items[0];
+  if (!sameData({ ...item, id: "" }, { ...expected, id: "" })) return null;
+
+  const split = docFromComposition(code, doc.size, exportedDurationInFrames);
+  if (!split) return null;
+  return { ...doc, tracks: split.tracks };
 }
 
 /**

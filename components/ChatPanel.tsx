@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import type { ChatMessage, SvgFile } from "@/lib/types";
-import { findItem, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
+import { findItem, itemLabel, type EditorDoc, type EditorItem } from "@/lib/editor-doc";
 import { timecode, needsHours } from "@/lib/timecode";
 import Icon from "@/components/ui/Icon";
 import Kbd from "@/components/ui/Kbd";
@@ -45,7 +45,9 @@ function extractCodeFromResponse(text: string, animationType?: string): string {
 /** What a clip is called in a chip: its words, its file, or its kind. */
 function chipLabel(doc: EditorDoc, item: EditorItem): string {
   if (item.type === "text") return (item as { text?: string }).text?.slice(0, 32) || "Text";
-  if (item.type === "scene" && "snippet" in item && item.snippet) return String(item.snippet.id);
+  // "Scene 3" (or its name), the label the timeline shows and the AI is given —
+  // "scene" alone named every block in an imported animation the same.
+  if (item.type === "scene") return itemLabel(doc, item);
   // A footage clip is its file, never "video" — the chip has to name the clip
   // you picked, and every clip on the track answers to "video".
   const assetId = (item as { assetId?: string }).assetId;

@@ -67,6 +67,7 @@ import {
   type VideoItem,
   retimeSceneCode,
   sceneFit,
+  setSceneCode,
   itemLabel,
   sceneNumbers,
 } from "./editor-doc";
@@ -1598,5 +1599,7 @@ export function reviseSceneItem(doc: EditorDoc, itemId: string, code: string, fp
     const was = sceneMeta(item.code, fps);
     pinned = retimeSceneCode(code, was.durationInFrames, was.fps);
   }
-  return updateItem<SceneItem>(doc, itemId, { code: pinned, fit, snippet: undefined });
+  // A window's revision is a revision of the composition it shows, so every
+  // window onto it takes the new code (see setSceneCode).
+  return updateItem<SceneItem>(setSceneCode(doc, itemId, pinned), itemId, { fit, snippet: undefined });
 }

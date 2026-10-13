@@ -4,7 +4,7 @@ import React, { useLayoutEffect, useMemo, useState } from "react";
 import ScrubNumber from "@/components/ui/ScrubNumber";
 import Icon from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
-import { findItem, updateItem, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
+import { findItem, setSceneCode, type EditorDoc, type SceneItem } from "@/lib/editor-doc";
 import { describeElement, elementLabel, findPickedNode, type ElementPick } from "@/lib/scene-elements";
 import {
   readElementProps, setElementStyle, setElementText, parseTranslate, type StyleKey,
@@ -119,7 +119,7 @@ export default function ElementSection({ doc, pick, frame, onChange, onClear }: 
       if (!opts?.transient) toast.warning("That change would break the scene", "Nothing was changed. Try asking for it in the chat.");
       return;
     }
-    onChange(updateItem<SceneItem>(doc, item.id, { code: next }), opts);
+    onChange(setSceneCode(doc, item.id, next), opts);
   };
   const setStyle = (key: StyleKey, source: string, opts?: { transient?: boolean }) =>
     apply(setElementStyle(code, pick.offset, key, source), opts);

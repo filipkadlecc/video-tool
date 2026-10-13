@@ -813,6 +813,36 @@ export function sceneFit(item: SceneItem): "window" | "retime" {
 }
 
 /**
+ * Give a scene block new code — and every window cut from the same composition.
+ *
+ * An imported animation is ONE composition shown through N windows, each block
+ * holding its own copy of the whole file. Revising "Scene 2" rewrites that file:
+ * its shared constants, background and sound, and the blend into Scene 3 that
+ * Scene 3's window draws. Written to one block only, the others kept the old
+ * copy — so a change to the colours stopped at the cut, and the blend out of the
+ * revised scene showed it as it was before.
+ *
+ * Siblings are window blocks holding exactly the block's current code. A placed
+ * snippet, or a window whose code has already been changed on its own, is left
+ * alone.
+ */
+export function setSceneCode(doc: EditorDoc, itemId: string, code: string): EditorDoc {
+  const found = findItem(doc, itemId);
+  if (!found || found.item.type !== "scene") return doc;
+  const self = found.item as SceneItem;
+  const shared = sceneFit(self) === "window";
+  const isSibling = (i: EditorItem) =>
+    shared && i.type === "scene" && sceneFit(i as SceneItem) === "window" && (i as SceneItem).code === self.code;
+  return {
+    ...doc,
+    tracks: doc.tracks.map((t) =>
+      t.items.some((i) => i.id === itemId || isSibling(i))
+        ? { ...t, items: t.items.map((i) => (i.id === itemId || isSibling(i) ? ({ ...i, code } as EditorItem) : i)) }
+        : t),
+  };
+}
+
+/**
  * Rewrite a scene's declared length so it matches the frames it will actually
  * receive.
  *

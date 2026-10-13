@@ -27,30 +27,96 @@ function extractFilename(src: string): string {
   return parts[parts.length - 1] || src;
 }
 
-function resolveNumericExpr(expr: string, constants: Record<string, number>): number | null {
-  // Trim
+/** The Math calls a timing constant may use: `Math.max(1, Math.round(fps / 25))`. */
+const TIMING_MATH = /\bMath\.(?:round|floor|ceil|max|min|abs)\b/g;
+
+function resolveNumericExpr(
+  expr: string,
+  constants: Record<string, number>,
+  round = true,
+): number | null {
   let s = expr.trim();
 
   // Direct number
   if (/^\d+$/.test(s)) return parseInt(s, 10);
 
-  // Simple math: "150 + 300", "TRANSITION + 200", etc.
-  // Replace known constants
-  for (const [name, value] of Object.entries(constants)) {
-    s = s.replace(new RegExp(`\\b${name}\\b`, "g"), String(value));
-  }
+  // Replace known constants — never a property of something else (`Math.max`,
+  // `cfg.fps`), and parenthesised so a negative or fractional value stays one term.
+  s = s.replace(/(?<![.\w$])([A-Za-z_$][\w$]*)/g, (word, name: string) =>
+    Object.prototype.hasOwnProperty.call(constants, name) ? `(${constants[name]})` : word);
 
-  // Try to evaluate simple arithmetic
-  if (/^[\d\s+\-*/().]+$/.test(s)) {
-    try {
-      const result = Function(`"use strict"; return (${s})`)();
-      if (typeof result === "number" && !isNaN(result)) return Math.round(result);
-    } catch {
-      // fallback
-    }
+  // Only arithmetic and those few Math calls may be left. Anything else — a
+  // function call, a property, a string — means the value isn't static.
+  if (!/^[\d\s+\-*/%().,]+$/.test(s.replace(TIMING_MATH, ""))) return null;
+  try {
+    const result = Function(`"use strict"; return (${s})`)();
+    if (typeof result === "number" && Number.isFinite(result)) return round ? Math.round(result) : result;
+  } catch {
+    // not an expression after all
   }
-
   return null;
+}
+
+/**
+ * The numeric constants a composition declares, resolved the way JS would.
+ *
+ * The scene writer is told to derive its transition length from the frame rate
+ * (`const TRANSITION = Math.max(1, Math.round(fps / 25))`) and builds slot
+ * lengths out of other constants (`SCENE_A + TRANSITION`). Reading only plain
+ * integers, as this used to, left every such TransitionSeries unparsed, so 26
+ * of 77 generated animations — 8 of the last 9 — opened as one block instead
+ * of one block per scene.
+ *
+ * Module-level declarations are resolved first, in passes so their order
+ * doesn't matter; then those inside functions, which never replace a
+ * module-level name (and among themselves the later one wins, as before).
+ * `overrides` are pinned before anything resolves, so constants built from
+ * them follow.
+ */
+export function collectConstants(
+  code: string,
+  fps: number,
+  overrides?: Record<string, number>,
+): Record<string, number> {
+  const constants: Record<string, number> = { fps };
+  const pinned = new Set(Object.keys(overrides ?? {}));
+  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*(?::\s*number\s*)?=\s*(\d+(?:\.\d+)?)\b/);
+  if (fpsExport) {
+    constants.fps = Number(fpsExport[1]);
+    pinned.add("fps");
+  }
+  Object.assign(constants, overrides ?? {});
+
+  const decls = [...code.matchAll(/(?:const|let|var)\s+([A-Za-z_]\w*)\s*(?::\s*number\s*)?=\s*([^;\n]+)/g)]
+    .map((m, i) => {
+      // Module level = on an unindented line (the generator indents function bodies).
+      const lineStart = code.lastIndexOf("\n", m.index) + 1;
+      return { name: m[1], expr: m[2], order: i, topLevel: !/[ \t]/.test(code[lineStart] ?? "") };
+    })
+    .filter((d) => !pinned.has(d.name));
+
+  const resolve = (group: typeof decls, mayReplace: (name: string) => boolean) => {
+    const owner = new Map<string, number>();
+    const done = new Set<number>();
+    for (let changed = true; changed; ) {
+      changed = false;
+      for (const d of group) {
+        if (done.has(d.order)) continue;
+        const v = resolveNumericExpr(d.expr, constants, false);
+        if (v === null) continue;
+        done.add(d.order);
+        const bound = owner.get(d.name);
+        if ((bound !== undefined && bound > d.order) || !mayReplace(d.name)) continue;
+        owner.set(d.name, d.order);
+        constants[d.name] = v;
+        changed = true;
+      }
+    }
+    return new Set(owner.keys());
+  };
+  const moduleLevel = resolve(decls.filter((d) => d.topLevel), () => true);
+  resolve(decls.filter((d) => !d.topLevel), (name) => !moduleLevel.has(name));
+  return constants;
 }
 
 /**
@@ -212,14 +278,7 @@ export function parseMediaBeds(code: string): MediaBed[] {
 export function parseSequenceBlocks(code: string, fps: number): SequenceBlock[] {
   if (!code || !code.trim()) return [];
 
-  const constants: Record<string, number> = { fps };
-  const constRegex = /(?:const|let|var)\s+(\w+)\s*=\s*(\d+)/g;
-  let cm: RegExpExecArray | null;
-  while ((cm = constRegex.exec(code)) !== null) {
-    constants[cm[1]] = parseInt(cm[2], 10);
-  }
-  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*=\s*(\d+)/);
-  if (fpsExport) constants.fps = parseInt(fpsExport[1], 10);
+  const constants = collectConstants(code, fps);
 
   const blocks: SequenceBlock[] = [];
   // Match opening tag <Sequence ...> (NOT TransitionSeries.Sequence / Series.Sequence).
@@ -358,14 +417,7 @@ export function normalizeSeriesToSequences(code: string, fps: number): string | 
   if (!openMatch || closeIdx < 0 || closeIdx < openMatch.index) return null;
   if (/<TransitionSeries\b/.test(code)) return null;
 
-  const constants: Record<string, number> = { fps };
-  const constRegex = /(?:const|let|var)\s+(\w+)\s*=\s*(\d+)/g;
-  let cm: RegExpExecArray | null;
-  while ((cm = constRegex.exec(code)) !== null) {
-    constants[cm[1]] = parseInt(cm[2], 10);
-  }
-  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*=\s*(\d+)/);
-  if (fpsExport) constants.fps = parseInt(fpsExport[1], 10);
+  const constants = collectConstants(code, fps);
 
   const body = code.slice(openMatch.index + openMatch[0].length, closeIdx);
   const childRe = /<Series\.Sequence\b([^>]*)>([\s\S]*?)<\/Series\.Sequence>/g;
@@ -583,15 +635,7 @@ export function resolveExprInCode(
   fps: number,
   overrides?: Record<string, number>,
 ): number | null {
-  const constants: Record<string, number> = { fps };
-  for (const m of code.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(\d+)\s*;/g)) {
-    constants[m[1]] = parseInt(m[2], 10);
-  }
-  for (const m of code.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*([A-Za-z_]\w*)\s*;/g)) {
-    if (!(m[1] in constants) && m[2] in constants) constants[m[1]] = constants[m[2]];
-  }
-  Object.assign(constants, overrides ?? {});
-  return resolveNumericExpr(expr, constants);
+  return resolveNumericExpr(expr, collectConstants(code, fps, overrides));
 }
 
 export function parseTransitionSeries(
@@ -604,16 +648,7 @@ export function parseTransitionSeries(
   const seriesStart = open.index;
   const seriesEnd = closeIdx + "</TransitionSeries>".length;
 
-  const constants: Record<string, number> = { fps };
-  for (const m of code.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*(\d+)\s*;/g)) {
-    constants[m[1]] = parseInt(m[2], 10);
-  }
-  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*=\s*(\d+)/);
-  if (fpsExport) constants.fps = parseInt(fpsExport[1], 10);
-  // `const T = TRANSITION;` — one level of aliasing between integer constants.
-  for (const m of code.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*([A-Za-z_]\w*)\s*;/g)) {
-    if (!(m[1] in constants) && m[2] in constants) constants[m[1]] = constants[m[2]];
-  }
+  const constants = collectConstants(code, fps);
 
   // Walk the series body in document order, interleaving children and transitions.
   const body = code.slice(seriesStart, seriesEnd);
@@ -706,17 +741,7 @@ export function parseTimeline(code: string, fps: number): TimelineClip[] {
 
   const clips: TimelineClip[] = [];
 
-  // Extract constants (const FOO = 123)
-  const constants: Record<string, number> = { fps };
-  const constRegex = /(?:const|let|var)\s+(\w+)\s*=\s*(\d+)/g;
-  let constMatch;
-  while ((constMatch = constRegex.exec(code)) !== null) {
-    constants[constMatch[1]] = parseInt(constMatch[2], 10);
-  }
-
-  // Also try to get fps and durationInFrames from exports
-  const fpsExport = code.match(/export\s+(?:const|let|var)\s+fps\s*=\s*(\d+)/);
-  if (fpsExport) constants.fps = parseInt(fpsExport[1], 10);
+  const constants = collectConstants(code, fps);
 
   // Pattern 1: <Sequence from={X} durationInFrames={Y}> containing video/audio/img
   const sequenceRegex = /<Sequence[^>]*?\bfrom=\{([^}]+)\}[^>]*?\bdurationInFrames=\{([^}]+)\}[^>]*?>([\s\S]*?)<\/Sequence>/g;

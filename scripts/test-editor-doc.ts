@@ -10,7 +10,9 @@
  */
 import fs from "fs";
 import path from "path";
-import { compositionSpans, docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments, windowedSceneItem } from "../lib/editor-import";
+import { compositionSpans, docFromComposition, docFromCutPlan, docFromVideoEdit, resplitUntouched, suspiciousSegments, windowedSceneItem } from "../lib/editor-import";
+import { collectConstants } from "../lib/timeline-parser";
+import { reviseSceneItem } from "../lib/editor-agent";
 import { planCuts, DEFAULT_THRESHOLDS } from "../lib/cut-plan";
 import type { Transcript } from "../lib/transcribe";
 import {
@@ -34,7 +36,7 @@ import {
   makeId, moveItem, removeItem, reorderTrack, rippleRemoveItem, setLayout,
   captionPageAt, cloneItem, duplicateItem, moveItemToTrack, paginateCaptions,
   hasRoomAt, resizeLayout, snapBox, splitItem, trackAboveAt, trackWithRoomAt, trimItem, updateItem,
-  fitSceneItem, retimeSceneCode, sceneFit,
+  fitSceneItem, retimeSceneCode, sceneFit, setSceneCode, renameItem,
   type Asset, type CaptionToken, type EditorDoc, type SceneItem, type SolidItem, type TextItem, type VideoItem,
   migrateDoc, EDITOR_DOC_VERSION, setItemKey, evenSpacing, evenSpacingGap, sameDuration, pasteEffects, removeItemKey, enableChannel, disableChannel, itemLayoutAt,
   type EditorItem,
@@ -1582,6 +1584,122 @@ head("a library block's texts are edited in place, and its length is kept");
   a(blk(p).durationInFrames === before + 2 * FPS, "PromptBox: two more seconds of typing, two more seconds of block");
 
   a(applySnippetValues(d, "nope", chatValues) === d, "an unknown block is a no-op");
+}
+
+head("an animation built the way the scene writer builds it splits into its scenes");
+{
+  // The prompt's own transition constant, and slots built from other constants.
+  // Reading only plain integers left this whole series unparsed: one block.
+  const GENERATED = [
+    'import { TransitionSeries, linearTiming } from "@remotion/transitions";',
+    'import { AbsoluteFill, Sequence, Audio, staticFile } from "remotion";',
+    "export const fps = 30;",
+    "const TRANSITION = Math.max(1, Math.round((20 * fps) / 25));",
+    "const SCENE_A = 120;",
+    "const SCENE_B = 90;",
+    "const SCENE_C = 60;",
+    "const B_START = SCENE_A;",
+    "export const durationInFrames = SCENE_A + SCENE_B + SCENE_C;",
+    "const SFX = () => (<><Sequence from={B_START - 6}><Audio src={staticFile(\"assets/sfx/swish-1.wav\")} /></Sequence></>);",
+    "export default function Main() { return (<AbsoluteFill>",
+    "  <TransitionSeries>",
+    "    <TransitionSeries.Sequence durationInFrames={SCENE_A + TRANSITION}><A /></TransitionSeries.Sequence>",
+    "    <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: TRANSITION })} />",
+    "    <TransitionSeries.Sequence durationInFrames={SCENE_B + TRANSITION}><B /></TransitionSeries.Sequence>",
+    "    <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: TRANSITION })} />",
+    "    <TransitionSeries.Sequence durationInFrames={SCENE_C}><C /></TransitionSeries.Sequence>",
+    "  </TransitionSeries><SFX /></AbsoluteFill>); }",
+  ].join("\n");
+
+  const c = collectConstants(GENERATED, 30);
+  a(c.TRANSITION === 24, "Math.max(1, Math.round(20 * fps / 25)) reads as 24 at 30fps");
+  a(c.B_START === 120, "a constant built from another one resolves");
+  a(collectConstants(GENERATED, 30, { SCENE_A: 100 }).B_START === 100, "an override flows into the constants built from it");
+  a(collectConstants("const A = B + 1; const B = 2;", 30).A === 3, "declaration order doesn't matter");
+  a(collectConstants("const X = 10;\nfunction f() {\n  const X = 99;\n}", 30).X === 10, "a module-level constant beats a local of the same name");
+  a(collectConstants("const X = useCurrentFrame();", 30).X === undefined, "a call is not a constant");
+
+  const spans = compositionSpans(GENERATED, 30, 270);
+  a(spans?.length === 3, `three scenes, three blocks (got ${spans?.length ?? "none"})`);
+  a(spans?.[1].from === 120 && spans?.[2].from === 210, "cut where each scene starts");
+
+  const doc = docFromComposition(GENERATED, SIZE, 270)!;
+  a(Boolean(doc) && isValidDoc(doc), "a valid timeline");
+  a(doc.tracks[0].items.every((i) => (i as SceneItem).code === GENERATED), "every block still embeds the whole composition");
+
+  // No TransitionSeries: plain Sequences, and the sound effects between them.
+  const PLAIN = [
+    "export const fps = 30;",
+    "const HALF = fps * 2;",
+    "export const durationInFrames = HALF * 2;",
+    "export default function Main() { return (<AbsoluteFill>",
+    "  <Sequence from={0} durationInFrames={HALF}><A /></Sequence>",
+    "  <Sequence from={HALF} durationInFrames={HALF}><B /></Sequence>",
+    "  <Sequence from={HALF - 10}><Audio src={staticFile(\"assets/sfx/swish-1.wav\")} /></Sequence>",
+    "  <Sequence from={HALF + 17} durationInFrames={20}><Audio src={staticFile(\"assets/sfx/pop-1.wav\")} /></Sequence>",
+    "</AbsoluteFill>); }",
+  ].join("\n");
+  const plain = compositionSpans(PLAIN, 30, 120);
+  a(plain?.map((sp) => sp.from).join(",") === "0,60", `sound effects are not scene cuts (got ${plain?.map((sp) => sp.from).join(",")})`);
+}
+
+head("revising one scene of an imported animation revises all of its windows");
+{
+  const COMP = "export const fps = 30;\nexport const durationInFrames = 300;\nexport default function C(){return null;}";
+  let d = emptyDoc(SIZE);
+  const track = d.tracks[0].id;
+  d = addItem(d, track, { ...windowedSceneItem(COMP, SIZE, 0, 100, 0), id: "w1" });
+  d = addItem(d, track, { ...windowedSceneItem(COMP, SIZE, 100, 100, 100), id: "w2" });
+  d = addItem(d, track, { ...windowedSceneItem(COMP, SIZE, 200, 100, 200), id: "w3" });
+  const other: SceneItem = { ...windowedSceneItem(COMP + "\n// changed alone", SIZE, 300, 50, 0), id: "w4" };
+  d = addItem(d, track, other);
+  const snippetCode = COMP.replace("300", "90");
+  const t2 = addTrack(d); d = t2;
+  d = addItem(d, d.tracks[1].id, { type: "scene", id: "snip", from: 0, durationInFrames: 90, layout: { ...box }, code: COMP, snippet: { id: "Card", values: {} }, fit: "retime" });
+  const code = (id: string) => (findItem(d, id)!.item as SceneItem).code;
+
+  const NEW = COMP.replace("return null", "return <div/>");
+  const r = reviseSceneItem(d, "w2", NEW, 30);
+  const codeIn = (doc: EditorDoc, id: string) => (findItem(doc, id)!.item as SceneItem).code;
+  a(codeIn(r, "w2").includes("<div/>"), "the revised block has the new code");
+  a(codeIn(r, "w1").includes("<div/>") && codeIn(r, "w3").includes("<div/>"), "and so do the other windows onto the same composition");
+  a(codeIn(r, "w4") === code("w4"), "a window whose code was already changed on its own is left alone");
+  a(codeIn(r, "snip") === code("snip"), "a placed snippet with the same text is left alone");
+  a((findItem(r, "w3")!.item as SceneItem).sourceOffsetFrames === 200 && findItem(r, "w3")!.item.durationInFrames === 100,
+    "each window keeps its own place and length");
+  a(isValidDoc(r), "still a valid timeline");
+
+  // Revising the snippet touches only the snippet.
+  const s2 = setSceneCode(d, "snip", snippetCode);
+  a(codeIn(s2, "snip") === snippetCode && codeIn(s2, "w1") === COMP, "a retiming block is its own piece");
+}
+
+head("an untouched one-block animation reopens as its scenes; a touched one doesn't");
+{
+  const GEN = [
+    "export const fps = 30;",
+    "const T = Math.max(1, Math.round(fps / 25));",
+    "export const durationInFrames = 200;",
+    "export default function Main() { return (<TransitionSeries>",
+    "  <TransitionSeries.Sequence durationInFrames={100 + T}><A /></TransitionSeries.Sequence>",
+    "  <TransitionSeries.Transition timing={linearTiming({ durationInFrames: T })} />",
+    "  <TransitionSeries.Sequence durationInFrames={100}><B /></TransitionSeries.Sequence>",
+    "</TransitionSeries>); }",
+  ].join("\n");
+  // What the old import made of it: one block, on a track named after the project.
+  const old = docFromScene(SIZE, GEN, 200, "My project");
+  const re = resplitUntouched(old, GEN, 200);
+  a(re?.tracks[0].items.length === 2, "the single block becomes two scenes");
+  a(Boolean(re) && isValidDoc(re!), "valid");
+  a(resplitUntouched(JSON.parse(JSON.stringify(old)), GEN, 200) !== null, "also after a trip through JSON, as it is stored");
+
+  const id = old.tracks[0].items[0].id;
+  a(resplitUntouched(renameItem(old, id, "Hero"), GEN, 200) === null, "renamed: hands off");
+  a(resplitUntouched(updateItem(old, id, { durationInFrames: 150 }), GEN, 200) === null, "resized: hands off");
+  a(resplitUntouched(addTrack(old), GEN, 200) === null, "a track added: hands off");
+  a(resplitUntouched(old, GEN.replace("Main", "Main2"), 200) === null, "the code has moved on since: hands off");
+  a(resplitUntouched(docFromScene(SIZE, "export default function S(){return null;}", 200), "export default function S(){return null;}", 200) === null,
+    "nothing to cut: stays one block");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);
