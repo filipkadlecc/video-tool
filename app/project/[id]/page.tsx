@@ -32,7 +32,7 @@ import Menu from "@/components/ui/Menu";
 import Tabs from "@/components/ui/Tabs";
 import { useCodeHistory } from "@/hooks/useCodeHistory";
 import { useDocHistory } from "@/hooks/useDocHistory";
-import { addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, updateItem, type EditorDoc, type EditorItem, type SceneItem , migrateDoc } from "@/lib/editor-doc";
+import { addItem, addTrack, docDuration, docFromScene, emptyDoc, fitSceneItem, fullFrameLayout, makeId, retimeSceneCode, splitItem, trackWithRoomAt, type EditorDoc, type EditorItem, type SceneItem , migrateDoc } from "@/lib/editor-doc";
 import { docFromComposition, docFromCutPlan, docFromVideoEdit, suspiciousSegments } from "@/lib/editor-import";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import type { PanelImperativeHandle } from "react-resizable-panels";
@@ -61,7 +61,6 @@ const ProjectSettingsDialog = dynamic(() => import("@/components/ProjectSettings
 const EditorInspector = dynamic(() => import("@/components/EditorInspector"), { ssr: false });
 const FootageBrowser = dynamic(() => import("@/components/FootageBrowser"), { ssr: false });
 const EffectsPanel = dynamic(() => import("@/components/EffectsPanel"), { ssr: false });
-const SnippetEditDialog = dynamic(() => import("@/components/SnippetEditDialog"), { ssr: false });
 
 const PreviewPanel = dynamic(() => import("@/components/PreviewPanel"), {
   ssr: false,
@@ -246,7 +245,6 @@ export default function ProjectEditor() {
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const timelinePanelRef = useRef<PanelImperativeHandle | null>(null);
   const railPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
   const chatRef = useRef<ChatPanelHandle>(null);
   // Bounds automatic error-retry so a persistently-broken generation can't loop
   // the model forever. Reset to 0 whenever a generation lands with no error.
@@ -1888,7 +1886,6 @@ export default function ProjectEditor() {
                   doc={docView}
                   selectedIds={selectedItemIds}
                   onChange={commitDoc}
-                  onEditSnippet={setEditingSnippetId}
                   projectId={projectId}
                   selectedElement={selectedElement}
                   onClearElement={() => setSelectedElement(null)}
@@ -2032,40 +2029,6 @@ export default function ProjectEditor() {
                 }),
               });
             } catch { /* the document is already right; the badge can lag */ }
-          }}
-        />
-      )}
-
-      {docView && (
-        <SnippetEditDialog
-          open={editingSnippetId !== null}
-          item={(() => {
-            if (!editingSnippetId) return null;
-            const found = findItem(docView, editingSnippetId);
-            return found && found.item.type === "scene" ? found.item : null;
-          })()}
-          onClose={() => setEditingSnippetId(null)}
-          onSave={(nextCode, values) => {
-            if (!editingSnippetId) return;
-            // Changing a parameter can change how long the scene runs (PromptBox's
-            // typing seconds, AiChat's logo flag), so the block has to be re-timed
-            // with it — otherwise the animation and its slot disagree.
-            const re = evalSceneCode(nextCode);
-            const reDur = re
-              ? sceneFramesAtFps({ durationInFrames: re.durationInFrames, fps: re.fps }, docView.size.fps)
-              : undefined;
-            commitDoc(updateItem<SceneItem>(docView, editingSnippetId, {
-              // Re-rendered code carries the snippet's own length again, so it is
-              // put back into document units or the exit stops being reachable.
-              code: reDur
-                ? retimeSceneCode(nextCode, reDur, docView.size.fps)
-                : nextCode,
-              ...(reDur !== undefined ? { durationInFrames: reDur } : {}),
-              fit: "retime",
-              snippet: { id: findItem(docView, editingSnippetId)?.item.type === "scene"
-                ? (findItem(docView, editingSnippetId)!.item as SceneItem).snippet!.id
-                : "", values },
-            }));
           }}
         />
       )}

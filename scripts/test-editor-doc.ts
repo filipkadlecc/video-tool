@@ -22,9 +22,12 @@ import { ANIMATION_PRESETS, animationFrames, composeEffects, itemEffects, preset
 import { scrubValue } from "../components/ui/ScrubNumber";
 import { timecode, needsHours } from "../lib/timecode";
 import { evalSceneCode } from "../remotion/DynamicScene";
-import { sceneMeta } from "../lib/scene-eval";
+import { sceneFramesAtFps, sceneMeta } from "../lib/scene-eval";
 import { getProjectSize, type ProjectSettings } from "../lib/types";
 import { captionItem, placeCaptions } from "../lib/captions-preset";
+import { applySnippetValues } from "../lib/snippet-apply";
+import { SNIPPET_SCHEMAS, buildDefaultValues } from "../lib/snippet-schemas";
+import { renderSnippet } from "../lib/snippet-template";
 import {
   addAsset, addItem, addTrack, docDuration, docFromScene, emptyDoc, findItem, isValidDoc,
   relinkAsset, resizeDoc, retimeDoc,
@@ -1532,6 +1535,53 @@ head("nothing the app renders asks for a weight above Medium");
   // The rule has to reach the model too, not just the library.
   const base = fs.readFileSync("lib/prompts/base.ts", "utf-8");
   a(/exactly THREE weights/.test(base), "and the prompt tells the model the same thing");
+}
+
+head("a library block's texts are edited in place, and its length is kept");
+{
+  // Insert the way the page does: render the library file, size the block
+  // from what the code declares, and bring the code into document units.
+  const place = (id: string, values: Record<string, unknown>) => {
+    const schema = SNIPPET_SCHEMAS[id];
+    const src = fs.readFileSync(`remotion/scenes/branded/${id}.tsx`, "utf-8");
+    const code = renderSnippet(src, schema, values);
+    const item: SceneItem = {
+      type: "scene", id: "blk", from: 0, layout: { ...box }, code,
+      durationInFrames: sceneFramesAtFps(sceneMeta(code, FPS), FPS),
+      snippet: { id, values }, fit: "retime",
+    };
+    const doc = emptyDoc(SIZE);
+    return addItem(doc, doc.tracks[0].id, fitSceneItem(item, FPS));
+  };
+  const blk = (d: EditorDoc) => findItem(d, "blk")!.item as SceneItem;
+
+  // AiChat at 30fps: authored 375 frames at 25 — 450 on this timeline.
+  const chatValues = { ...buildDefaultValues(SNIPPET_SCHEMAS.AiChat), PROMPT: "Find me leads" };
+  let d = place("AiChat", chatValues);
+  a(blk(d).durationInFrames === 450, "AiChat lands at 450 frames in a 30fps document");
+
+  d = applySnippetValues(d, "blk", { ...chatValues, PROMPT: "Find me 50 dentists in Prague" });
+  a(/Find me 50 dentists in Prague/.test(blk(d).code), "the new prompt is written into the code");
+  a(blk(d).snippet?.values.PROMPT === "Find me 50 dentists in Prague", "and remembered as the block's value");
+  a(blk(d).durationInFrames === 450, "a text edit doesn't shrink the block (it used to drop to 375)");
+
+  d = updateItem<SceneItem>(d, "blk", { durationInFrames: 600 });
+  d = applySnippetValues(d, "blk", { ...chatValues, PROMPT: "Again" });
+  a(blk(d).durationInFrames === 600, "a block the user resized keeps its size through a text edit");
+
+  d = applySnippetValues(d, "blk", { ...chatValues, PROMPT: "Again", SHOW_LOGO: false });
+  a(blk(d).durationInFrames < 600, "turning the logo outro off shortens it — the code's own length changed");
+
+  // PromptBox computes its length from typing + hold seconds.
+  const boxValues = buildDefaultValues(SNIPPET_SCHEMAS.PromptBox);
+  let p = place("PromptBox", boxValues);
+  const before = blk(p).durationInFrames;
+  p = applySnippetValues(p, "blk", { ...boxValues, PROMPT_TEXT: "A much longer prompt than the default one" });
+  a(blk(p).durationInFrames === before, "PromptBox: new text, same length");
+  p = applySnippetValues(p, "blk", { ...boxValues, TYPING_SECONDS: Number(boxValues.TYPING_SECONDS) + 2 });
+  a(blk(p).durationInFrames === before + 2 * FPS, "PromptBox: two more seconds of typing, two more seconds of block");
+
+  a(applySnippetValues(d, "nope", chatValues) === d, "an unknown block is a no-op");
 }
 
 console.log(`\n==== ${pass} passed, ${fail} failed ====`);

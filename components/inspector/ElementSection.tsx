@@ -40,11 +40,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function Locked({ why }: { why: string }) {
+function Locked({ why, title = "This value is worked out in the scene's code. Ask for the change in the chat." }: { why: string; title?: string }) {
   return (
     <div
       className="t-caption"
-      title="This value is worked out in the scene's code. Ask for the change in the chat."
+      title={title}
       style={{ ...FIELD, display: "flex", alignItems: "center", gap: 6, color: "var(--ink-disabled)" }}
     >
       <Icon name="lock" size={11} />
@@ -171,7 +171,10 @@ export default function ElementSection({ doc, pick, frame, onChange, onClear }: 
                 style={FIELD}
               />
             ) : (
-              <Locked why="set in code — ask the AI" />
+              // A library block's words are its parameters, edited in the Text tab.
+              (item as SceneItem).snippet
+                ? <Locked why="edit it in the Text tab" title="This block's texts are in the Text tab below." />
+                : <Locked why="set in code — ask the AI" />
             )}
           </Row>
         )}

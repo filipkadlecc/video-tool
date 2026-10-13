@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ScrubNumber from "@/components/ui/ScrubNumber";
 import Icon from "@/components/ui/Icon";
 import IconButton from "@/components/ui/IconButton";
@@ -14,7 +14,7 @@ import {
   findItem, hasSource, setLayout, updateItem, docDuration,
   evenSpacing, evenSpacingGap, sameDuration, pasteEffects, itemLabel, renameItem,
   type AudioItem, type CaptionsItem, type EditorDoc, type EditorItem,
-  type TextItem, type VideoItem,
+  type SceneItem, type TextItem, type VideoItem,
 } from "@/lib/editor-doc";
 import {
   itemEffects, presetsFor, setEffectPreset,
@@ -33,6 +33,9 @@ import GradeSection from "@/components/inspector/GradeSection";
 import AddEffectPopover from "@/components/inspector/AddEffectPopover";
 import ElementSection from "@/components/inspector/ElementSection";
 import type { ElementPick } from "@/lib/scene-elements";
+import SnippetParamsForm from "@/components/SnippetParamsForm";
+import { SNIPPET_SCHEMAS, buildDefaultValues } from "@/lib/snippet-schemas";
+import { applySnippetValues } from "@/lib/snippet-apply";
 
 /**
  * The inspector, as a STACK OF EFFECT SECTIONS.
@@ -377,7 +380,7 @@ function Section({
 type Category = "video" | "text" | "audio";
 
 export default function EditorInspector({
-  doc, selectedIds, onChange, onEditSnippet, projectId, selectedElement, onClearElement,
+  doc, selectedIds, onChange, projectId, selectedElement, onClearElement,
 }: {
   doc: EditorDoc;
   selectedIds: Set<string>;
@@ -387,7 +390,6 @@ export default function EditorInspector({
   onClearElement?: () => void;
   /** `transient` values come from a drag in progress and must not be recorded for undo. */
   onChange: (next: EditorDoc, opts?: { transient?: boolean }) => void;
-  onEditSnippet?: (itemId: string) => void;
 }) {
   // Subscribes: once a property is animated, its VALUE depends on the playhead.
   const playheadFrame = usePlayheadFrame();
@@ -400,6 +402,18 @@ export default function EditorInspector({
   const ids = [...selectedIds];
   const found = ids.length === 1 ? findItem(doc, ids[0]) : null;
   const item = found?.item;
+
+  /*
+   * A new selection keeps the tab you were on when it has one, and falls back
+   * to Video when it doesn't. Without this, a Text tab left open on a text clip
+   * stayed "active" — greyed — on the next scene block, and the panel under it
+   * showed nothing at all.
+   */
+  const [tabItemId, setTabItemId] = useState(item?.id);
+  if (item && item.id !== tabItemId) {
+    setTabItemId(item.id);
+    if (!categoryEnabled(category, item)) setCategory("video");
+  }
 
   const isOpen = (k: string, dflt = true) => openSections[k] ?? dflt;
   const setOpen = (k: string, v: boolean) => setOpenSections((p) => ({ ...p, [k]: v }));
@@ -543,11 +557,13 @@ export default function EditorInspector({
     onChange(updateItem(doc, item.id, { effects: next } as Partial<EditorItem>));
 
   const isText = item.type === "text" || item.type === "captions";
+  const snippetItem = snippetSceneOf(item);
   const hasAudio = hasSource(item);
 
   /* which sections belong to the active category */
   const showVideo = category === "video";
   const showText = category === "text" && isText;
+  const showSnippet = category === "text" && snippetItem !== null;
   const showAudio = category === "audio" && hasAudio;
 
   return (
@@ -594,7 +610,7 @@ export default function EditorInspector({
         onChange={(v) => setCategory(v as Category)}
         options={[
           { value: "video", label: "Video" },
-          { value: "text", label: "Text", disabled: !isText },
+          { value: "text", label: "Text", disabled: !categoryEnabled("text", item) },
           { value: "audio", label: "Audio", disabled: !hasAudio },
         ]}
         style={{ padding: "0 10px", flexShrink: 0 }}
@@ -931,16 +947,96 @@ export default function EditorInspector({
         </Section>
       )}
 
-      {showVideo && item.type === "scene" && "snippet" in item && item.snippet && onEditSnippet && (
-        <div style={{ padding: 8 }}>
-          <button
-            onClick={() => onEditSnippet(item.id)}
-            style={{ ...FIELD, height: 28, cursor: "pointer", textAlign: "left", fontSize: "var(--t-control-size)" }}
-          >
-            Edit {item.snippet.id} texts…
-          </button>
-        </div>
+      {showSnippet && snippetItem && (
+        // Keyed on the block, so switching blocks starts from ITS values.
+        <SnippetText key={snippetItem.id} doc={doc} item={snippetItem} onChange={onChange} />
       )}
+    </div>
+  );
+}
+
+/** A library block whose texts can still be edited as parameters. */
+function snippetSceneOf(item: EditorItem): SceneItem | null {
+  if (item.type !== "scene") return null;
+  const scene = item as SceneItem;
+  return scene.snippet && SNIPPET_SCHEMAS[scene.snippet.id] ? scene : null;
+}
+
+function categoryEnabled(category: Category, item: EditorItem): boolean {
+  if (category === "text") return item.type === "text" || item.type === "captions" || snippetSceneOf(item) !== null;
+  if (category === "audio") return hasSource(item);
+  return true;
+}
+
+/**
+ * The Text tab of a library block (AI chat, Prompt box, lower thirds, …).
+ *
+ * Its words are top-of-file consts in the block's code, not a TextItem, so the
+ * tab shows the snippet's own form and writes through `applySnippetValues` —
+ * the same substitution the library uses on insert. Typing applies after a
+ * short pause: the preview follows along, and each pause is one undo step
+ * rather than one per keystroke.
+ */
+function SnippetText({
+  doc, item, onChange,
+}: {
+  doc: EditorDoc;
+  item: SceneItem;
+  onChange: (next: EditorDoc, opts?: { transient?: boolean }) => void;
+}) {
+  const schema = SNIPPET_SCHEMAS[item.snippet!.id];
+  const stored = item.snippet!.values;
+  const seed = () => ({ ...buildDefaultValues(schema), ...stored });
+  const [values, setValues] = useState<Record<string, unknown>>(seed);
+
+  // Typed but not yet applied — a reload of the doc mid-word must not undo it.
+  const [dirty, setDirty] = useState(false);
+
+  // An undo (or anything else) that changes the stored values from outside
+  // re-seeds the form. Our own commits come back equal to what is typed, so
+  // they leave it alone.
+  const [seen, setSeen] = useState(stored);
+  if (stored !== seen) {
+    setSeen(stored);
+    if (!dirty && JSON.stringify(stored) !== JSON.stringify(values)) setValues(seed());
+  }
+
+  // The latest doc and pending values, for a commit that lands after a pause
+  // (or on unmount, so switching blocks mid-word doesn't drop the word).
+  const docRef = useRef(doc);
+  const onChangeRef = useRef(onChange);
+  useLayoutEffect(() => {
+    docRef.current = doc;
+    onChangeRef.current = onChange;
+  });
+  const pending = useRef<Record<string, unknown> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const next = pending.current;
+    pending.current = null;
+    if (!next) return;
+    setDirty(false);
+    onChangeRef.current(applySnippetValues(docRef.current, item.id, next));
+  };
+  useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div style={{ padding: "10px 12px 14px" }}>
+      <SnippetParamsForm
+        schema={schema}
+        values={values}
+        hideFooter
+        onValuesChange={(next) => {
+          setValues(next);
+          setDirty(true);
+          pending.current = next;
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(flush, 300);
+        }}
+      />
     </div>
   );
 }
